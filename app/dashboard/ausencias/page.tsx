@@ -46,14 +46,21 @@ export default async function AusenciasPage({
     const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(searchParams.ciudad));
     query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
   }
+  if (searchParams.gestor) {
+    const { data: ciudadesDelGestor } = await supabase.from('gestor_ciudades').select('ciudad_id').eq('gestor_id', Number(searchParams.gestor));
+    const idsCiudad = (ciudadesDelGestor ?? []).map((c) => c.ciudad_id);
+    const { data: centrosDelGestor } = await supabase.from('centros').select('id').in('ciudad_id', idsCiudad);
+    query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
+  }
 
-  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }, { data: centros }, { data: ciudades }] =
+  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }, { data: centros }, { data: ciudades }, { data: gestores }] =
     await Promise.all([
       query,
       supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
       supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
       supabase.from('centros').select('*').eq('activo', true).order('nombre'),
       supabase.from('ciudades').select('*').order('nombre'),
+      supabase.from('gestores').select('*').order('nombre'),
     ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
@@ -83,6 +90,7 @@ export default async function AusenciasPage({
         centros={centros ?? []}
         motivos={motivosAusencia ?? []}
         motivoLabel="motivo"
+        gestores={gestores ?? []}
         showDateRange
       />
 

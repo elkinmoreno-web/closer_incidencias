@@ -28,6 +28,8 @@ README es la parte técnica: instalación y despliegue.
    4. `supabase/schema_mejoras_2.sql`
    5. `supabase/schema_zonas_1.sql`
    6. `supabase/schema_zonas_2.sql`
+   7. `supabase/schema_zonas_3_1.sql`
+   8. `supabase/schema_zonas_3_2.sql`
 
    Los pasos "_1" y "_2" de cada bloque van separados a propósito (una
    limitación de Postgres: no se puede usar un valor nuevo de un `enum`
@@ -89,18 +91,18 @@ Sustituye `localhost:3000` por tu dominio de Vercel cuando despliegues.
 | URL | Quién entra | Qué hace |
 |---|---|---|
 | `/` , `/login` , `/panel` | Rider (por defecto) | Todos redirigen al login del rider |
-| `/rider/login` | Rider | Iniciar sesión (email + DNI) |
+| `/rider/login` | Rider | Iniciar sesión (DNI + contraseña) |
 | `/rider/dashboard` | Rider | Reportar incidencia / comunicar ausencia |
 | `/gestor/login` | Admin | Iniciar sesión (email + contraseña) — URL no enlazada desde ningún sitio |
 | `/dashboard` | Admin | Resumen con estadísticas en vivo |
 | `/dashboard/incidencias` | Admin | Listado, filtros, aprobar/rechazar/editar |
 | `/dashboard/ausencias` | Admin | Ausencias comunicadas por riders |
-| `/dashboard/riders` | Admin | Alta individual y masiva de riders, importar Excel |
+| `/dashboard/riders` | Admin | Alta individual de riders, importar Excel |
 | `/dashboard/conexiones` | Admin | Registro de conexiones fuera de zona |
 | `/dashboard/reportes` | Admin | Gráficos de rendimiento y motivos |
 | `/dashboard/auditoria` | Admin | Quién aprobó, rechazó, editó o creó cada cosa |
 | `/dashboard/papelera` | Admin | Incidencias eliminadas, recuperables |
-| `/dashboard/configuracion` | Super Admin | Catálogos, anuncio global, alta de admins |
+| `/dashboard/configuracion` | Super Admin y Administrador | Ver sección 7 (el alcance depende del rol) |
 
 `/gestor/login` es comodidad, no seguridad real (cualquiera puede ver esa
 ruta en el código fuente público de la web). Lo que protege el panel es
@@ -122,38 +124,64 @@ se ve a qué ciudad pertenece cada uno) o directamente por SQL si son
 muchos cambios de golpe.
 
 ### Roles de administrador
-Ahora hay tres:
-- **Super Admin**: ve y gestiona todo, incluida la Configuración.
-- **Moderador**: ve y gestiona todo (igual que antes), pero no entra a Configuración.
-- **Admin de zona** (nuevo): solo ve riders, incidencias, ausencias y
-  conexiones de las ciudades que se le asignen al crearlo. Si intenta
-  acceder a algo fuera de su zona, la base de datos lo bloquea
-  directamente (no es solo una restricción de la pantalla).
+- **Super Admin**: ve y gestiona todo, sin restricción. Configuración completa.
+- **Administrador**: ve y gestiona todos los datos, sin restricción de
+  zona. En Configuración solo ve y edita el **Anuncio Global**. Puede
+  crear cuentas nuevas, pero **solo de tipo Moderador**, asignándoles
+  las ciudades a las que tendrán acceso.
+- **Moderador**: **siempre** restringido a las ciudades que se le hayan
+  asignado al crearlo. No ve el panel de Configuración en absoluto. Si
+  intenta acceder a algo fuera de su zona, la base de datos lo bloquea
+  directamente (no es solo una restricción de pantalla).
 
-Se asigna desde **Configuración → Administradores**, eligiendo el rol
-"Admin de zona" y marcando las ciudades correspondientes.
+Se asigna desde **Configuración → Administradores**. Si quien crea la
+cuenta es Super Admin, puede elegir cualquiera de los tres roles; si es
+Administrador, el formulario solo permite crear Moderadores.
 
-**Importante:** la Auditoría (quién aprobó/rechazó/editó qué) sí es
-visible para todos los admins sin importar su zona, ya que es un
-registro de actividad general del sistema, no datos de un rider en
-concreto. Si prefieres que también se filtre por zona, dímelo y lo
-ajusto.
+**Importante:** la Auditoría (quién aprobó/rechazó/editó qué) es visible
+para todos los admins sin importar su zona, ya que es un registro de
+actividad general del sistema, no datos de un rider en concreto. Si
+prefieres que también se filtre por zona, dímelo y lo ajusto.
+
+### Ciudades y centros
+Los centros ("MADRID CENTRO", "MADRID ALCOBENDAS"...) están agrupados en
+ciudades ("MADRID"). Esto permite filtrar por "Madrid" y ver todos sus
+centros de golpe, o por un centro concreto. Si necesitas más ciudades o
+mover un centro de ciudad, hazlo desde **Configuración → Centros** (ahí
+se ve a qué ciudad pertenece cada uno) o directamente por SQL si son
+muchos cambios de golpe.
+
+### Gestores
+Además de la ciudad, cada centro pertenece (indirectamente, a través de
+la ciudad) a un gestor. Esto es solo para **filtrar** en las tablas — no
+es un rol con acceso al panel. Si el mapeo gestor↔ciudad cambia, se
+edita directamente en las tablas `gestores` y `gestor_ciudades` por SQL.
 
 ### Importar riders desde Excel
 En `/dashboard/riders`, botón "Importar Excel". Acepta el archivo tal
-cual lo exporta vuestro sistema de RRHH (columnas Empleado, DNI, Email,
-Centro, Tipo de vehículo, Estado, etc.). Si un centro o vehículo del
-Excel no existe todavía en el sistema, se crea automáticamente — por
-eso conviene revisar luego en Configuración que no se hayan colado
-duplicados por una falta de ortografía en el Excel (ej. "FD Hamburg" vs
-"FD Hambuarg" crearían dos centros distintos, uno por cada forma en que
-esté escrito en el archivo).
+cual lo exporta vuestro sistema de RRHH. Solo se cargan las filas cuyo
+**Estado sea "Activo" o "Baja operativa"**; el resto se omite y se
+informa cuántas se omitieron y por qué. Si una fila falla al crearse
+(DNI duplicado, etc.), el resto del lote sigue procesándose igual, y al
+final se muestra la lista completa de quién falló y el motivo exacto.
+
+Si un centro o vehículo del Excel no existe todavía en el sistema, se
+crea automáticamente — por eso conviene revisar luego en Configuración
+que no se hayan colado duplicados por una falta de ortografía en el
+Excel (ej. "FD Hamburg" vs "FD Hambuarg" crearían dos centros
+distintos).
+
+**Ya no hay alta masiva por texto** (la que se pegaba línea por línea):
+si vais a mantener el Excel como fuente de verdad y lo subís a diario,
+esa vía quedaba redundante y con más riesgo de error manual que la
+importación real. Sigue existiendo el alta individual, para un rider
+suelto entre subida y subida del Excel.
 
 ### Conexiones fuera de zona
-Sección nueva para registrar cuando un rider se conecta fuera de su
-zona habitual: buscas al rider por nombre o DNI (se autocompleta su
-centro), indicas la fecha, adjuntas una captura de pantalla y, si
-quieres, una observación.
+Sección para registrar cuando un rider se conecta fuera de su zona
+habitual: buscas al rider por nombre o DNI (se autocompleta su centro),
+indicas la fecha, adjuntas una captura de pantalla y, si quieres, una
+observación.
 
 ## 8. Qué incluye esta versión
 
@@ -172,35 +200,60 @@ quieres, una observación.
   ausencia** para altas directas del admin.
 - El rider ve el **motivo de rechazo** y el **código de pedido** de sus
   incidencias, y una tabla con sus propias ausencias y su estado.
-- **Notificaciones**: además del aviso sonoro y el toast al momento, hay
-  una campana con historial de las últimas 20 notificaciones (avisa de
-  incidencias y ausencias nuevas), para revisar qué entró aunque no
-  estuvieras mirando la pantalla.
+- **Notificaciones**: campana con historial de las últimas notificaciones
+  (avisa de incidencias y ausencias nuevas), con sonido activable/desactivable.
+  El rider también tiene su propia campana: le avisa en cuanto le
+  aprueban o rechazan algo.
 - Papelera con recuperación.
-- Riders: alta individual y masiva, importación desde Excel, login con
-  email + DNI, campos de RRHH (provincia, puesto, fechas de alta/baja,
-  teléfono, etc.).
-- **Zonas**: administradores restringidos a una o varias ciudades (rol
-  "Admin de zona"), con centros agrupados por ciudad para filtrar por
-  cualquiera de los dos niveles.
+- Riders: alta individual, importación desde Excel (con filtro de
+  Estado), login con **DNI + contraseña** (ver nota más abajo), campos
+  de RRHH (provincia, puesto, fechas de alta/baja, teléfono, etc.).
+- **Zonas**: el rol Moderador siempre está restringido a una o varias
+  ciudades; el rol Administrador ve todo sin restricción. Centros
+  agrupados por ciudad para filtrar por cualquiera de los dos niveles.
+- **Gestores**: filtro adicional que agrupa ciudades bajo un gestor.
 - **Conexiones fuera de zona**: registro con captura de pantalla de
   cuándo un rider se conecta fuera de su zona habitual.
 - **Filtros con fecha** en incidencias, ausencias, riders, papelera,
   auditoría y conexiones fuera de zona.
 - Reportes con gráficos (rendimiento por admin, motivos frecuentes).
-- Anuncios globales visibles en ambos portales.
+- Anuncios globales visibles en ambos portales (editable por Super Admin
+  y Administrador).
 - Archivos en **Supabase Storage**, en buckets privados. Nadie ve un
   archivo sin pasar antes por el panel con sesión de admin (enlaces
   firmados de 5 minutos, nunca URLs públicas).
 - Compresión de imágenes en el navegador del rider antes de subirlas.
+- Pendiente: el logo y favicon reales de Closer Logistics — en cuanto
+  subas los dos archivos, los coloco en el sitio correcto.
+
+### Bug corregido: riders/incidencias invisibles sin centro asignado
+Si una incidencia, ausencia o rider se guardaba sin `centro_id` (por
+ejemplo, al crear un rider sin elegir centro), se volvía invisible para
+**todos** los administradores, incluido el Super Admin, por cómo estaba
+escrita la regla de zona. Ya está corregido: ahora los roles sin
+restricción de zona (Super Admin, Administrador) siempre ven esas filas.
+Además, el campo Centro ya es obligatorio al dar de alta un rider desde
+el formulario, para que no vuelva a pasar.
 
 ### Nota de seguridad sobre el login de riders
 
-Usar el DNI como contraseña es más rápido y no depende de email, pero es
-un dato que otras personas pueden conocer o adivinar (a diferencia de
-una contraseña elegida por el propio rider). Es el mismo compromiso que
-tenía el sistema anterior. Supabase Auth aplica límites de intentos por
-email/IP, lo que ayuda contra ataques automatizados.
+La contraseña ahora se genera a partir del nombre (inicial del nombre en
+mayúscula + inicial del apellido en minúscula + "123456", ej. "Luis
+Gonzales" → `Lg123456`). Es muy rápido de comunicar y no depende de
+email, pero quiero ser directo: es **más adivinable que el DNI**, porque
+el nombre de una persona suele ser más público que su documento de
+identidad. Cualquiera que sepa el nombre completo de un rider puede
+calcular su contraseña. Lo implementé tal cual lo pediste, pero es un
+compromiso real de seguridad, no solo una molestia teórica — sabiéndolo,
+decides tú si te vale así o prefieres algo con un componente menos
+adivinable (por ejemplo, añadiendo los dos últimos dígitos del DNI en
+vez de "123456" fijo). Dímelo si quieres que lo ajuste.
+
+**Riders creados antes de este cambio** siguen teniendo su DNI como
+contraseña antigua. Desde `/dashboard/riders`, cada fila tiene un botón
+(icono de llave) para recalcular su contraseña al esquema nuevo — te
+muestra la contraseña nueva en pantalla para que se la puedas pasar al
+rider.
 
 ### Sobre el coste de Supabase Storage a más volumen
 

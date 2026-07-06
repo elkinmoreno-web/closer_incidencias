@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrearRiderForm } from '@/components/riders/CrearRiderForm';
-import { BulkRidersForm } from '@/components/riders/BulkRidersForm';
 import { ImportRidersModal } from '@/components/riders/ImportRidersModal';
 import { RidersList } from '@/components/riders/RidersList';
 import { TableFilters } from '@/components/dashboard/TableFilters';
@@ -41,12 +40,19 @@ export default async function RidersPage({
     const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(searchParams.ciudad));
     query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
   }
+  if (searchParams.gestor) {
+    const { data: ciudadesDelGestor } = await supabase.from('gestor_ciudades').select('ciudad_id').eq('gestor_id', Number(searchParams.gestor));
+    const idsCiudad = (ciudadesDelGestor ?? []).map((c) => c.ciudad_id);
+    const { data: centrosDelGestor } = await supabase.from('centros').select('id').in('ciudad_id', idsCiudad);
+    query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
+  }
 
-  const [{ data: riders, count }, { data: centros }, { data: vehiculos }, { data: ciudades }] = await Promise.all([
+  const [{ data: riders, count }, { data: centros }, { data: vehiculos }, { data: ciudades }, { data: gestores }] = await Promise.all([
     query,
     supabase.from('centros').select('*').eq('activo', true).order('nombre'),
     supabase.from('vehiculos').select('*').eq('activo', true).order('nombre'),
     supabase.from('ciudades').select('*').order('nombre'),
+    supabase.from('gestores').select('*').order('nombre'),
   ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
@@ -66,17 +72,12 @@ export default async function RidersPage({
         <CrearRiderForm centros={centros ?? []} vehiculos={vehiculos ?? []} />
       </div>
 
-      <div className="rounded-card border border-border bg-surface p-5">
-        <h2 className="mb-1 font-semibold text-ink">Alta masiva (texto)</h2>
-        <p className="mb-3 text-sm text-ink-muted">Pega varias líneas para dar de alta un lote de golpe.</p>
-        <BulkRidersForm />
-      </div>
-
       <TableFilters
         searchPlaceholder="Buscar por nombre, DNI o email..."
         estados={ESTADOS}
         ciudades={ciudades ?? []}
         centros={centros ?? []}
+        gestores={gestores ?? []}
       />
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">

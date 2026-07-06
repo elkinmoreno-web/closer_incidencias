@@ -8,15 +8,15 @@ import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
 
 const NAV = [
-  { href: '/dashboard', label: 'Resumen', icon: LayoutDashboard, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/incidencias', label: 'Incidencias', icon: AlertTriangle, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/ausencias', label: 'Ausencias', icon: CalendarOff, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/riders', label: 'Riders', icon: Users, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/conexiones', label: 'Conexiones fuera de zona', icon: MapPinOff, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/auditoria', label: 'Auditoría', icon: ClipboardList, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/papelera', label: 'Papelera', icon: Trash2, roles: ['super_admin', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings, roles: ['super_admin'] },
+  { href: '/dashboard', label: 'Resumen', icon: LayoutDashboard, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/incidencias', label: 'Incidencias', icon: AlertTriangle, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/ausencias', label: 'Ausencias', icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/riders', label: 'Riders', icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/conexiones', label: 'Conexiones fuera de zona', icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/auditoria', label: 'Auditoría', icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/papelera', label: 'Papelera', icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings, roles: ['super_admin', 'administrador'] },
 ] as const;
 
 export function Sidebar({ rol, pendientesCount }: { rol: RolAdmin; pendientesCount: number }) {
@@ -24,6 +24,7 @@ export function Sidebar({ rol, pendientesCount }: { rol: RolAdmin; pendientesCou
 
   return (
     <nav className="flex h-full w-60 shrink-0 flex-col gap-1 border-r border-border bg-surface p-4">
+      <img src="https://www.closerlogistics.com/img/logo_closer_line.svg" width="207"  alt="Logo Closer"/>
       <div className="mb-4 px-2 text-lg font-semibold text-primary">Closer Logistics</div>
       {NAV.filter((item) => (item.roles as readonly string[]).includes(rol)).map((item) => {
         const active = pathname === item.href;

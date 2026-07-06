@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import type { Centro, Ciudad } from '@/lib/types';
+import type { Centro, Ciudad, Gestor } from '@/lib/types';
 
 interface Opcion {
   value: string;
@@ -21,6 +21,7 @@ export function TableFilters({
   centros,
   motivos,
   motivoLabel = 'Motivo',
+  gestores,
   showDateRange = false,
 }: {
   searchPlaceholder?: string;
@@ -29,6 +30,7 @@ export function TableFilters({
   centros?: Centro[];
   motivos?: MotivoOpcion[];
   motivoLabel?: string;
+  gestores?: Gestor[];
   showDateRange?: boolean;
 }) {
   const router = useRouter();
@@ -78,6 +80,19 @@ export function TableFilters({
           <option value="">Todos los estados</option>
           {estados.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      )}
+
+      {gestores && (
+        <select
+          defaultValue={searchParams.get('gestor') ?? ''}
+          onChange={(e) => setParam('gestor', e.target.value)}
+          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="">Todos los gestores</option>
+          {gestores.map((g) => (
+            <option key={g.id} value={g.id}>{g.nombre}</option>
           ))}
         </select>
       )}

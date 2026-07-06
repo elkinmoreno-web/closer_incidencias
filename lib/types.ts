@@ -2,11 +2,16 @@
 // Si generas tipos automáticamente con `supabase gen types typescript`,
 // puedes sustituir este archivo por el generado sin tocar el resto del código.
 
-export type RolAdmin = 'super_admin' | 'moderador' | 'admin_zona';
+export type RolAdmin = 'super_admin' | 'administrador' | 'moderador' | 'admin_zona'; // 'admin_zona' en desuso, se migró a 'moderador'
 export type EstadoIncidencia = 'pendiente' | 'aprobada' | 'rechazada' | 'papelera';
 export type EstadoAusencia = 'pendiente' | 'aprobada' | 'rechazada' | 'revisada'; // 'revisada' en desuso
 
 export interface Ciudad {
+  id: number;
+  nombre: string;
+}
+
+export interface Gestor {
   id: number;
   nombre: string;
 }

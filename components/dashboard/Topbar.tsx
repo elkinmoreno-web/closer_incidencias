@@ -18,7 +18,13 @@ export function Topbar({
         <div className="text-sm text-ink-muted">
           Bienvenido, <span className="font-semibold text-ink">{usuario}</span>
           <span className="ml-2 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-ink-muted">
-            {rol === 'super_admin' ? 'Super Admin' : rol === 'admin_zona' ? 'Admin de zona' : 'Moderador'}
+            {rol === 'super_admin'
+              ? 'Super Admin'
+              : rol === 'administrador'
+              ? 'Administrador'
+              : rol === 'admin_zona'
+              ? 'Moderador'
+              : 'Moderador'}
           </span>
         </div>
         <ConnectedAdmins adminId={adminId} usuario={usuario} />

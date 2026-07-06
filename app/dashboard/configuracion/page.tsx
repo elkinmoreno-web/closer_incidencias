@@ -4,6 +4,13 @@ import { CentrosList, VehiculosList, MotivosList, MotivosAusenciaList } from '@/
 import { CrearAdminForm } from '@/components/config/CrearAdminForm';
 import { AnuncioForm } from '@/components/config/AnuncioForm';
 
+function etiquetaRol(rol: string) {
+  if (rol === 'super_admin') return 'Super Admin';
+  if (rol === 'administrador') return 'Administrador';
+  if (rol === 'admin_zona') return 'Moderador (rol antiguo, revisa)';
+  return 'Moderador';
+}
+
 export default async function ConfiguracionPage() {
   const supabase = createClient();
   const {
@@ -11,8 +18,10 @@ export default async function ConfiguracionPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/gestor/login');
 
-  const { data: admin } = await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single();
-  if (admin?.rol !== 'super_admin') redirect('/dashboard');
+  const { data: yo } = await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single();
+  if (yo?.rol !== 'super_admin' && yo?.rol !== 'administrador') redirect('/dashboard');
+
+  const esSuperAdmin = yo.rol === 'super_admin';
 
   const [{ data: centros }, { data: vehiculos }, { data: motivos }, { data: motivosAusencia }, { data: admins }, { data: anuncioActivo }, { data: ciudades }, { data: adminCiudades }] =
     await Promise.all([
@@ -39,7 +48,9 @@ export default async function ConfiguracionPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Configuración</h1>
-        <p className="text-sm text-ink-muted">Solo visible para Super Admin.</p>
+        <p className="text-sm text-ink-muted">
+          {esSuperAdmin ? 'Acceso completo (Super Admin).' : 'Como Administrador, aquí solo gestionas el anuncio global y das de alta moderadores.'}
+        </p>
       </div>
 
       <div className="rounded-card border border-border bg-surface p-5">
@@ -50,38 +61,41 @@ export default async function ConfiguracionPage() {
         <AnuncioForm anuncioActivo={anuncioActivo ?? null} />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div className="rounded-card border border-border bg-surface p-5">
-          <h2 className="mb-3 font-semibold text-ink">Centros</h2>
-          <CentrosList centros={centros ?? []} />
+      {esSuperAdmin && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+          <div className="rounded-card border border-border bg-surface p-5">
+            <h2 className="mb-3 font-semibold text-ink">Centros</h2>
+            <CentrosList centros={centros ?? []} />
+          </div>
+          <div className="rounded-card border border-border bg-surface p-5">
+            <h2 className="mb-3 font-semibold text-ink">Vehículos</h2>
+            <VehiculosList vehiculos={vehiculos ?? []} />
+          </div>
+          <div className="rounded-card border border-border bg-surface p-5">
+            <h2 className="mb-3 font-semibold text-ink">Motivos de incidencia</h2>
+            <MotivosList motivos={motivos ?? []} />
+          </div>
+          <div className="rounded-card border border-border bg-surface p-5">
+            <h2 className="mb-3 font-semibold text-ink">Motivos de ausencia</h2>
+            <MotivosAusenciaList motivos={motivosAusencia ?? []} />
+          </div>
         </div>
-        <div className="rounded-card border border-border bg-surface p-5">
-          <h2 className="mb-3 font-semibold text-ink">Vehículos</h2>
-          <VehiculosList vehiculos={vehiculos ?? []} />
-        </div>
-        <div className="rounded-card border border-border bg-surface p-5">
-          <h2 className="mb-3 font-semibold text-ink">Motivos de incidencia</h2>
-          <MotivosList motivos={motivos ?? []} />
-        </div>
-        <div className="rounded-card border border-border bg-surface p-5">
-          <h2 className="mb-3 font-semibold text-ink">Motivos de ausencia</h2>
-          <MotivosAusenciaList motivos={motivosAusencia ?? []} />
-        </div>
-      </div>
+      )}
 
       <div className="rounded-card border border-border bg-surface p-5">
         <h2 className="mb-1 font-semibold text-ink">Administradores</h2>
-        <p className="mb-4 text-sm text-ink-muted">Da de alta nuevas cuentas de acceso al panel.</p>
-        <CrearAdminForm ciudades={ciudades ?? []} />
+        <p className="mb-4 text-sm text-ink-muted">
+          {esSuperAdmin ? 'Da de alta nuevas cuentas de acceso al panel.' : 'Da de alta nuevos moderadores y elige a qué ciudades tienen acceso.'}
+        </p>
+        <CrearAdminForm ciudades={ciudades ?? []} puedeCrearTodosLosRoles={esSuperAdmin} />
 
         <div className="mt-6 divide-y divide-border border-t border-border">
           {(admins ?? []).map((a) => (
             <div key={a.id} className="flex items-center justify-between py-2.5 text-sm">
               <span className="font-medium text-ink">{a.usuario}</span>
               <span className="text-right text-ink-muted">
-                {a.rol === 'super_admin' ? 'Super Admin' : a.rol === 'admin_zona' ? 'Admin de zona' : 'Moderador'} ·{' '}
-                {a.activo ? 'Activo' : 'Inactivo'}
-                {a.rol === 'admin_zona' && (
+                {etiquetaRol(a.rol)} · {a.activo ? 'Activo' : 'Inactivo'}
+                {(a.rol === 'moderador' || a.rol === 'admin_zona') && (
                   <div className="text-xs">{(zonasPorAdmin.get(a.id) ?? []).join(', ') || 'Sin ciudades asignadas'}</div>
                 )}
               </span>

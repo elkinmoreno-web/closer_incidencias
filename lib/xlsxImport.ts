@@ -57,6 +57,13 @@ function normKey(k: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/** Igual que normKey pero pensado para valores de celda (no cabeceras). */
+function normVal(v: string): string {
+  return normKey(v);
+}
+
+const ESTADOS_PERMITIDOS = ['activo', 'baja operativa'];
+
 function strOrNull(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
@@ -96,9 +103,11 @@ export async function leerArchivoExcel(file: File): Promise<Record<string, unkno
 export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
   validas: RiderExcelRow[];
   errores: string[];
+  omitidas: string[];
 } {
   const validas: RiderExcelRow[] = [];
   const errores: string[] = [];
+  const omitidas: string[] = [];
 
   filasCrudas.forEach((cruda, idx) => {
     const fila: Record<string, unknown> = {};
@@ -116,7 +125,13 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       return;
     }
 
-    const estadoTexto = (strOrNull(fila.estado) ?? '').toLowerCase();
+    const estadoOriginal = strOrNull(fila.estado) ?? '';
+    const estadoTexto = normVal(estadoOriginal);
+
+    if (!ESTADOS_PERMITIDOS.includes(estadoTexto)) {
+      omitidas.push(`Fila ${idx + 2} (${nombre}): estado "${estadoOriginal || '(vacío)'}" no es Activo ni Baja operativa, se omite`);
+      return;
+    }
 
     validas.push({
       nombre,
@@ -135,7 +150,7 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       fechaNacimiento: fechaOrNull(fila.fechaNacimiento),
       telefono: strOrNull(fila.telefono),
       direccion: strOrNull(fila.direccion),
-      activo: estadoTexto === '' || estadoTexto === 'activo',
+      activo: estadoTexto === 'activo',
       vehiculo: strOrNull(fila.vehiculo),
       horasTrabajo: fila.horasTrabajo ? Number(fila.horasTrabajo) : null,
       turno: strOrNull(fila.turno),
@@ -143,5 +158,5 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
     });
   });
 
-  return { validas, errores };
+  return { validas, errores, omitidas };
 }

@@ -18,9 +18,14 @@ function SubmitButton() {
   );
 }
 
-export function CrearAdminForm({ ciudades }: { ciudades: Ciudad[] }) {
+/**
+ * `puedeCrearTodosLosRoles`: true si quien crea es Super Admin (puede
+ * elegir cualquier rol). Si es Administrador, solo puede crear
+ * Moderadores, así que el selector queda fijo.
+ */
+export function CrearAdminForm({ ciudades, puedeCrearTodosLosRoles }: { ciudades: Ciudad[]; puedeCrearTodosLosRoles: boolean }) {
   const [state, formAction] = useFormState<CrearAdminState, FormData>(crearAdmin, undefined);
-  const [rol, setRol] = useState('moderador');
+  const [rol, setRol] = useState(puedeCrearTodosLosRoles ? 'administrador' : 'moderador');
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -46,19 +51,29 @@ export function CrearAdminForm({ ciudades }: { ciudades: Ciudad[] }) {
           minLength={8}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         />
-        <select
-          name="rol"
-          value={rol}
-          onChange={(e) => setRol(e.target.value)}
-          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-        >
-          <option value="moderador">Moderador (ve todo)</option>
-          <option value="admin_zona">Admin de zona (solo sus ciudades)</option>
-          <option value="super_admin">Super Admin</option>
-        </select>
+        {puedeCrearTodosLosRoles ? (
+          <select
+            name="rol"
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+            className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="administrador">Administrador (ve todo + Anuncio Global)</option>
+            <option value="moderador">Moderador (restringido a sus ciudades)</option>
+            <option value="super_admin">Super Admin</option>
+          </select>
+        ) : (
+          <input type="hidden" name="rol" value="moderador" />
+        )}
       </div>
 
-      {rol === 'admin_zona' && (
+      {!puedeCrearTodosLosRoles && (
+        <p className="text-xs text-ink-muted">
+          Como Administrador, las cuentas que crees serán siempre de tipo Moderador.
+        </p>
+      )}
+
+      {rol === 'moderador' && (
         <div className="rounded-lg border border-border bg-bg p-3">
           <p className="mb-2 text-xs font-semibold text-ink-muted">Ciudades a las que tendrá acceso:</p>
           <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto sm:grid-cols-3">

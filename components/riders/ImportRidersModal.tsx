@@ -14,6 +14,7 @@ export function ImportRidersModal() {
   const [fase, setFase] = useState<Fase>('inicial');
   const [filas, setFilas] = useState<RiderExcelRow[]>([]);
   const [erroresParseo, setErroresParseo] = useState<string[]>([]);
+  const [omitidasParseo, setOmitidasParseo] = useState<string[]>([]);
   const [progreso, setProgreso] = useState(0);
   const [okTotal, setOkTotal] = useState(0);
   const [erroresImport, setErroresImport] = useState<string[]>([]);
@@ -23,6 +24,7 @@ export function ImportRidersModal() {
     setFase('inicial');
     setFilas([]);
     setErroresParseo([]);
+    setOmitidasParseo([]);
     setProgreso(0);
     setOkTotal(0);
     setErroresImport([]);
@@ -33,13 +35,14 @@ export function ImportRidersModal() {
     setErrorArchivo(null);
     try {
       const crudas = await leerArchivoExcel(file);
-      const { validas, errores } = mapearFilasExcel(crudas);
+      const { validas, errores, omitidas } = mapearFilasExcel(crudas);
       if (validas.length === 0) {
-        setErrorArchivo('No se encontró ninguna fila válida. Revisa que las cabeceras coincidan con la plantilla.');
+        setErrorArchivo('No se encontró ninguna fila válida (Activo o Baja operativa). Revisa el Excel.');
         return;
       }
       setFilas(validas);
       setErroresParseo(errores);
+      setOmitidasParseo(omitidas);
       setFase('previsualizando');
     } catch {
       setErrorArchivo('No se pudo leer el archivo. Asegúrate de que sea un .xlsx válido.');
@@ -118,8 +121,14 @@ export function ImportRidersModal() {
             {fase === 'previsualizando' && (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-ink">
-                  <span className="font-semibold">{filas.length}</span> rider(es) listos para importar.
+                  <span className="font-semibold">{filas.length}</span> rider(es) con estado Activo o Baja
+                  operativa, listos para importar.
                 </p>
+                {omitidasParseo.length > 0 && (
+                  <div className="rounded-lg bg-bg p-3 text-xs text-ink-muted">
+                    {omitidasParseo.length} fila(s) omitidas por no tener estado Activo ni Baja operativa.
+                  </div>
+                )}
                 {erroresParseo.length > 0 && (
                   <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
                     {erroresParseo.length} fila(s) se ignoraron por falta de datos:
@@ -169,7 +178,7 @@ export function ImportRidersModal() {
 
                 {fase === 'terminado' && erroresImport.length > 0 && (
                   <div className="max-h-40 overflow-y-auto rounded-lg bg-red-50 p-3 text-xs text-danger">
-                    {erroresImport.slice(0, 15).map((e, idx) => (
+                    {erroresImport.map((e, idx) => (
                       <div key={idx}>{e}</div>
                     ))}
                   </div>

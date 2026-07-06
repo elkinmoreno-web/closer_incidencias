@@ -3,6 +3,7 @@ import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { riderSignOut } from '@/app/rider/dashboard/actions';
 import { AnnouncementBanner } from '@/components/shared/AnnouncementBanner';
+import { RiderNotificationBell } from '@/components/rider/RiderNotificationBell';
 
 export default async function RiderDashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -13,7 +14,7 @@ export default async function RiderDashboardLayout({ children }: { children: Rea
 
   const { data: rider } = await supabase
     .from('riders')
-    .select('nombre, activo')
+    .select('id, nombre, activo')
     .eq('auth_user_id', user.id)
     .maybeSingle();
 
@@ -26,15 +27,18 @@ export default async function RiderDashboardLayout({ children }: { children: Rea
           <div className="text-sm font-semibold text-primary">Closer Logistics</div>
           <div className="text-xs text-ink-muted">Hola, {rider.nombre}</div>
         </div>
-        <form action={riderSignOut}>
-          <button
-            type="submit"
-            className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted transition hover:border-danger hover:text-danger"
-          >
-            <LogOut size={16} />
-            Salir
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          <RiderNotificationBell riderId={rider.id} />
+          <form action={riderSignOut}>
+            <button
+              type="submit"
+              className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted transition hover:border-danger hover:text-danger"
+            >
+              <LogOut size={16} />
+              Salir
+            </button>
+          </form>
+        </div>
       </header>
       <AnnouncementBanner />
       <main className="mx-auto max-w-2xl p-6">{children}</main>

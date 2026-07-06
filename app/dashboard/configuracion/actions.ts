@@ -4,26 +4,31 @@ import { revalidatePath } from 'next/cache';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
-async function assertSuperAdmin() {
+async function getCallerRol(): Promise<{ supabase: ReturnType<typeof createClient>; rol: string }> {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) throw new Error('No autenticado');
 
-  const { data: admin } = await supabase
-    .from('admins')
-    .select('rol')
-    .eq('auth_user_id', user.id)
-    .single();
+  const { data: admin } = await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single();
+  if (!admin) throw new Error('Sin acceso');
 
-  // Comprobación explícita aquí porque las siguientes operaciones usan el
-  // cliente de service_role, que se salta las políticas RLS de la base
-  // de datos. Sin esta línea, cualquier admin (no solo super_admin)
-  // podría crear otros admins.
-  if (!admin || admin.rol !== 'super_admin') throw new Error('Solo un Super Admin puede hacer esto');
+  return { supabase, rol: admin.rol };
+}
 
+/** Solo Super Admin: catálogos y gestión total de administradores. */
+async function assertSuperAdmin() {
+  const { supabase, rol } = await getCallerRol();
+  if (rol !== 'super_admin') throw new Error('Solo un Super Admin puede hacer esto');
   return supabase;
+}
+
+/** Super Admin o Administrador: anuncio global y creación de moderadores. */
+async function assertSuperAdminOAdministrador() {
+  const { supabase, rol } = await getCallerRol();
+  if (rol !== 'super_admin' && rol !== 'administrador') throw new Error('No tienes permiso para hacer esto');
+  return { supabase, rol };
 }
 
 export async function toggleCentro(id: number, activo: boolean) {
@@ -55,7 +60,7 @@ export async function toggleMotivoAusencia(id: number, activo: boolean) {
 }
 
 export async function publicarAnuncio(mensaje: string) {
-  const supabase = await assertSuperAdmin();
+  const { supabase } = await assertSuperAdminOAdministrador();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -78,7 +83,7 @@ export async function publicarAnuncio(mensaje: string) {
 }
 
 export async function desactivarAnuncio(id: number) {
-  const supabase = await assertSuperAdmin();
+  const { supabase } = await assertSuperAdminOAdministrador();
   const { error } = await supabase.from('anuncios').update({ activo: false }).eq('id', id);
   if (error) throw new Error(error.message);
 
@@ -86,6 +91,7 @@ export async function desactivarAnuncio(id: number) {
   revalidatePath('/dashboard/configuracion');
   revalidatePath('/rider/dashboard');
 }
+
 export async function crearCentro(nombre: string) {
   const supabase = await assertSuperAdmin();
   const { error } = await supabase.from('centros').insert({ nombre: nombre.trim() });
@@ -97,14 +103,16 @@ const crearAdminSchema = z.object({
   usuario: z.string().trim().min(3),
   email: z.string().trim().email(),
   password: z.string().min(8),
-  rol: z.enum(['super_admin', 'moderador', 'admin_zona']),
+  rol: z.enum(['super_admin', 'administrador', 'moderador']),
 });
 
 export type CrearAdminState = { error?: string; success?: boolean } | undefined;
 
 export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Promise<CrearAdminState> {
+  let callerRol: string;
   try {
-    await assertSuperAdmin();
+    const res = await assertSuperAdminOAdministrador();
+    callerRol = res.rol;
   } catch (e) {
     return { error: (e as Error).message };
   }
@@ -120,9 +128,15 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
     return { error: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
   }
 
+  // Un Administrador (no Super Admin) solo puede crear moderadores,
+  // sin importar lo que llegue en el formulario.
+  if (callerRol === 'administrador' && parsed.data.rol !== 'moderador') {
+    return { error: 'Solo puedes crear cuentas de tipo Moderador' };
+  }
+
   const ciudadIds = formData.getAll('ciudadIds').map((v) => Number(v)).filter(Boolean);
-  if (parsed.data.rol === 'admin_zona' && ciudadIds.length === 0) {
-    return { error: 'Selecciona al menos una ciudad para un Admin de zona' };
+  if (parsed.data.rol === 'moderador' && ciudadIds.length === 0) {
+    return { error: 'Selecciona al menos una ciudad para un Moderador' };
   }
 
   // A partir de aquí SÍ necesitamos el cliente de service_role: crear un
@@ -155,7 +169,7 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
     return { error: insertError?.message ?? 'No se pudo crear el administrador' };
   }
 
-  if (parsed.data.rol === 'admin_zona' && ciudadIds.length > 0) {
+  if (parsed.data.rol === 'moderador' && ciudadIds.length > 0) {
     const { error: zonasError } = await admin
       .from('admin_ciudades')
       .insert(ciudadIds.map((ciudadId) => ({ admin_id: nuevoAdmin.id, ciudad_id: ciudadId })));
@@ -172,8 +186,8 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
 }
 
 export async function actualizarZonasAdmin(adminId: string, ciudadIds: number[]) {
+  await assertSuperAdminOAdministrador();
   const admin = createAdminClient();
-  await assertSuperAdmin();
 
   await admin.from('admin_ciudades').delete().eq('admin_id', adminId);
   if (ciudadIds.length > 0) {

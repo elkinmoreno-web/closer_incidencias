@@ -55,13 +55,20 @@ export default async function IncidenciasPage({
     const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(searchParams.ciudad));
     query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
   }
+  if (searchParams.gestor) {
+    const { data: ciudadesDelGestor } = await supabase.from('gestor_ciudades').select('ciudad_id').eq('gestor_id', Number(searchParams.gestor));
+    const idsCiudad = (ciudadesDelGestor ?? []).map((c) => c.ciudad_id);
+    const { data: centrosDelGestor } = await supabase.from('centros').select('id').in('ciudad_id', idsCiudad);
+    query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
+  }
 
-  const [{ data: incidencias, count }, { data: centros }, { data: motivos }, { data: ciudades }, { data: riders }] =
+  const [{ data: incidencias, count }, { data: centros }, { data: motivos }, { data: ciudades }, { data: gestores }, { data: riders }] =
     await Promise.all([
       query,
       supabase.from('centros').select('*').eq('activo', true).order('nombre'),
       supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
       supabase.from('ciudades').select('*').order('nombre'),
+      supabase.from('gestores').select('*').order('nombre'),
       supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
     ]);
 
@@ -96,6 +103,7 @@ export default async function IncidenciasPage({
         ciudades={ciudades ?? []}
         centros={centros ?? []}
         motivos={motivos ?? []}
+        gestores={gestores ?? []}
         showDateRange
       />
 

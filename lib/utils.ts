@@ -93,3 +93,32 @@ export function daysAgoISO(n: number): string {
   return d.toISOString();
 }
 
+/** Lunes de esta semana (hora de Madrid), en ISO, para "solo esta semana". */
+export function inicioSemanaActualISO(): string {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const hoy = new Date(`${ymd}T00:00:00`);
+  const diaSemana = hoy.getDay() === 0 ? 7 : hoy.getDay(); // 1 = lunes ... 7 = domingo
+  hoy.setDate(hoy.getDate() - (diaSemana - 1));
+  return hoy.toISOString();
+}
+
+/**
+ * Contraseña de rider a partir de su nombre: primera letra del nombre
+ * en mayúscula + primera letra del apellido en minúscula + "123456".
+ * Ej: "Luis Gonzales" -> "Lg123456". Si solo hay una palabra, usa su
+ * segunda letra como si fuera el apellido (mejor que un valor fijo).
+ */
+export function generarPasswordRider(nombreCompleto: string): string {
+  const partes = nombreCompleto.trim().split(/\s+/).filter(Boolean);
+  const nombre = partes[0] ?? 'x';
+  const apellido = partes[1] ?? (nombre[1] ?? 'x');
+  const letra1 = (nombre[0] ?? 'x').toUpperCase();
+  const letra2 = (apellido[0] ?? 'x').toLowerCase();
+  return `${letra1}${letra2}123456`;
+}
+

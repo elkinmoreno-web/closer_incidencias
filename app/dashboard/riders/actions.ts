@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { dniSchema } from '@/lib/validations';
+import { generarPasswordRider } from '@/lib/utils';
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -80,7 +81,7 @@ async function crearUsuarioYFila(admin: ReturnType<typeof createAdminClient>, da
 
   const { data: authUser, error: authError } = await admin.auth.admin.createUser({
     email: data.email,
-    password: data.dni,
+    password: generarPasswordRider(data.nombre),
     email_confirm: true,
   });
   if (authError || !authUser.user) return { ok: false as const, motivo: authError?.message ?? 'No se pudo crear el acceso' };
@@ -143,67 +144,35 @@ export async function crearRider(_prev: RiderFormState, formData: FormData): Pro
   return { success: true };
 }
 
-export type BulkResultState = { error?: string; resumen?: string } | undefined;
-
-export async function crearRidersMasivo(_prev: BulkResultState, formData: FormData): Promise<BulkResultState> {
-  try {
-    await assertAdmin();
-  } catch (e) {
-    return { error: (e as Error).message };
-  }
-
-  const texto = String(formData.get('lineas') || '');
-  const lineas = texto
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  if (lineas.length === 0) return { error: 'Pega al menos una línea' };
-  if (lineas.length > 200) return { error: 'Máximo 200 riders por lote' };
-
-  const admin = createAdminClient();
-  const [{ data: centros }, { data: vehiculos }] = await Promise.all([
-    admin.from('centros').select('id, nombre'),
-    admin.from('vehiculos').select('id, nombre'),
-  ]);
-
-  let ok = 0;
-  const errores: string[] = [];
-
-  for (const linea of lineas) {
-    const [nombre, dniRaw, email, centroNombre, vehiculoNombre] = linea.split(',').map((p) => p.trim());
-
-    const parsed = riderSchema.safeParse({
-      nombre,
-      dni: dniRaw,
-      email,
-      centroId: centros?.find((c) => c.nombre.toLowerCase() === (centroNombre || '').toLowerCase())?.id ?? null,
-      vehiculoId: vehiculos?.find((v) => v.nombre.toLowerCase() === (vehiculoNombre || '').toLowerCase())?.id ?? null,
-    });
-
-    if (!parsed.success) {
-      errores.push(`${linea} → ${parsed.error.issues[0]?.message}`);
-      continue;
-    }
-
-    const result = await crearUsuarioYFila(admin, parsed.data);
-    if (result.ok) ok++;
-    else errores.push(`${linea} → ${result.motivo}`);
-  }
-
-  revalidatePath('/dashboard/riders');
-
-  const resumen =
-    `${ok} rider(es) creado(s). ${errores.length} con error.` +
-    (errores.length ? `\n${errores.slice(0, 10).join('\n')}` : '');
-  return { resumen };
-}
-
 export async function toggleRiderActivo(id: string, activo: boolean) {
   const supabase = await assertAdmin();
   const { error } = await supabase.from('riders').update({ activo }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/riders');
+}
+
+/**
+ * Recalcula la contraseña de un rider según el esquema actual
+ * (inicial del nombre + inicial del apellido + 123456). Útil para
+ * riders creados antes de este cambio, que todavía tienen su DNI
+ * como contraseña.
+ */
+export async function restablecerPasswordRider(riderId: string): Promise<{ ok: boolean; motivo?: string; passwordNueva?: string }> {
+  try {
+    await assertAdmin();
+  } catch (e) {
+    return { ok: false, motivo: (e as Error).message };
+  }
+
+  const admin = createAdminClient();
+  const { data: rider } = await admin.from('riders').select('nombre, auth_user_id').eq('id', riderId).maybeSingle();
+  if (!rider || !rider.auth_user_id) return { ok: false, motivo: 'Rider no encontrado' };
+
+  const nuevaPassword = generarPasswordRider(rider.nombre);
+  const { error } = await admin.auth.admin.updateUserById(rider.auth_user_id, { password: nuevaPassword });
+  if (error) return { ok: false, motivo: error.message };
+
+  return { ok: true, passwordNueva: nuevaPassword };
 }
 
 // ============================================================

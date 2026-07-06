@@ -25,8 +25,8 @@ export function CrearRiderForm({ centros, vehiculos }: { centros: Centro[]; vehi
       <input name="nombre" placeholder="Nombre completo" required className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
       <input name="dni" placeholder="DNI/NIE" required className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
       <input name="email" type="email" placeholder="Email" required className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
-      <select name="centroId" defaultValue="" className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none">
-        <option value="">Centro...</option>
+      <select name="centroId" required defaultValue="" className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none">
+        <option value="" disabled>Centro (obligatorio)...</option>
         {centros.map((c) => (
           <option key={c.id} value={c.id}>{c.nombre}</option>
         ))}

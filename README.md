@@ -89,7 +89,7 @@ Sustituye `localhost:3000` por tu dominio de Vercel cuando despliegues.
 | `/` , `/login` , `/panel` | Rider (por defecto) | Todos redirigen al login del rider |
 | `/rider/login` | Rider | Iniciar sesión (email + DNI) |
 | `/rider/dashboard` | Rider | Reportar incidencia / comunicar ausencia |
-| `/staff/login` | Admin | Iniciar sesión (email + contraseña) — URL no enlazada desde ningún sitio |
+| `/gestor/login` | Admin | Iniciar sesión (email + contraseña) — URL no enlazada desde ningún sitio |
 | `/dashboard` | Admin | Resumen con estadísticas en vivo |
 | `/dashboard/incidencias` | Admin | Listado, filtros, aprobar/rechazar/editar |
 | `/dashboard/ausencias` | Admin | Ausencias comunicadas por riders |
@@ -99,10 +99,10 @@ Sustituye `localhost:3000` por tu dominio de Vercel cuando despliegues.
 | `/dashboard/papelera` | Admin | Incidencias eliminadas, recuperables |
 | `/dashboard/configuracion` | Super Admin | Catálogos, anuncio global, alta de admins |
 
-`/staff/login` es comodidad, no seguridad real (cualquiera puede ver esa
+`/gestor/login` es comodidad, no seguridad real (cualquiera puede ver esa
 ruta en el código fuente público de la web). Lo que protege el panel es
 la contraseña + que la cuenta exista en la tabla `admins`. Puedes
-renombrar la carpeta `app/staff/login` a lo que prefieras si quieres
+renombrar la carpeta `app/gestor/login` a lo que prefieras si quieres
 una ruta menos adivinable.
 
 No hay URL para "crear el primer admin": eso se hace una vez, a mano,

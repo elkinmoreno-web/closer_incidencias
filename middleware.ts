@@ -18,7 +18,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user) {
-    const loginPath = isDashboardRoute ? '/staff/login' : '/rider/login';
+    const loginPath = isDashboardRoute ? '/gestor/login' : '/rider/login';
     return NextResponse.redirect(new URL(loginPath, request.url));
   }
 
@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
       .maybeSingle();
 
     if (!admin || !admin.activo) {
-      return NextResponse.redirect(new URL('/staff/login?error=sin_acceso', request.url));
+      return NextResponse.redirect(new URL('/gestor/login?error=sin_acceso', request.url));
     }
   }
 

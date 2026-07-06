@@ -5,10 +5,17 @@ import { Badge } from '@/components/ui/Badge';
 import { AusenciaActions } from '@/components/dashboard/AusenciaActions';
 import { NuevaAusenciaModal } from '@/components/dashboard/NuevaAusenciaModal';
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
+import { TableFilters } from '@/components/dashboard/TableFilters';
 import { estadoAusenciaColor, estadoAusenciaLabel, formatFechaCorta } from '@/lib/utils';
 import { listSignedUrls } from '@/lib/storage';
 
 const PAGE_SIZE = 10;
+
+const ESTADOS = [
+  { value: 'pendiente', label: 'Pendiente' },
+  { value: 'aprobada', label: 'Aprobada' },
+  { value: 'rechazada', label: 'Rechazada' },
+];
 
 export default async function AusenciasPage({
   searchParams,
@@ -20,15 +27,34 @@ export default async function AusenciasPage({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }] = await Promise.all([
-    supabase
-      .from('ausencias')
-      .select('*, motivos_ausencia(nombre), admins:revisado_por_id(usuario)', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to),
-    supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
-    supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
-  ]);
+  let query = supabase
+    .from('ausencias')
+    .select('*, motivos_ausencia(nombre), admins:revisado_por_id(usuario), centros(nombre)', { count: 'exact' })
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (searchParams.estado) query = query.eq('estado', searchParams.estado);
+  if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
+  if (searchParams.motivo) query = query.eq('motivo_id', Number(searchParams.motivo));
+  if (searchParams.desde) query = query.gte('fecha_inicio', searchParams.desde);
+  if (searchParams.hasta) query = query.lte('fecha_inicio', searchParams.hasta);
+  if (searchParams.q) {
+    const q = searchParams.q.replace(/[%,]/g, '');
+    query = query.or(`nombre_rider.ilike.%${q}%,dni.ilike.%${q}%`);
+  }
+  if (searchParams.ciudad) {
+    const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(searchParams.ciudad));
+    query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
+  }
+
+  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }, { data: centros }, { data: ciudades }] =
+    await Promise.all([
+      query,
+      supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
+      supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
+      supabase.from('centros').select('*').eq('activo', true).order('nombre'),
+      supabase.from('ciudades').select('*').order('nombre'),
+    ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
@@ -50,18 +76,28 @@ export default async function AusenciasPage({
         <NuevaAusenciaModal riders={riders ?? []} motivos={motivosAusencia ?? []} />
       </div>
 
+      <TableFilters
+        searchPlaceholder="Buscar rider o DNI..."
+        estados={ESTADOS}
+        ciudades={ciudades ?? []}
+        centros={centros ?? []}
+        motivos={motivosAusencia ?? []}
+        motivoLabel="motivo"
+        showDateRange
+      />
+
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
         {filas.length === 0 ? (
-          <EmptyState title="No hay ausencias registradas todavía" />
+          <EmptyState title="No hay ausencias con estos filtros" />
         ) : (
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[950px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
                 <th className="px-4 py-3">Rider</th>
+                <th className="px-4 py-3">Centro</th>
                 <th className="px-4 py-3">Motivo</th>
                 <th className="px-4 py-3">Rango</th>
                 <th className="px-4 py-3">Justificantes</th>
-                <th className="px-4 py-3">Comentario</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Gestionado por</th>
                 <th className="px-4 py-3 text-right">Acciones</th>
@@ -74,6 +110,7 @@ export default async function AusenciasPage({
                     <div className="font-medium text-ink">{a.nombre_rider}</div>
                     <div className="text-xs text-ink-muted">{a.dni}</div>
                   </td>
+                  <td className="px-4 py-3 text-xs">{(a.centros as unknown as { nombre: string } | null)?.nombre ?? '—'}</td>
                   <td className="px-4 py-3 text-xs">
                     {(a.motivos_ausencia as unknown as { nombre: string } | null)?.nombre ?? '—'}
                     {a.estado === 'rechazada' && a.motivo_rechazo && (
@@ -100,7 +137,6 @@ export default async function AusenciasPage({
                       </div>
                     )}
                   </td>
-                  <td className="max-w-xs px-4 py-3 text-xs text-ink-muted">{a.comentario || '—'}</td>
                   <td className="px-4 py-3">
                     <Badge className={estadoAusenciaColor(a.estado)}>{estadoAusenciaLabel(a.estado)}</Badge>
                   </td>
@@ -122,7 +158,7 @@ export default async function AusenciasPage({
           {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((p) => (
             <Link
               key={p}
-              href={`/dashboard/ausencias?page=${p}`}
+              href={`/dashboard/ausencias?${new URLSearchParams({ ...searchParams, page: String(p) } as Record<string, string>).toString()}`}
               className={`rounded-full px-3 py-1.5 ${p === page ? 'bg-primary text-white' : 'text-ink-muted hover:bg-surface'}`}
             >
               {p}

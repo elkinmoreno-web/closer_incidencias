@@ -97,7 +97,7 @@ const crearAdminSchema = z.object({
   usuario: z.string().trim().min(3),
   email: z.string().trim().email(),
   password: z.string().min(8),
-  rol: z.enum(['super_admin', 'moderador']),
+  rol: z.enum(['super_admin', 'moderador', 'admin_zona']),
 });
 
 export type CrearAdminState = { error?: string; success?: boolean } | undefined;
@@ -120,6 +120,11 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
     return { error: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
   }
 
+  const ciudadIds = formData.getAll('ciudadIds').map((v) => Number(v)).filter(Boolean);
+  if (parsed.data.rol === 'admin_zona' && ciudadIds.length === 0) {
+    return { error: 'Selecciona al menos una ciudad para un Admin de zona' };
+  }
+
   // A partir de aquí SÍ necesitamos el cliente de service_role: crear un
   // usuario de Auth no es una operación normal de base de datos.
   const admin = createAdminClient();
@@ -133,19 +138,47 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
     return { error: authError?.message ?? 'No se pudo crear el usuario' };
   }
 
-  const { error: insertError } = await admin.from('admins').insert({
-    auth_user_id: authUser.user.id,
-    usuario: parsed.data.usuario,
-    rol: parsed.data.rol,
-    acceso_panel: true,
-  });
+  const { data: nuevoAdmin, error: insertError } = await admin
+    .from('admins')
+    .insert({
+      auth_user_id: authUser.user.id,
+      usuario: parsed.data.usuario,
+      rol: parsed.data.rol,
+      acceso_panel: true,
+    })
+    .select('id')
+    .single();
 
-  if (insertError) {
+  if (insertError || !nuevoAdmin) {
     // Revertimos la creación del usuario de Auth para no dejar huérfanos.
     await admin.auth.admin.deleteUser(authUser.user.id);
-    return { error: insertError.message };
+    return { error: insertError?.message ?? 'No se pudo crear el administrador' };
+  }
+
+  if (parsed.data.rol === 'admin_zona' && ciudadIds.length > 0) {
+    const { error: zonasError } = await admin
+      .from('admin_ciudades')
+      .insert(ciudadIds.map((ciudadId) => ({ admin_id: nuevoAdmin.id, ciudad_id: ciudadId })));
+
+    if (zonasError) {
+      await admin.auth.admin.deleteUser(authUser.user.id);
+      await admin.from('admins').delete().eq('id', nuevoAdmin.id);
+      return { error: zonasError.message };
+    }
   }
 
   revalidatePath('/dashboard/configuracion');
   return { success: true };
+}
+
+export async function actualizarZonasAdmin(adminId: string, ciudadIds: number[]) {
+  const admin = createAdminClient();
+  await assertSuperAdmin();
+
+  await admin.from('admin_ciudades').delete().eq('admin_id', adminId);
+  if (ciudadIds.length > 0) {
+    const { error } = await admin.from('admin_ciudades').insert(ciudadIds.map((ciudadId) => ({ admin_id: adminId, ciudad_id: ciudadId })));
+    if (error) throw new Error(error.message);
+  }
+  revalidatePath('/dashboard/configuracion');
 }

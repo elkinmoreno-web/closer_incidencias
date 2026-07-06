@@ -4,10 +4,23 @@ import { ToggleSwitch } from '@/components/config/ToggleSwitch';
 import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia } from '@/app/dashboard/configuracion/actions';
 import type { Centro, Vehiculo, Motivo, MotivoAusencia } from '@/lib/types';
 
-function CatalogRow({ nombre, activo, onToggle }: { nombre: string; activo: boolean; onToggle: (v: boolean) => Promise<void> }) {
+function CatalogRow({
+  nombre,
+  subtitulo,
+  activo,
+  onToggle,
+}: {
+  nombre: string;
+  subtitulo?: string;
+  activo: boolean;
+  onToggle: (v: boolean) => Promise<void>;
+}) {
   return (
     <div className="flex items-center justify-between border-b border-border py-2.5 last:border-0">
-      <span className={activo ? 'text-ink' : 'text-ink-muted line-through'}>{nombre}</span>
+      <div>
+        <div className={activo ? 'text-ink' : 'text-ink-muted line-through'}>{nombre}</div>
+        {subtitulo && <div className="text-xs text-ink-muted">{subtitulo}</div>}
+      </div>
       <ToggleSwitch activo={activo} onToggle={onToggle} />
     </div>
   );
@@ -15,9 +28,15 @@ function CatalogRow({ nombre, activo, onToggle }: { nombre: string; activo: bool
 
 export function CentrosList({ centros }: { centros: Centro[] }) {
   return (
-    <div>
+    <div className="max-h-96 overflow-y-auto pr-1">
       {centros.map((c) => (
-        <CatalogRow key={c.id} nombre={c.nombre} activo={c.activo} onToggle={(v) => toggleCentro(c.id, v)} />
+        <CatalogRow
+          key={c.id}
+          nombre={c.nombre}
+          subtitulo={c.ciudades?.nombre}
+          activo={c.activo}
+          onToggle={(v) => toggleCentro(c.id, v)}
+        />
       ))}
     </div>
   );

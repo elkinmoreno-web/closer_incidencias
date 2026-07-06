@@ -1,15 +1,22 @@
-// Tipos alineados con schema_supabase.sql + schema_mejoras_2.sql.
+// Tipos alineados con schema_supabase.sql + schema_mejoras_2.sql + schema_zonas_2.sql.
 // Si generas tipos automáticamente con `supabase gen types typescript`,
 // puedes sustituir este archivo por el generado sin tocar el resto del código.
 
-export type RolAdmin = 'super_admin' | 'moderador';
+export type RolAdmin = 'super_admin' | 'moderador' | 'admin_zona';
 export type EstadoIncidencia = 'pendiente' | 'aprobada' | 'rechazada' | 'papelera';
-export type EstadoAusencia = 'pendiente' | 'aprobada' | 'rechazada' | 'revisada'; // 'revisada' queda en desuso, ya no se genera
+export type EstadoAusencia = 'pendiente' | 'aprobada' | 'rechazada' | 'revisada'; // 'revisada' en desuso
+
+export interface Ciudad {
+  id: number;
+  nombre: string;
+}
 
 export interface Centro {
   id: number;
   nombre: string;
   activo: boolean;
+  ciudad_id: number | null;
+  ciudades?: Pick<Ciudad, 'id' | 'nombre'> | null;
 }
 
 export interface Vehiculo {
@@ -44,6 +51,21 @@ export interface Rider {
   gestor: string | null;
   activo: boolean;
   created_at: string;
+  // Campos de RRHH (opcionales, vienen de la importación de Excel)
+  nacionalidad: string | null;
+  genero: string | null;
+  empresa_contratante: string | null;
+  provincia: string | null;
+  puesto: string | null;
+  fecha_alta: string | null;
+  fecha_baja: string | null;
+  tipo_baja: string | null;
+  motivo_baja: string | null;
+  fecha_nacimiento: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  horas_trabajo: number | null;
+  turno: string | null;
 }
 
 export interface Admin {
@@ -88,17 +110,33 @@ export interface Ausencia {
   rider_id: string | null;
   dni: string;
   nombre_rider: string;
+  centro_id: number | null;
   motivo_id: number | null;
   motivo_rechazo: string | null;
   fecha_inicio: string;
   fecha_fin: string;
   comentario: string | null;
-  storage_prefix: string | null; // ruta dentro del bucket "ausencias" en Supabase Storage
+  storage_prefix: string | null;
   num_archivos: number;
   estado: EstadoAusencia;
   revisado_por_id: string | null;
   created_at: string;
   motivos_ausencia?: Pick<MotivoAusencia, 'id' | 'nombre'> | null;
+  admins?: Pick<Admin, 'usuario'> | null;
+}
+
+export interface ConexionFueraZona {
+  id: string;
+  rider_id: string | null;
+  dni: string;
+  nombre_rider: string;
+  centro_id: number | null;
+  fecha: string;
+  screenshot_url: string | null;
+  observaciones: string | null;
+  created_by: string | null;
+  created_at: string;
+  centros?: Pick<Centro, 'id' | 'nombre'> | null;
   admins?: Pick<Admin, 'usuario'> | null;
 }
 

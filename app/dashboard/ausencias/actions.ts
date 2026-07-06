@@ -76,7 +76,7 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
   const riderDni = String(formData.get('riderDni') || '').trim().toUpperCase();
   if (!riderDni) return { error: 'Selecciona un rider' };
 
-  const { data: rider } = await supabase.from('riders').select('id, nombre, dni').eq('dni', riderDni).maybeSingle();
+  const { data: rider } = await supabase.from('riders').select('id, nombre, dni, centro_id').eq('dni', riderDni).maybeSingle();
   if (!rider) return { error: 'No se encontró un rider con ese DNI' };
 
   const motivoId = Number(formData.get('motivoId'));
@@ -107,6 +107,7 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
     rider_id: rider.id,
     dni: rider.dni,
     nombre_rider: rider.nombre,
+    centro_id: rider.centro_id,
     motivo_id: motivoId,
     fecha_inicio: fechaInicio,
     fecha_fin: fechaFin,

@@ -167,6 +167,7 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
       rider_id: rider.id,
       dni: rider.dni,
       nombre_rider: rider.nombre,
+      centro_id: rider.centro_id,
       motivo_id: parsed.data.motivoId,
       fecha_inicio: parsed.data.fechaInicio,
       fecha_fin: parsed.data.fechaFin,

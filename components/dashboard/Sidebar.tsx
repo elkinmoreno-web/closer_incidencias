@@ -3,18 +3,19 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
-import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff } from 'lucide-react';
 import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
 
 const NAV = [
-  { href: '/dashboard', label: 'Resumen', icon: LayoutDashboard, roles: ['super_admin', 'moderador'] },
-  { href: '/dashboard/incidencias', label: 'Incidencias', icon: AlertTriangle, roles: ['super_admin', 'moderador'] },
-  { href: '/dashboard/ausencias', label: 'Ausencias', icon: CalendarOff, roles: ['super_admin', 'moderador'] },
-  { href: '/dashboard/riders', label: 'Riders', icon: Users, roles: ['super_admin', 'moderador'] },
-  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3, roles: ['super_admin', 'moderador'] },
-  { href: '/dashboard/auditoria', label: 'Auditoría', icon: ClipboardList, roles: ['super_admin', 'moderador'] },
-  { href: '/dashboard/papelera', label: 'Papelera', icon: Trash2, roles: ['super_admin', 'moderador'] },
+  { href: '/dashboard', label: 'Resumen', icon: LayoutDashboard, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/incidencias', label: 'Incidencias', icon: AlertTriangle, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/ausencias', label: 'Ausencias', icon: CalendarOff, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/riders', label: 'Riders', icon: Users, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/conexiones', label: 'Conexiones fuera de zona', icon: MapPinOff, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/auditoria', label: 'Auditoría', icon: ClipboardList, roles: ['super_admin', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/papelera', label: 'Papelera', icon: Trash2, roles: ['super_admin', 'moderador', 'admin_zona'] },
   { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings, roles: ['super_admin'] },
 ] as const;
 

@@ -26,10 +26,12 @@ README es la parte técnica: instalación y despliegue.
    2. `supabase/schema_final.sql`
    3. `supabase/schema_mejoras_1.sql`
    4. `supabase/schema_mejoras_2.sql`
+   5. `supabase/schema_zonas_1.sql`
+   6. `supabase/schema_zonas_2.sql`
 
-   Los pasos 3 y 4 van separados a propósito (una limitación de Postgres:
-   no se puede usar un valor nuevo de un tipo `enum` en la misma
-   transacción en la que se crea).
+   Los pasos "_1" y "_2" de cada bloque van separados a propósito (una
+   limitación de Postgres: no se puede usar un valor nuevo de un `enum`
+   en la misma transacción en la que se crea).
 3. Ve a **Authentication → Users** y crea tu primer usuario administrador
    (email + contraseña). Copia su UUID (click en el usuario).
 4. Vuelve a **SQL Editor** y ejecuta (sustituyendo el UUID y el usuario):
@@ -93,7 +95,8 @@ Sustituye `localhost:3000` por tu dominio de Vercel cuando despliegues.
 | `/dashboard` | Admin | Resumen con estadísticas en vivo |
 | `/dashboard/incidencias` | Admin | Listado, filtros, aprobar/rechazar/editar |
 | `/dashboard/ausencias` | Admin | Ausencias comunicadas por riders |
-| `/dashboard/riders` | Admin | Alta individual y masiva de riders |
+| `/dashboard/riders` | Admin | Alta individual y masiva de riders, importar Excel |
+| `/dashboard/conexiones` | Admin | Registro de conexiones fuera de zona |
 | `/dashboard/reportes` | Admin | Gráficos de rendimiento y motivos |
 | `/dashboard/auditoria` | Admin | Quién aprobó, rechazó, editó o creó cada cosa |
 | `/dashboard/papelera` | Admin | Incidencias eliminadas, recuperables |
@@ -108,7 +111,51 @@ una ruta menos adivinable.
 No hay URL para "crear el primer admin": eso se hace una vez, a mano,
 en el SQL Editor (paso 2.4).
 
-## 7. Qué incluye esta versión
+## 7. Zonas, ciudades e importación de riders
+
+### Ciudades y centros
+Los centros ("MADRID CENTRO", "MADRID ALCOBENDAS"...) están agrupados en
+ciudades ("MADRID"). Esto permite filtrar por "Madrid" y ver todos sus
+centros de golpe, o por un centro concreto. Si necesitas más ciudades o
+mover un centro de ciudad, hazlo desde **Configuración → Centros** (ahí
+se ve a qué ciudad pertenece cada uno) o directamente por SQL si son
+muchos cambios de golpe.
+
+### Roles de administrador
+Ahora hay tres:
+- **Super Admin**: ve y gestiona todo, incluida la Configuración.
+- **Moderador**: ve y gestiona todo (igual que antes), pero no entra a Configuración.
+- **Admin de zona** (nuevo): solo ve riders, incidencias, ausencias y
+  conexiones de las ciudades que se le asignen al crearlo. Si intenta
+  acceder a algo fuera de su zona, la base de datos lo bloquea
+  directamente (no es solo una restricción de la pantalla).
+
+Se asigna desde **Configuración → Administradores**, eligiendo el rol
+"Admin de zona" y marcando las ciudades correspondientes.
+
+**Importante:** la Auditoría (quién aprobó/rechazó/editó qué) sí es
+visible para todos los admins sin importar su zona, ya que es un
+registro de actividad general del sistema, no datos de un rider en
+concreto. Si prefieres que también se filtre por zona, dímelo y lo
+ajusto.
+
+### Importar riders desde Excel
+En `/dashboard/riders`, botón "Importar Excel". Acepta el archivo tal
+cual lo exporta vuestro sistema de RRHH (columnas Empleado, DNI, Email,
+Centro, Tipo de vehículo, Estado, etc.). Si un centro o vehículo del
+Excel no existe todavía en el sistema, se crea automáticamente — por
+eso conviene revisar luego en Configuración que no se hayan colado
+duplicados por una falta de ortografía en el Excel (ej. "FD Hamburg" vs
+"FD Hambuarg" crearían dos centros distintos, uno por cada forma en que
+esté escrito en el archivo).
+
+### Conexiones fuera de zona
+Sección nueva para registrar cuando un rider se conecta fuera de su
+zona habitual: buscas al rider por nombre o DNI (se autocompleta su
+centro), indicas la fecha, adjuntas una captura de pantalla y, si
+quieres, una observación.
+
+## 8. Qué incluye esta versión
 
 - Panel admin completo: resumen en vivo, incidencias con filtros,
   paginación (10 por página), edición de campos de una incidencia ya
@@ -130,7 +177,16 @@ en el SQL Editor (paso 2.4).
   incidencias y ausencias nuevas), para revisar qué entró aunque no
   estuvieras mirando la pantalla.
 - Papelera con recuperación.
-- Riders: alta individual y masiva, login con email + DNI.
+- Riders: alta individual y masiva, importación desde Excel, login con
+  email + DNI, campos de RRHH (provincia, puesto, fechas de alta/baja,
+  teléfono, etc.).
+- **Zonas**: administradores restringidos a una o varias ciudades (rol
+  "Admin de zona"), con centros agrupados por ciudad para filtrar por
+  cualquiera de los dos niveles.
+- **Conexiones fuera de zona**: registro con captura de pantalla de
+  cuándo un rider se conecta fuera de su zona habitual.
+- **Filtros con fecha** en incidencias, ausencias, riders, papelera,
+  auditoría y conexiones fuera de zona.
 - Reportes con gráficos (rendimiento por admin, motivos frecuentes).
 - Anuncios globales visibles en ambos portales.
 - Archivos en **Supabase Storage**, en buckets privados. Nadie ve un

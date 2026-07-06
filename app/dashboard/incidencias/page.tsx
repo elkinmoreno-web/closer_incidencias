@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { FiltersBar } from '@/components/dashboard/FiltersBar';
+import { TableFilters } from '@/components/dashboard/TableFilters';
 import { IncidenciaActions } from '@/components/dashboard/IncidenciaActions';
 import { EditIncidenciaModal } from '@/components/dashboard/EditIncidenciaModal';
 import { NuevaIncidenciaModal } from '@/components/dashboard/NuevaIncidenciaModal';
@@ -12,6 +12,12 @@ import { getSignedUrl } from '@/lib/storage';
 import type { Incidencia } from '@/lib/types';
 
 const PAGE_SIZE = 10;
+
+const ESTADOS = [
+  { value: 'pendiente', label: 'Pendiente' },
+  { value: 'aprobada', label: 'Aprobada' },
+  { value: 'rechazada', label: 'Rechazada' },
+];
 
 export default async function IncidenciasPage({
   searchParams,
@@ -33,6 +39,8 @@ export default async function IncidenciasPage({
   if (searchParams.estado) query = query.eq('estado', searchParams.estado);
   if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
   if (searchParams.motivo) query = query.eq('motivo_id', Number(searchParams.motivo));
+  if (searchParams.desde) query = query.gte('created_at', `${searchParams.desde}T00:00:00`);
+  if (searchParams.hasta) query = query.lte('created_at', `${searchParams.hasta}T23:59:59`);
   if (searchParams.q) {
     const q = searchParams.q.replace(/[%,]/g, '');
     query = query.or(
@@ -40,12 +48,22 @@ export default async function IncidenciasPage({
     );
   }
 
-  const [{ data: incidencias, count }, { data: centros }, { data: motivos }, { data: riders }] = await Promise.all([
-    query,
-    supabase.from('centros').select('*').eq('activo', true).order('nombre'),
-    supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
-    supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
-  ]);
+  // El filtro por ciudad se resuelve antes: sacamos los centros de esa
+  // ciudad y filtramos por esos IDs (PostgREST no filtra directo por una
+  // columna de una relación anidada sin usar joins internos).
+  if (searchParams.ciudad) {
+    const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(searchParams.ciudad));
+    query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
+  }
+
+  const [{ data: incidencias, count }, { data: centros }, { data: motivos }, { data: ciudades }, { data: riders }] =
+    await Promise.all([
+      query,
+      supabase.from('centros').select('*').eq('activo', true).order('nombre'),
+      supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
+      supabase.from('ciudades').select('*').order('nombre'),
+      supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
+    ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
@@ -72,7 +90,14 @@ export default async function IncidenciasPage({
         <NuevaIncidenciaModal riders={riders ?? []} motivos={motivos ?? []} />
       </div>
 
-      <FiltersBar centros={centros ?? []} motivos={motivos ?? []} />
+      <TableFilters
+        searchPlaceholder="Buscar rider, DNI o código..."
+        estados={ESTADOS}
+        ciudades={ciudades ?? []}
+        centros={centros ?? []}
+        motivos={motivos ?? []}
+        showDateRange
+      />
 
       <div className="table-scroll overflow-x-auto rounded-card border border-border bg-surface">
         {filas.length === 0 ? (

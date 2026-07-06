@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-outfit: 'Outfit', sans-serif;
+}
+
+body {
+  @apply bg-bg text-ink;
+}
+
+/* Foco de teclado visible en todo el panel: accesibilidad, no decoración. */
+:focus-visible {
+  outline: 2px solid theme('colors.primary');
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Scrollbar discreta para las tablas con desbordamiento horizontal */
+.table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: theme('colors.border');
+  border-radius: 8px;
+}

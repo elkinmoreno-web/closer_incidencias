@@ -6,7 +6,7 @@ import { ImportRidersModal } from '@/components/riders/ImportRidersModal';
 import { RidersList } from '@/components/riders/RidersList';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 10;
 
 const ESTADOS = [
   { value: 'activo', label: 'Activo' },

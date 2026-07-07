@@ -157,7 +157,14 @@ export default async function IncidenciasPage({
                           Ver evidencia
                         </a>
                       )}
-                      {!i.screenshotSignedUrl && !i.evidenciaSignedUrl && '—'}
+                      {!i.screenshotSignedUrl && !i.evidenciaSignedUrl &&
+                        (i.archivos_purgados ? (
+                          <span className="text-ink-muted" title="Los archivos se borran automáticamente tras 2 meses">
+                            Archivo eliminado por antigüedad
+                          </span>
+                        ) : (
+                          '—'
+                        ))}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(i.created_at)}</td>

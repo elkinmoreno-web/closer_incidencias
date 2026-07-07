@@ -37,16 +37,11 @@ function validarArchivo(file: File | null, allowed: string[]): string | null {
 
 function extFromMime(mime: string): string {
   switch (mime) {
-    case 'image/jpeg':
-      return 'jpg';
-    case 'image/png':
-      return 'png';
-    case 'image/webp':
-      return 'webp';
-    case 'application/pdf':
-      return 'pdf';
-    default:
-      return 'bin';
+    case 'image/jpeg': return 'jpg';
+    case 'image/png': return 'png';
+    case 'image/webp': return 'webp';
+    case 'application/pdf': return 'pdf';
+    default: return 'bin';
   }
 }
 
@@ -85,24 +80,23 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
       return { error: 'Este motivo requiere ambas direcciones' };
     }
 
+    const stamp = Date.now();
     let screenshotPath: string | null = null;
     let evidenciaPath: string | null = null;
-    const stamp = Date.now();
 
     if (screenshot && screenshot.size > 0) {
       const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
       if (err) return { error: err };
-      screenshotPath = `${user.id}/incidencia_${stamp}_captura.${extFromMime(screenshot.type)}`;
+      screenshotPath = `${user.id}/${stamp}_captura.${extFromMime(screenshot.type)}`;
       const { error: upErr } = await supabase.storage.from('incidencias').upload(screenshotPath, screenshot);
-      if (upErr) return { error: 'No se pudo subir la captura' };
+      if (upErr) return { error: 'No se pudo subir la captura. Inténtalo de nuevo.' };
     }
-
     if (evidencia && evidencia.size > 0) {
       const err = validarArchivo(evidencia, ALLOWED_IMAGE_MIME);
       if (err) return { error: err };
-      evidenciaPath = `${user.id}/incidencia_${stamp}_evidencia.${extFromMime(evidencia.type)}`;
+      evidenciaPath = `${user.id}/${stamp}_evidencia.${extFromMime(evidencia.type)}`;
       const { error: upErr } = await supabase.storage.from('incidencias').upload(evidenciaPath, evidencia);
-      if (upErr) return { error: 'No se pudo subir la evidencia adicional' };
+      if (upErr) return { error: 'No se pudo subir la evidencia. Inténtalo de nuevo.' };
     }
 
     const { error: insertError } = await supabase.from('incidencias').insert({
@@ -155,12 +149,10 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
     }
 
     const prefix = `${user.id}/${parsed.data.fechaInicio}_${parsed.data.fechaFin}_${Date.now()}`;
-
     for (let i = 0; i < validos.length; i++) {
-      const f = validos[i];
-      const path = `${prefix}/justificante_${i + 1}.${extFromMime(f.type)}`;
-      const { error: upErr } = await supabase.storage.from('ausencias').upload(path, f);
-      if (upErr) return { error: 'No se pudo subir uno de los justificantes' };
+      const path = `${prefix}/justificante_${i + 1}.${extFromMime(validos[i].type)}`;
+      const { error: upErr } = await supabase.storage.from('ausencias').upload(path, validos[i]);
+      if (upErr) return { error: 'No se pudo subir alguno de los justificantes. Inténtalo de nuevo.' };
     }
 
     const { error: insertError } = await supabase.from('ausencias').insert({

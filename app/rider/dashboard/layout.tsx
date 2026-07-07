@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Image from 'next/image';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { riderSignOut } from '@/app/rider/dashboard/actions';
@@ -24,8 +25,8 @@ export default async function RiderDashboardLayout({ children }: { children: Rea
     <div className="min-h-screen bg-bg">
       <header className="flex items-center justify-between border-b border-border bg-surface px-6 py-4">
         <div>
-          <div className="text-sm font-semibold text-primary">Closer Logistics</div>
-          <div className="text-xs text-ink-muted">Hola, {rider.nombre}</div>
+          <Image src="/logo-closer.png" alt="Closer Logistics" width={150} height={36} className="h-8 w-auto" priority />
+          <div className="mt-1 text-xs text-ink-muted">Hola, {rider.nombre}</div>
         </div>
         <div className="flex items-center gap-3">
           <RiderNotificationBell riderId={rider.id} />

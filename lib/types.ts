@@ -95,8 +95,9 @@ export interface Incidencia {
   motivo_rechazo: string | null;
   direccion_recogida: string | null;
   direccion_entrega: string | null;
-  screenshot_url: string | null;
+  screenshot_url: string | null; // ruta dentro del bucket "incidencias"
   evidencia_url: string | null;
+  archivos_purgados: boolean;
   estado: EstadoIncidencia;
   gestor_id: string | null;
   fecha_gestion: string | null;
@@ -121,7 +122,7 @@ export interface Ausencia {
   fecha_inicio: string;
   fecha_fin: string;
   comentario: string | null;
-  storage_prefix: string | null;
+  storage_prefix: string | null; // carpeta dentro del bucket "ausencias"
   num_archivos: number;
   estado: EstadoAusencia;
   revisado_por_id: string | null;
@@ -137,7 +138,7 @@ export interface ConexionFueraZona {
   nombre_rider: string;
   centro_id: number | null;
   fecha: string;
-  screenshot_url: string | null;
+  screenshot_url: string | null; // ruta dentro del bucket "conexiones"
   observaciones: string | null;
   created_by: string | null;
   created_at: string;

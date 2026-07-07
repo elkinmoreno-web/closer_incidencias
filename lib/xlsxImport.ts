@@ -148,6 +148,22 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       return;
     }
 
+    // Solo el puesto "Rider" (hay otros puestos en el Excel: coordinadores,
+    // administrativos, etc., que no deben entrar al sistema).
+    const puestoTexto = normVal(strOrNull(fila.puesto) ?? '');
+    if (puestoTexto !== 'rider') {
+      omitidas.push(`Fila ${idx + 2} (${nombre}): puesto "${fila.puesto ?? '(vacío)'}" no es Rider, se omite`);
+      return;
+    }
+
+    // Los centros que empiezan por "MCD" son de otra operación, no de
+    // reparto; no se importan.
+    const centroTexto = strOrNull(fila.centro) ?? '';
+    if (normVal(centroTexto).startsWith('mcd')) {
+      omitidas.push(`Fila ${idx + 2} (${nombre}): centro "${centroTexto}" es MCD, se omite`);
+      return;
+    }
+
     // Deduplicación: si este DNI ya salió antes en el mismo archivo, nos
     // quedamos con la primera aparición y omitimos las siguientes.
     if (dnisVistos.has(dni)) {

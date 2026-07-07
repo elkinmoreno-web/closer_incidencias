@@ -135,8 +135,24 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
   }
 
   const ciudadIds = formData.getAll('ciudadIds').map((v) => Number(v)).filter(Boolean);
-  if (parsed.data.rol === 'moderador' && ciudadIds.length === 0) {
-    return { error: 'Selecciona al menos una ciudad para un Moderador' };
+  if ((parsed.data.rol === 'moderador' || parsed.data.rol === 'administrador') && ciudadIds.length === 0) {
+    return { error: 'Selecciona al menos una ciudad para este usuario' };
+  }
+
+  // Si quien crea es Administrador, las ciudades asignadas deben ser un
+  // subconjunto de las suyas (defensa en servidor, no solo en el form).
+  if (callerRol === 'administrador') {
+    const supabaseAuth = createClient();
+    const {
+      data: { user },
+    } = await supabaseAuth.auth.getUser();
+    const { data: yo } = await supabaseAuth.from('admins').select('id').eq('auth_user_id', user!.id).single();
+    const { data: misCiudades } = await supabaseAuth.from('admin_ciudades').select('ciudad_id').eq('admin_id', yo!.id);
+    const permitidas = new Set((misCiudades ?? []).map((c) => c.ciudad_id));
+    const fueraDeZona = ciudadIds.filter((c) => !permitidas.has(c));
+    if (fueraDeZona.length > 0) {
+      return { error: 'Solo puedes asignar ciudades que están dentro de tu propia zona' };
+    }
   }
 
   // A partir de aquí SÍ necesitamos el cliente de service_role: crear un
@@ -169,7 +185,7 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
     return { error: insertError?.message ?? 'No se pudo crear el administrador' };
   }
 
-  if (parsed.data.rol === 'moderador' && ciudadIds.length > 0) {
+  if ((parsed.data.rol === 'moderador' || parsed.data.rol === 'administrador') && ciudadIds.length > 0) {
     const { error: zonasError } = await admin
       .from('admin_ciudades')
       .insert(ciudadIds.map((ciudadId) => ({ admin_id: nuevoAdmin.id, ciudad_id: ciudadId })));

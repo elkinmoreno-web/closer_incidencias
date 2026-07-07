@@ -73,9 +73,11 @@ export function CrearAdminForm({ ciudades, puedeCrearTodosLosRoles }: { ciudades
         </p>
       )}
 
-      {rol === 'moderador' && (
+      {(rol === 'moderador' || rol === 'administrador') && (
         <div className="rounded-lg border border-border bg-bg p-3">
-          <p className="mb-2 text-xs font-semibold text-ink-muted">Ciudades a las que tendrá acceso:</p>
+          <p className="mb-2 text-xs font-semibold text-ink-muted">
+            Ciudades a las que tendrá acceso{rol === 'administrador' ? ' (el administrador solo verá estas zonas)' : ''}:
+          </p>
           <div className="grid max-h-40 grid-cols-2 gap-1.5 overflow-y-auto sm:grid-cols-3">
             {ciudades.map((c) => (
               <label key={c.id} className="flex items-center gap-1.5 text-xs text-ink">

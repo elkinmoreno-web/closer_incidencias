@@ -36,18 +36,19 @@ returns boolean as $$
   );
 $$ language sql stable security definer;
 
--- Devuelve true si el admin actual ve TODO sin restricción de zona
--- (super_admin o administrador).
+-- Devuelve true si el admin actual ve TODO sin restricción de zona.
+-- Solo el Super Admin (TI) ve todo; el Administrador (gestor) y el
+-- Moderador están ambos restringidos a las ciudades que se les asignen.
 create or replace function admin_sin_restriccion_zona()
 returns boolean as $$
   select exists (
     select 1 from admins a
-    where a.auth_user_id = auth.uid() and a.activo and a.rol in ('super_admin', 'administrador')
+    where a.auth_user_id = auth.uid() and a.activo and a.rol = 'super_admin'
   );
 $$ language sql stable security definer;
 
--- Centros visibles: todos si no hay restricción de zona, o solo los de
--- las ciudades asignadas si el admin es "moderador".
+-- Centros visibles: todos si es Super Admin, o solo los de las ciudades
+-- asignadas si es Administrador o Moderador.
 create or replace function centros_visibles_admin()
 returns setof int as $$
   select c.id from centros c
@@ -56,7 +57,7 @@ returns setof int as $$
     or c.ciudad_id in (
       select ac.ciudad_id from admin_ciudades ac
       join admins a on a.id = ac.admin_id
-      where a.auth_user_id = auth.uid() and a.activo and a.rol = 'moderador'
+      where a.auth_user_id = auth.uid() and a.activo and a.rol in ('administrador', 'moderador')
     );
 $$ language sql stable security definer;
 

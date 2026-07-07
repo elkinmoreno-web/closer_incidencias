@@ -30,6 +30,8 @@ README es la parte técnica: instalación y despliegue.
    6. `supabase/schema_zonas_2.sql`
    7. `supabase/schema_zonas_3_1.sql`
    8. `supabase/schema_zonas_3_2.sql`
+   9. `supabase/schema_almacenamiento_final.sql`
+   10. `supabase/schema_limpieza_archivos.sql` (lee la nota de retención antes)
 
    Los pasos "_1" y "_2" de cada bloque van separados a propósito (una
    limitación de Postgres: no se puede usar un valor nuevo de un `enum`
@@ -66,9 +68,52 @@ desplegar después de añadir/editar variables de entorno).
 
 ## 3. Variables de entorno
 
-Copia `.env.local.example` a `.env.local` y rellena los 3 valores.
-Solo son de Supabase — no hace falta ninguna cuenta ni credencial de
-Google para nada de esto.
+Copia `.env.local.example` a `.env.local` y rellena los 3 valores. Solo
+son de Supabase — no hace falta ninguna credencial de Google.
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+### Almacenamiento de archivos (Supabase Storage)
+Las fotos de incidencias, los justificantes de ausencias y las capturas
+de conexiones fuera de zona se guardan en **buckets privados de Supabase
+Storage** (`incidencias`, `ausencias`, `conexiones`), que crea el script
+`schema_almacenamiento_final.sql`. Nunca se exponen por enlace público:
+el panel genera URLs firmadas que caducan a los 5 minutos, y solo un
+admin con sesión puede pedirlas.
+
+Se intentó usar Google Drive del Workspace para ahorrar coste, pero
+requiere permisos de administrador en Google Cloud (crear una cuenta de
+servicio) que no siempre están disponibles, así que el sistema usa
+Supabase Storage, que funciona sin depender de nadie más.
+
+### Ahorro de espacio: compresión + borrado automático
+Para que el 1 GB del plan gratuito de Supabase dure lo máximo posible:
+- **Compresión fuerte en el navegador** antes de subir: las imágenes se
+  reescalan a 1280px de ancho y se recomprimen (calidad 0.65). Una foto
+  de móvil de 4-8 MB acaba en ~100-250 KB, y sigue siendo legible. Los
+  PDF no se tocan.
+- **Borrado automático de fotos con 2+ meses** (`schema_limpieza_archivos.sql`):
+  cada noche se borran los archivos de incidencias/ausencias/conexiones
+  con dos meses o más. **El registro se conserva** (quién, cuándo,
+  motivo, estado); solo desaparece la foto, que es lo pesado, y el panel
+  muestra "Archivo eliminado por antigüedad".
+
+  Este script necesita un par de pasos de configuración (vienen
+  detallados dentro del propio archivo .sql):
+    1. Activar las extensiones `http` y `pg_cron` (Database → Extensions).
+    2. Guardar en Vault la URL del proyecto y la `service_role` key con
+       los dos `vault.create_secret(...)` que indica el script. Se hace
+       así, y no poniendo la clave en el código, porque borrar de verdad
+       un archivo (liberando espacio) obliga a llamar a la Storage API de
+       Supabase con permisos de servicio — borrarlo por SQL directo NO
+       libera el espacio, solo deja el archivo huérfano.
+
+  ⚠️ Esas fotos son evidencias. Confirma con RRHH/legal que 2 meses es
+  un plazo de conservación aceptable **antes** de ejecutar ese script.
+  Para cambiar el plazo, edita el `interval '2 months'` del script. Para
+  probar sin esperar a la noche: `select purgar_archivos_antiguos();`.
 
 ## 4. Desarrollo local
 
@@ -81,7 +126,7 @@ npm run dev
 
 1. Sube el proyecto a un repo de GitHub/GitLab.
 2. En Vercel, importa el repo.
-3. En **Settings → Environment Variables**, añade las 3 variables.
+3. En **Settings → Environment Variables**, añade las 3 variables de Supabase.
 4. Despliega.
 
 ## 6. Mapa de URLs para hacer pruebas
@@ -124,19 +169,25 @@ se ve a qué ciudad pertenece cada uno) o directamente por SQL si son
 muchos cambios de golpe.
 
 ### Roles de administrador
-- **Super Admin**: ve y gestiona todo, sin restricción. Configuración completa.
-- **Administrador**: ve y gestiona todos los datos, sin restricción de
-  zona. En Configuración solo ve y edita el **Anuncio Global**. Puede
-  crear cuentas nuevas, pero **solo de tipo Moderador**, asignándoles
-  las ciudades a las que tendrán acceso.
-- **Moderador**: **siempre** restringido a las ciudades que se le hayan
-  asignado al crearlo. No ve el panel de Configuración en absoluto. Si
-  intenta acceder a algo fuera de su zona, la base de datos lo bloquea
-  directamente (no es solo una restricción de pantalla).
+- **Super Admin** (TI): ve y gestiona **todo**, sin restricción de zona.
+  Configuración completa (catálogos, anuncio, y alta de cualquier rol).
+- **Administrador** (gestor de zona): ve y gestiona **solo los datos de
+  las ciudades que se le asignen**. En Configuración solo ve el
+  **Anuncio Global** y el alta de usuarios, y ahí solo puede crear
+  **Moderadores dentro de sus propias ciudades**. En la lista de
+  usuarios solo ve a los moderadores de su zona (y a sí mismo).
+- **Moderador**: igual de restringido a sus ciudades, pero **no entra a
+  Configuración** en absoluto. Está para estar pendiente de la
+  herramienta (incidencias, ausencias, etc.) de su zona.
+
+Tanto Administrador como Moderador quedan restringidos por RLS en la
+base de datos: aunque manipulen el navegador, no pueden leer datos de
+una ciudad que no tienen asignada.
 
 Se asigna desde **Configuración → Administradores**. Si quien crea la
-cuenta es Super Admin, puede elegir cualquiera de los tres roles; si es
-Administrador, el formulario solo permite crear Moderadores.
+cuenta es Super Admin, puede elegir cualquiera de los tres roles y
+cualquier ciudad; si es Administrador, solo puede crear Moderadores y
+solo asignarles ciudades de su propia zona.
 
 **Importante:** la Auditoría (quién aprobó/rechazó/editó qué) es visible
 para todos los admins sin importar su zona, ya que es un registro de
@@ -208,8 +259,8 @@ observación.
 - Riders: alta individual, importación desde Excel (con filtro de
   Estado), login con **DNI + contraseña** (ver nota más abajo), campos
   de RRHH (provincia, puesto, fechas de alta/baja, teléfono, etc.).
-- **Zonas**: el rol Moderador siempre está restringido a una o varias
-  ciudades; el rol Administrador ve todo sin restricción. Centros
+- **Zonas**: tanto Administrador como Moderador están restringidos a las
+  ciudades que se les asignen; solo el Super Admin ve todo. Centros
   agrupados por ciudad para filtrar por cualquiera de los dos niveles.
 - **Gestores**: filtro adicional que agrupa ciudades bajo un gestor.
 - **Conexiones fuera de zona**: registro con captura de pantalla de
@@ -219,21 +270,22 @@ observación.
 - Reportes con gráficos (rendimiento por admin, motivos frecuentes).
 - Anuncios globales visibles en ambos portales (editable por Super Admin
   y Administrador).
-- Archivos en **Supabase Storage**, en buckets privados. Nadie ve un
-  archivo sin pasar antes por el panel con sesión de admin (enlaces
-  firmados de 5 minutos, nunca URLs públicas).
+- Archivos en **Supabase Storage** (buckets privados). Nadie ve un
+  archivo sin sesión de admin: se sirven con URLs firmadas temporales de
+  5 minutos, nunca por enlace público. Imágenes comprimidas en el
+  navegador y borrado automático de las que superan los 2 meses (ver
+  sección 3).
 - Compresión de imágenes en el navegador del rider antes de subirlas.
-- Pendiente: el logo y favicon reales de Closer Logistics — en cuanto
-  subas los dos archivos, los coloco en el sitio correcto.
+- Logo y favicon de Closer Logistics ya integrados en login, panel y
+  portal del rider.
 
 ### Bug corregido: riders/incidencias invisibles sin centro asignado
 Si una incidencia, ausencia o rider se guardaba sin `centro_id` (por
 ejemplo, al crear un rider sin elegir centro), se volvía invisible para
 **todos** los administradores, incluido el Super Admin, por cómo estaba
-escrita la regla de zona. Ya está corregido: ahora los roles sin
-restricción de zona (Super Admin, Administrador) siempre ven esas filas.
-Además, el campo Centro ya es obligatorio al dar de alta un rider desde
-el formulario, para que no vuelva a pasar.
+escrita la regla de zona. Ya está corregido: ahora el Super Admin
+siempre ve esas filas. Además, el campo Centro ya es obligatorio al dar
+de alta un rider desde el formulario, para que no vuelva a pasar.
 
 ### Nota de seguridad sobre el login de riders
 
@@ -255,12 +307,20 @@ contraseña antigua. Desde `/dashboard/riders`, cada fila tiene un botón
 muestra la contraseña nueva en pantalla para que se la puedas pasar al
 rider.
 
-### Sobre el coste de Supabase Storage a más volumen
+### Sobre el almacenamiento y el límite de 1 GB
 
-El plan gratuito da 1 GB de archivos. Con una flota grande, eso se llena
-rápido (una foto de móvil sin comprimir pesa varios MB; ya la
-comprimimos en el navegador antes de subirla, pero aun así). El plan Pro
-(25 $/mes) incluye 100 GB, de sobra para empezar en producción real.
+Los archivos se guardan en Supabase Storage. El plan gratuito da 1 GB.
+Para que dure lo máximo posible sin pagar:
+
+- Las imágenes se comprimen fuerte en el navegador antes de subir
+  (~100-250 KB por foto), así que 1 GB da para muchísimas.
+- El borrado automático elimina las fotos de más de 2 meses cada noche,
+  conservando el registro. Esto mantiene el uso de Storage casi plano en
+  el tiempo: entra lo del último par de meses y sale lo más viejo.
+
+Si aun así algún día se llenara, las opciones son subir el plazo de
+borrado (menos retención) o pasar al plan Pro de Supabase (25 $/mes,
+100 GB). Con Madrid y estos ajustes, el margen para arrancar es amplio.
 
 ### Posibles siguientes pasos (no incluidos)
 

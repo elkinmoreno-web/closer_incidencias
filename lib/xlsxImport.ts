@@ -108,6 +108,7 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
   const validas: RiderExcelRow[] = [];
   const errores: string[] = [];
   const omitidas: string[] = [];
+  const dnisVistos = new Set<string>();
 
   filasCrudas.forEach((cruda, idx) => {
     const fila: Record<string, unknown> = {};
@@ -125,6 +126,13 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       return;
     }
 
+    // Deduplicación: si este DNI ya salió antes en el mismo archivo, nos
+    // quedamos con la primera aparición y omitimos las siguientes.
+    if (dnisVistos.has(dni)) {
+      omitidas.push(`Fila ${idx + 2} (${nombre}): DNI ${dni} duplicado en el archivo, se omite`);
+      return;
+    }
+
     const estadoOriginal = strOrNull(fila.estado) ?? '';
     const estadoTexto = normVal(estadoOriginal);
 
@@ -132,6 +140,8 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       omitidas.push(`Fila ${idx + 2} (${nombre}): estado "${estadoOriginal || '(vacío)'}" no es Activo ni Baja operativa, se omite`);
       return;
     }
+
+    dnisVistos.add(dni);
 
     validas.push({
       nombre,

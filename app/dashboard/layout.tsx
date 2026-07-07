@@ -33,7 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="flex flex-1 flex-col">
         <Topbar adminId={admin.id} usuario={admin.usuario} rol={admin.rol} />
         <AnnouncementBanner />
-        <main className="flex-1 overflow-y-auto bg-bg p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-bg p-6 pt-16 md:pt-6">{children}</main>
       </div>
     </div>
   );

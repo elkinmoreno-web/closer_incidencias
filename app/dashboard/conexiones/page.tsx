@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NuevaConexionModal } from '@/components/conexiones/NuevaConexionModal';
 import { TableFilters } from '@/components/dashboard/TableFilters';
+import { Pagination } from '@/components/dashboard/Pagination';
 import { formatFechaCorta, formatFecha } from '@/lib/utils';
 import { getSignedUrl } from '@/lib/storage';
 
@@ -121,19 +121,7 @@ export default async function ConexionesPage({
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((p) => (
-            <Link
-              key={p}
-              href={`/dashboard/conexiones?${new URLSearchParams({ ...searchParams, page: String(p) } as Record<string, string>).toString()}`}
-              className={`rounded-full px-3 py-1.5 ${p === page ? 'bg-primary text-white' : 'text-ink-muted hover:bg-surface'}`}
-            >
-              {p}
-            </Link>
-          ))}
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} basePath="/dashboard/conexiones" searchParams={searchParams} />
     </div>
   );
 }

@@ -5,7 +5,11 @@ import { Upload, X } from 'lucide-react';
 import { leerArchivoExcel, mapearFilasExcel, type RiderExcelRow } from '@/lib/xlsxImport';
 import { importarRidersLote } from '@/app/dashboard/riders/actions';
 
-const TAMANO_LOTE = 15;
+// Lotes más grandes que antes: ahora la mayoría de filas de un lote solo
+// necesitan un UPSERT en bloque (rápido), no una operación por fila. Solo
+// las filas genuinamente nuevas son más lentas (crean su acceso), así
+// que el tiempo real depende de cuántos riders nuevos haya, no del total.
+const TAMANO_LOTE = 200;
 
 type Fase = 'inicial' | 'previsualizando' | 'importando' | 'terminado';
 
@@ -16,8 +20,10 @@ export function ImportRidersModal() {
   const [erroresParseo, setErroresParseo] = useState<string[]>([]);
   const [omitidasParseo, setOmitidasParseo] = useState<string[]>([]);
   const [progreso, setProgreso] = useState(0);
-  const [okTotal, setOkTotal] = useState(0);
+  const [creadosTotal, setCreadosTotal] = useState(0);
+  const [actualizadosTotal, setActualizadosTotal] = useState(0);
   const [erroresImport, setErroresImport] = useState<string[]>([]);
+  const [sinCentroImport, setSinCentroImport] = useState<string[]>([]);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
 
   function reset() {
@@ -26,8 +32,10 @@ export function ImportRidersModal() {
     setErroresParseo([]);
     setOmitidasParseo([]);
     setProgreso(0);
-    setOkTotal(0);
+    setCreadosTotal(0);
+    setActualizadosTotal(0);
     setErroresImport([]);
+    setSinCentroImport([]);
     setErrorArchivo(null);
   }
 
@@ -51,17 +59,23 @@ export function ImportRidersModal() {
 
   async function iniciarImportacion() {
     setFase('importando');
-    let ok = 0;
+    let creados = 0;
+    let actualizados = 0;
     const errores: string[] = [];
+    const sinCentro: string[] = [];
 
     for (let i = 0; i < filas.length; i += TAMANO_LOTE) {
       const lote = filas.slice(i, i + TAMANO_LOTE);
       const resultado = await importarRidersLote(lote);
-      ok += resultado.ok;
+      creados += resultado.creados;
+      actualizados += resultado.actualizados;
       errores.push(...resultado.errores);
+      sinCentro.push(...resultado.sinCentro);
       setProgreso(Math.min(filas.length, i + TAMANO_LOTE));
-      setOkTotal(ok);
+      setCreadosTotal(creados);
+      setActualizadosTotal(actualizados);
       setErroresImport([...errores]);
+      setSinCentroImport([...sinCentro]);
     }
 
     setFase('terminado');
@@ -105,8 +119,12 @@ export function ImportRidersModal() {
             {fase === 'inicial' && (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-ink-muted">
-                  Sube el .xlsx con las columnas habituales (Empleado, DNI, Email, Centro, Tipo de vehículo,
-                  Estado, etc.). Si un centro o vehículo no existe todavía, se crea automáticamente.
+                  Sube el .xlsx con las columnas habituales (Empleado, DNI, Email, Centro, Empresa
+                  contratante, Tipo de vehículo, Estado, etc.). Solo se cargan filas de{' '}
+                  <strong>Closer Logistics SL</strong> con estado Activo o Baja operativa. Si un
+                  rider ya existe (por DNI), se actualiza en vez de duplicarse. Los centros se
+                  asocian a los que ya existen en el sistema; si alguno no se reconoce, el rider se
+                  importa igual pero sin centro y te lo indicamos al final.
                 </p>
                 <input
                   type="file"
@@ -172,9 +190,23 @@ export function ImportRidersModal() {
                   />
                 </div>
                 <p className="text-sm text-ink">
-                  {progreso} / {filas.length} procesados — <span className="font-semibold text-emerald-700">{okTotal} creados</span>
+                  {progreso} / {filas.length} procesados —{' '}
+                  <span className="font-semibold text-emerald-700">{creadosTotal} nuevos</span>,{' '}
+                  <span className="font-semibold text-primary">{actualizadosTotal} actualizados</span>
                   {erroresImport.length > 0 && <span className="text-danger"> · {erroresImport.length} con error</span>}
                 </p>
+
+                {fase === 'terminado' && sinCentroImport.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                    <p className="mb-1 font-semibold">
+                      {sinCentroImport.length} rider(es) se importaron sin centro (su centro del Excel no está
+                      en el sistema). Revísalos y asígnales centro a mano:
+                    </p>
+                    {sinCentroImport.map((s, idx) => (
+                      <div key={idx}>{s}</div>
+                    ))}
+                  </div>
+                )}
 
                 {fase === 'terminado' && erroresImport.length > 0 && (
                   <div className="max-h-40 overflow-y-auto rounded-lg bg-red-50 p-3 text-xs text-danger">

@@ -97,7 +97,7 @@ export default async function ConfiguracionPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <div className="rounded-card border border-border bg-surface p-5">
             <h2 className="mb-3 font-semibold text-ink">Centros</h2>
-            <CentrosList centros={centros ?? []} />
+            <CentrosList centros={centros ?? []} ciudades={ciudades ?? []} />
           </div>
           <div className="rounded-card border border-border bg-surface p-5">
             <h2 className="mb-3 font-semibold text-ink">Vehículos</h2>

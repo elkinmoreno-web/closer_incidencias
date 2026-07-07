@@ -63,11 +63,25 @@ function normVal(v: string): string {
 }
 
 const ESTADOS_PERMITIDOS = ['activo', 'baja operativa'];
+const EMPRESA_PERMITIDA = 'closer logistics sl';
 
 function strOrNull(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
   return s === '' || s === '-' ? null : s;
+}
+
+/**
+ * A veces RRHH deja dos emails separados por coma en la misma celda
+ * (ej. "personal@gmail.com, trabajo@gmail.com"). Nos quedamos con el
+ * segundo, que en la práctica suele ser el que de verdad usan.
+ */
+function limpiarEmail(v: unknown): string | null {
+  const s = strOrNull(v);
+  if (!s) return null;
+  const partes = s.split(',').map((p) => p.trim()).filter(Boolean);
+  const elegido = partes.length > 1 ? partes[1] : partes[0];
+  return elegido ? elegido.toLowerCase() : null;
 }
 
 /** Acepta Date (de SheetJS con cellDates), número de serie de Excel, o texto DD/MM/AAAA. */
@@ -119,10 +133,18 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
 
     const nombre = strOrNull(fila.nombre);
     const dni = strOrNull(fila.dni)?.toUpperCase() ?? null;
-    const email = strOrNull(fila.email)?.toLowerCase() ?? null;
+    const email = limpiarEmail(fila.email);
 
     if (!nombre || !dni || !email) {
       errores.push(`Fila ${idx + 2}: falta Empleado, DNI o Email`);
+      return;
+    }
+
+    // Solo importamos riders de la empresa contratante correcta (puede
+    // haber otras empresas del grupo en el mismo Excel).
+    const empresaTexto = normVal(strOrNull(fila.empresaContratante) ?? '');
+    if (empresaTexto !== EMPRESA_PERMITIDA) {
+      omitidas.push(`Fila ${idx + 2} (${nombre}): empresa contratante "${fila.empresaContratante ?? '(vacío)'}" no es Closer Logistics SL, se omite`);
       return;
     }
 

@@ -38,6 +38,20 @@ export async function toggleCentro(id: number, activo: boolean) {
   revalidatePath('/dashboard/configuracion');
 }
 
+/**
+ * Asigna (o cambia) la ciudad de un centro. Hace falta sobre todo para
+ * los centros que se crean solos al importar el Excel de riders: si el
+ * nombre no permitió adivinar la ciudad (p. ej. centros fuera de
+ * España), quedan sin agrupar y por tanto invisibles para los admins
+ * restringidos por zona hasta que alguien se la asigna aquí.
+ */
+export async function asignarCiudadCentro(centroId: number, ciudadId: number | null) {
+  const supabase = await assertSuperAdmin();
+  const { error } = await supabase.from('centros').update({ ciudad_id: ciudadId }).eq('id', centroId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
 export async function toggleVehiculo(id: number, activo: boolean) {
   const supabase = await assertSuperAdmin();
   const { error } = await supabase.from('vehiculos').update({ activo }).eq('id', id);

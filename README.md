@@ -210,23 +210,40 @@ edita directamente en las tablas `gestores` y `gestor_ciudades` por SQL.
 
 ### Importar riders desde Excel
 En `/dashboard/riders`, botón "Importar Excel". Acepta el archivo tal
-cual lo exporta vuestro sistema de RRHH. Solo se cargan las filas cuyo
-**Estado sea "Activo" o "Baja operativa"**; el resto se omite y se
-informa cuántas se omitieron y por qué. Si una fila falla al crearse
-(DNI duplicado, etc.), el resto del lote sigue procesándose igual, y al
-final se muestra la lista completa de quién falló y el motivo exacto.
+cual lo exporta vuestro sistema de RRHH. Está pensado para subir el
+**Excel completo todos los días** sin duplicar nada.
 
-Si un centro o vehículo del Excel no existe todavía en el sistema, se
-crea automáticamente — por eso conviene revisar luego en Configuración
-que no se hayan colado duplicados por una falta de ortografía en el
-Excel (ej. "FD Hamburg" vs "FD Hambuarg" crearían dos centros
-distintos).
+Qué hace con cada fila:
+- **Solo importa** las de empresa contratante **Closer Logistics SL** con
+  Estado **"Activo"** o **"Baja operativa"**. El resto se omite y se
+  informa cuántas y por qué.
+- **No duplica**: si el DNI ya existe, actualiza ese rider en vez de
+  crear uno nuevo. Al terminar verás "X nuevos, Y actualizados".
+- **Deduplica dentro del propio archivo**: si el mismo DNI aparece varias
+  veces, solo cuenta la primera.
+- Acepta **DNI/NIE español y también documentos de otros países** (ej.
+  riders de Alemania).
+- Si una celda de email trae **dos correos separados por coma**, se queda
+  con el segundo.
 
-**Ya no hay alta masiva por texto** (la que se pegaba línea por línea):
-si vais a mantener el Excel como fuente de verdad y lo subís a diario,
-esa vía quedaba redundante y con más riesgo de error manual que la
-importación real. Sigue existiendo el alta individual, para un rider
-suelto entre subida y subida del Excel.
+Sobre los **centros**: el Excel usa nombres como "FD Jerez" o "MCD Oliva",
+que se traducen al centro real del sistema mediante una tabla de
+equivalencias (`lib/mapeoCentros.ts`). **La importación nunca crea
+centros nuevos.** Si un centro del Excel no está en esa tabla (uno nuevo
+o mal escrito), el rider se importa igual pero **sin centro**, y al
+final se lista quiénes quedaron así para que les asignes el centro a
+mano desde Configuración. Si añadís centros nuevos en el futuro, hay que
+añadir su equivalencia en `lib/mapeoCentros.ts`.
+
+**Rendimiento:** la importación procesa el archivo por lotes y resuelve
+en bloque (una consulta para saber quién ya existe, un único UPSERT para
+actualizar a todos los existentes); solo los riders realmente nuevos
+requieren crear su acceso uno a uno. Por eso el tiempo depende sobre
+todo de cuántos riders nuevos haya, no del total del archivo: una subida
+diaria donde casi todos ya existen es rápida.
+
+**Ya no hay alta masiva por texto**. Sigue existiendo el alta individual
+para un rider suelto entre subida y subida del Excel.
 
 ### Conexiones fuera de zona
 Sección para registrar cuando un rider se conecta fuera de su zona

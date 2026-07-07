@@ -1,15 +1,17 @@
 import { z } from 'zod';
 
-// Reutilizamos la misma validación de DNI/NIE que ya usamos en el
-// formulario de ausencias, para mantener consistencia en todo el sistema.
+// DNI/NIE español, o un identificador genérico alfanumérico para riders
+// de otros países (ej. Alemania, donde el "documento" que usa RRHH no es
+// un DNI/NIE español sino un código interno tipo "W5942941").
 const dniRegex = /^[0-9]{8}[A-Z]$/;
 const nieRegex = /^[XYZ][0-9]{7}[A-Z]$/;
+const idExtranjeroRegex = /^[A-Z0-9]{5,15}$/;
 
 export const dniSchema = z
   .string()
   .trim()
   .toUpperCase()
-  .refine((v) => dniRegex.test(v) || nieRegex.test(v), 'DNI/NIE no válido');
+  .refine((v) => dniRegex.test(v) || nieRegex.test(v) || idExtranjeroRegex.test(v), 'Documento no válido');
 
 export const incidenciaSchema = z.object({
   dni: dniSchema,

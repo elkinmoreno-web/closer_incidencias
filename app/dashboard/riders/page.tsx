@@ -1,12 +1,12 @@
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrearRiderForm } from '@/components/riders/CrearRiderForm';
 import { ImportRidersModal } from '@/components/riders/ImportRidersModal';
 import { RidersList } from '@/components/riders/RidersList';
 import { TableFilters } from '@/components/dashboard/TableFilters';
+import { Pagination } from '@/components/dashboard/Pagination';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 50; // Riders tiene muchos más registros que el resto de tablas (miles); con 10 por página serían cientos de páginas.
 
 const ESTADOS = [
   { value: 'activo', label: 'Activo' },
@@ -56,14 +56,6 @@ export default async function RidersPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
-  const paginationItems = getPaginationItems(page, totalPages);
-
-  // Helper para generar las URLs manteniendo los filtros actuales
-  const createPageURL = (pageNumber: number | string) => {
-    const params = new URLSearchParams(searchParams as Record<string, string>);
-    params.set('page', pageNumber.toString());
-    return `/dashboard/riders?${params.toString()}`;
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -96,80 +88,7 @@ export default async function RidersPage({
         )}
       </div>
 
-      {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 text-sm mt-4">
-            {/* Botón Anterior */}
-            <Link
-                href={createPageURL(page - 1)}
-                className={`rounded px-3 py-1.5 border border-border ${
-                    page <= 1 ? 'pointer-events-none opacity-50' : 'hover:bg-surface text-ink'
-                }`}
-                aria-disabled={page <= 1}
-            >
-              Anterior
-            </Link>
-
-            {/* Números de Página y Puntos Suspensivos */}
-            {paginationItems.map((item, idx) => {
-              if (item === '...') {
-                return (
-                    <span key={`ellipsis-${idx}`} className="px-2 text-ink-muted">
-                  ...
-                </span>
-                );
-              }
-
-              return (
-                  <Link
-                      key={item}
-                      href={createPageURL(item)}
-                      className={`rounded-full min-w-[32px] text-center px-3 py-1.5 ${
-                          item === page
-                              ? 'bg-primary text-white'
-                              : 'text-ink-muted hover:bg-surface hover:text-ink'
-                      }`}
-                  >
-                    {item}
-                  </Link>
-              );
-            })}
-
-            {/* Botón Siguiente */}
-            <Link
-                href={createPageURL(page + 1)}
-                className={`rounded px-3 py-1.5 border border-border ${
-                    page >= totalPages ? 'pointer-events-none opacity-50' : 'hover:bg-surface text-ink'
-                }`}
-                aria-disabled={page >= totalPages}
-            >
-              Siguiente
-            </Link>
-          </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} basePath="/dashboard/riders" searchParams={searchParams} />
     </div>
   );
-}
-
-function getPaginationItems(currentPage: number, totalPages: number) {
-  const items: (number | string)[] = [];
-
-  if (totalPages <= 7) {
-    // Si hay pocas páginas, las mostramos todas
-    for (let i = 1; i <= totalPages; i++) {
-      items.push(i);
-    }
-  } else {
-    if (currentPage <= 3) {
-      // Cerca del inicio: 1 2 3 4 ... 80
-      items.push(1, 2, 3, 4, '...', totalPages);
-    } else if (currentPage >= totalPages - 2) {
-      // Cerca del final: 1 ... 77 78 79 80
-      items.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      // En el medio: 1 ... 34 35 36 ... 80
-      items.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-    }
-  }
-
-  return items;
 }

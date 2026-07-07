@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { TableFilters } from '@/components/dashboard/TableFilters';
+import { Pagination } from '@/components/dashboard/Pagination';
 import { IncidenciaActions } from '@/components/dashboard/IncidenciaActions';
 import { EditIncidenciaModal } from '@/components/dashboard/EditIncidenciaModal';
 import { NuevaIncidenciaModal } from '@/components/dashboard/NuevaIncidenciaModal';
@@ -195,21 +195,7 @@ export default async function IncidenciasPage({
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 text-sm">
-          {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((p) => (
-            <Link
-              key={p}
-              href={`/dashboard/incidencias?${new URLSearchParams({ ...searchParams, page: String(p) } as Record<string, string>).toString()}`}
-              className={`rounded-full px-3 py-1.5 ${
-                p === page ? 'bg-primary text-white' : 'text-ink-muted hover:bg-surface'
-              }`}
-            >
-              {p}
-            </Link>
-          ))}
-        </div>
-      )}
+      <Pagination page={page} totalPages={totalPages} basePath="/dashboard/incidencias" searchParams={searchParams} />
     </div>
   );
 }

@@ -64,11 +64,13 @@ export const MAPEO_CENTROS: Record<string, string> = {
   'fd jerez rota': 'JEREZ ROTA',
   'fd jerez san fernando': 'JEREZ SAN FERNANDO',
   'fd la coruña': 'LA CORUNA CENTRO',
+  'fd la coruna': 'LA CORUNA CENTRO',
   'fd la coruña ferrol': 'LA CORUNA FERROL',
   'fd la coruña santiago': 'SANTIAGO DE COMPOSTELA',
   'fd leon': 'LEON',
   'fd lleida': 'LLEIDA',
   'fd logroño centro': 'LOGRONO',
+  'fd logrono centro': 'LOGRONO',
   'fd lugo': 'LUGO',
   'fd madrid alcala de henares': 'MADRID ALCALA DE HENARES',
   'fd madrid alcobendas': 'MADRID ALCOBENDAS',
@@ -121,6 +123,8 @@ export const MAPEO_CENTROS: Record<string, string> = {
   'fd vitoria': 'VITORIA',
   'fd zamora': 'ZAMORA',
   'fd zaragoza': 'ZARAGOZA',
+  'fd jaen linares': 'JAEN',
+  'fd soria': 'SORIA'
 };
 
 /** Normaliza un nombre para comparar sin importar tildes/mayúsculas/espacios. */
@@ -142,3 +146,4 @@ export function nombreCentroOficial(nombreExcel: string): string | null {
   const key = normalizarNombreCentro(nombreExcel);
   return MAPEO_CENTROS[key] ?? null;
 }
+

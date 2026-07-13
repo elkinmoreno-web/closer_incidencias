@@ -32,7 +32,7 @@ export function LoginForm() {
           autoComplete="username"
           required
           className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
-          placeholder="tu.usuario@closerlogistics.es"
+          placeholder="tu.usuario@closerlogistics.com"
         />
       </div>
 

@@ -58,8 +58,8 @@ export function CrearAdminForm({ ciudades, puedeCrearTodosLosRoles }: { ciudades
             onChange={(e) => setRol(e.target.value)}
             className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
-            <option value="administrador">Administrador (ve todo + Anuncio Global)</option>
-            <option value="moderador">Moderador (restringido a sus ciudades)</option>
+            <option value="administrador">Administrador</option>
+            <option value="moderador">Moderador</option>
             <option value="super_admin">Super Admin</option>
           </select>
         ) : (

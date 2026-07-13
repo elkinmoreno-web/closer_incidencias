@@ -6,7 +6,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen">
       {/* Panel de marca — solo visible en pantallas medianas o más grandes */}
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-white md:flex">
-        <Image src="/logo-closer-transparente.png" alt="Closer Logistics" width={160} height={38} className="h-9 w-auto brightness-0 invert" priority />
+        <Image src="/logo-closer-transparente.png" alt="Closer Logistics" width={160} height={38} className="h-9 w-auto brightness-0 invert" style="max-width: 250px" priority />
         <div>
           <h1 className="text-3xl font-semibold leading-snug">
             Panel interno de gestión de flota

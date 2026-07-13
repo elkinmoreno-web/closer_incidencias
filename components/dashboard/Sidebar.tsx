@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
-import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale } from 'lucide-react';
 import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
 
@@ -15,6 +15,8 @@ const NAV = [
   { href: '/dashboard/ausencias', label: 'Ausencias', icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/riders', label: 'Riders', icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/conexiones', label: 'Conexiones fuera de zona', icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/overtime', label: 'Horas extra', icon: Clock, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/ch-vs-wh', label: 'CH vs WH', icon: Scale, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/auditoria', label: 'Auditoría', icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/papelera', label: 'Papelera', icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },

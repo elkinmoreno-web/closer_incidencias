@@ -49,6 +49,7 @@ export const MAPEO_CENTROS: Record<string, string> = {
   'fd ciudad real': 'CIUDAD REAL',
   'fd collado villalba': 'MADRID COLLADO VILLALBA',
   'fd cordoba': 'CORDOBA',
+  'fd cuenca': 'CUENCA',
   'fd elche centro': 'ALICANTE ELCHE',
   'fd gandia': 'GANDIA',
   'fd gijon': 'GIJON',
@@ -57,19 +58,18 @@ export const MAPEO_CENTROS: Record<string, string> = {
   'fd huelva': 'HUELVA',
   'fd ibiza': 'IBIZA',
   'fd jaen': 'JAEN',
+  'fd jaen linares': 'JAEN',
   'fd jerez': 'JEREZ CENTRO',
   'fd jerez cadiz': 'JEREZ CADIZ',
   'fd jerez chiclana': 'JEREZ CHICLANA DE LA FRONTERA',
   'fd jerez puerto': 'JEREZ PUERTO DE SANTA MARIA',
   'fd jerez rota': 'JEREZ ROTA',
   'fd jerez san fernando': 'JEREZ SAN FERNANDO',
-  'fd la coruña': 'LA CORUNA CENTRO',
   'fd la coruna': 'LA CORUNA CENTRO',
-  'fd la coruña ferrol': 'LA CORUNA FERROL',
-  'fd la coruña santiago': 'SANTIAGO DE COMPOSTELA',
+  'fd la coruna ferrol': 'LA CORUNA FERROL',
+  'fd la coruna santiago': 'SANTIAGO DE COMPOSTELA',
   'fd leon': 'LEON',
   'fd lleida': 'LLEIDA',
-  'fd logroño centro': 'LOGRONO',
   'fd logrono centro': 'LOGRONO',
   'fd lugo': 'LUGO',
   'fd madrid alcala de henares': 'MADRID ALCALA DE HENARES',
@@ -111,6 +111,7 @@ export const MAPEO_CENTROS: Record<string, string> = {
   'fd sevilla este': 'SEVILLA ESTE',
   'fd sevilla montequinto': 'SEVILLA MONTEQUINTO',
   'fd sevilla oeste': 'SEVILLA OESTE',
+  'fd soria': 'SORIA',
   'fd tarragona': 'TARRAGONA',
   'fd toledo centro': 'TOLEDO',
   'fd valencia alfafar picassent': 'VALENCIA ALFAFAR PICASSENT',
@@ -123,8 +124,6 @@ export const MAPEO_CENTROS: Record<string, string> = {
   'fd vitoria': 'VITORIA',
   'fd zamora': 'ZAMORA',
   'fd zaragoza': 'ZARAGOZA',
-  'fd jaen linares': 'JAEN',
-  'fd soria': 'SORIA'
 };
 
 /** Normaliza un nombre para comparar sin importar tildes/mayúsculas/espacios. */
@@ -146,4 +145,3 @@ export function nombreCentroOficial(nombreExcel: string): string | null {
   const key = normalizarNombreCentro(nombreExcel);
   return MAPEO_CENTROS[key] ?? null;
 }
-

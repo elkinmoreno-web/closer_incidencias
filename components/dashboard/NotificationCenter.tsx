@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Bell, Volume2, VolumeX } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -39,6 +39,7 @@ function formatHora(iso: string) {
 }
 
 export function NotificationCenter() {
+  const idInstancia = useId();
   const [sonido, setSonido] = useState(true);
   const [notis, setNotis] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
@@ -85,7 +86,7 @@ export function NotificationCenter() {
     }
 
     const channel = supabase
-      .channel('avisos-panel-admin')
+      .channel(`avisos-panel-admin-${idInstancia}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'incidencias' }, (payload) => {
         const nombre = (payload.new as { nombre_rider?: string })?.nombre_rider ?? 'Un rider';
         agregar(`Nueva incidencia de ${nombre}`);
@@ -99,7 +100,7 @@ export function NotificationCenter() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [idInstancia]);
 
   function toggleSonido() {
     setSonido((v) => {

@@ -213,7 +213,7 @@ export function OvertimePanel() {
 
           <label className="flex items-center gap-2 text-xs text-ink-muted">
             <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} className="accent-primary" />
-            Forzar actualización en vivo
+            Forzar actualización en vivo (ignorar datos recientes)
           </label>
 
           <button

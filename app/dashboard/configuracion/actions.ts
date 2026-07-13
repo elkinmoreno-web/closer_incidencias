@@ -261,8 +261,15 @@ export async function actualizarZonasAdmin(adminId: string, ciudadIds: number[])
  * Cambia el rol de un administrador. Solo el Super Admin puede hacerlo.
  * No se permite cambiar el propio rol (para no quedarse sin super_admin
  * por error) ni dejar a alguien con un rol inválido.
+ *
+ * IMPORTANTE: si el nuevo rol es 'administrador' o 'moderador' (roles
+ * restringidos por zona), hay que indicar `ciudadIds` con al menos una
+ * ciudad — si no, la persona quedaría con un rol de zona pero sin
+ * ninguna zona asignada, viendo el panel completamente vacío/bloqueado.
+ * El cambio de rol y la asignación de ciudades se guardan juntos, en la
+ * misma operación, para que nunca quede a medias.
  */
-export async function cambiarRolAdmin(adminId: string, nuevoRol: 'super_admin' | 'administrador' | 'moderador') {
+export async function cambiarRolAdmin(adminId: string, nuevoRol: 'super_admin' | 'administrador' | 'moderador', ciudadIds: number[] = []) {
   const supabase = await assertSuperAdmin();
   const {
     data: { user },
@@ -272,9 +279,22 @@ export async function cambiarRolAdmin(adminId: string, nuevoRol: 'super_admin' |
   if (!objetivo) throw new Error('Administrador no encontrado');
   if (objetivo.auth_user_id === user!.id) throw new Error('No puedes cambiar tu propio rol');
 
+  if (nuevoRol !== 'super_admin' && ciudadIds.length === 0) {
+    throw new Error('Este rol necesita al menos una ciudad asignada; selecciona una antes de aplicar el cambio');
+  }
+
   const admin = createAdminClient();
   const { error } = await admin.from('admins').update({ rol: nuevoRol }).eq('id', adminId);
   if (error) throw new Error(error.message);
+
+  // Guardamos las ciudades en la misma operación (nunca queda un rol de
+  // zona sin ciudades). Si pasa a super_admin, no tocamos sus ciudades
+  // anteriores (quedan guardadas por si vuelve a bajar de rol luego).
+  if (nuevoRol !== 'super_admin') {
+    await admin.from('admin_ciudades').delete().eq('admin_id', adminId);
+    const { error: errorCiudades } = await admin.from('admin_ciudades').insert(ciudadIds.map((ciudadId) => ({ admin_id: adminId, ciudad_id: ciudadId })));
+    if (errorCiudades) throw new Error(errorCiudades.message);
+  }
 
   revalidatePath('/dashboard/configuracion');
 }

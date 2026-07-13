@@ -14,11 +14,15 @@ function etiquetaRol(rol: string) {
 export function AdminRow({
   admin,
   zonas,
+  ciudadIdsActuales,
+  ciudadesDisponibles,
   esSuperAdmin,
   esYoMismo,
 }: {
   admin: { id: string; usuario: string; rol: string; activo: boolean };
   zonas: string[];
+  ciudadIdsActuales: number[];
+  ciudadesDisponibles: { id: number; nombre: string }[];
   esSuperAdmin: boolean;
   esYoMismo: boolean;
 }) {
@@ -28,14 +32,60 @@ export function AdminRow({
   const [msgPassword, setMsgPassword] = useState<string | null>(null);
   const [guardandoPassword, setGuardandoPassword] = useState(false);
 
-  const muestraZonas = admin.rol === 'moderador' || admin.rol === 'administrador' || admin.rol === 'admin_zona';
+  // Rol "en edición": mientras se está eligiendo un rol de zona y sus
+  // ciudades, no se aplica nada todavía — así nunca queda a medias.
+  const [rolPendiente, setRolPendiente] = useState<string | null>(null);
+  const [ciudadesSeleccionadas, setCiudadesSeleccionadas] = useState<Set<number>>(new Set(ciudadIdsActuales));
+  const [errorRol, setErrorRol] = useState<string | null>(null);
 
-  function onCambiarRol(nuevoRol: string) {
+  const muestraZonas = admin.rol === 'moderador' || admin.rol === 'administrador' || admin.rol === 'admin_zona';
+  const necesitaCiudades = rolPendiente === 'administrador' || rolPendiente === 'moderador';
+
+  function onCambiarSelectRol(nuevoRol: string) {
+    setErrorRol(null);
+    if (nuevoRol === admin.rol) {
+      setRolPendiente(null);
+      return;
+    }
+    if (nuevoRol === 'super_admin') {
+      // Sin ciudades que elegir: se aplica directo.
+      startTransition(async () => {
+        try {
+          await cambiarRolAdmin(admin.id, 'super_admin');
+          setRolPendiente(null);
+        } catch (e) {
+          setErrorRol((e as Error).message);
+        }
+      });
+      return;
+    }
+    // Rol de zona: no se aplica todavía, hay que elegir ciudades primero.
+    setRolPendiente(nuevoRol);
+    setCiudadesSeleccionadas(new Set(ciudadIdsActuales));
+  }
+
+  function toggleCiudad(id: number) {
+    setCiudadesSeleccionadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function aplicarCambioRol() {
+    if (!rolPendiente) return;
+    if (ciudadesSeleccionadas.size === 0) {
+      setErrorRol('Selecciona al menos una ciudad antes de aplicar');
+      return;
+    }
+    setErrorRol(null);
     startTransition(async () => {
       try {
-        await cambiarRolAdmin(admin.id, nuevoRol as 'super_admin' | 'administrador' | 'moderador');
+        await cambiarRolAdmin(admin.id, rolPendiente as 'administrador' | 'moderador', Array.from(ciudadesSeleccionadas));
+        setRolPendiente(null);
       } catch (e) {
-        alert((e as Error).message);
+        setErrorRol((e as Error).message);
       }
     });
   }
@@ -76,16 +126,16 @@ export function AdminRow({
             {esYoMismo && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">tú</span>}
             {!admin.activo && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-danger">Inactivo</span>}
           </div>
-          {muestraZonas && <div className="mt-0.5 text-xs text-ink-muted">{zonas.join(', ') || 'Sin ciudades asignadas'}</div>}
+          {muestraZonas && !necesitaCiudades && <div className="mt-0.5 text-xs text-ink-muted">{zonas.join(', ') || 'Sin ciudades asignadas'}</div>}
         </div>
 
         <div className="flex items-center gap-2">
           {/* Cambio de rol: solo super_admin, y no sobre uno mismo */}
           {esSuperAdmin && !esYoMismo ? (
             <select
-              value={admin.rol === 'admin_zona' ? 'moderador' : admin.rol}
+              value={rolPendiente ?? (admin.rol === 'admin_zona' ? 'moderador' : admin.rol)}
               disabled={pending}
-              onChange={(e) => onCambiarRol(e.target.value)}
+              onChange={(e) => onCambiarSelectRol(e.target.value)}
               className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-ink focus:border-primary focus:outline-none"
             >
               <option value="super_admin">Super Admin</option>
@@ -119,6 +169,51 @@ export function AdminRow({
           )}
         </div>
       </div>
+
+      {/* Selector de ciudades inline: aparece SOLO mientras se está
+          eligiendo un rol de zona, y el cambio no se aplica hasta pulsar
+          "Aplicar" — así nunca queda un rol de zona sin ciudades. */}
+      {necesitaCiudades && (
+        <div className="mt-2 rounded-lg bg-bg p-3">
+          <p className="mb-2 text-xs font-medium text-ink">
+            Elige las ciudades para el rol &quot;{rolPendiente === 'administrador' ? 'Administrador' : 'Moderador'}&quot;:
+          </p>
+          <div className="mb-2 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+            {ciudadesDisponibles.map((c) => (
+              <label
+                key={c.id}
+                className={`cursor-pointer rounded-full border px-2.5 py-1 text-xs ${
+                  ciudadesSeleccionadas.has(c.id) ? 'border-primary bg-primary/10 text-primary' : 'border-border text-ink-muted'
+                }`}
+              >
+                <input type="checkbox" checked={ciudadesSeleccionadas.has(c.id)} onChange={() => toggleCiudad(c.id)} className="hidden" />
+                {c.nombre}
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={aplicarCambioRol}
+              disabled={pending}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Aplicar cambio de rol
+            </button>
+            <button
+              onClick={() => {
+                setRolPendiente(null);
+                setErrorRol(null);
+              }}
+              disabled={pending}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs text-ink-muted hover:text-ink"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {errorRol && <p className="mt-1.5 text-xs text-danger">{errorRol}</p>}
 
       {mostrarPassword && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-bg p-2">

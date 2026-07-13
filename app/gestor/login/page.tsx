@@ -6,7 +6,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen">
       {/* Panel de marca — solo visible en pantallas medianas o más grandes */}
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-white md:flex">
-        <Image src="/logo-closer.png" alt="Closer Logistics" width={200} height={48} className="h-12 w-auto brightness-0 invert" priority />
+        <Image src="/logo-closer-transparente.png" alt="Closer Logistics" width={160} height={38} className="h-9 w-auto brightness-0 invert" priority />
         <div>
           <h1 className="text-3xl font-semibold leading-snug">
             Panel interno de gestión de flota
@@ -22,7 +22,7 @@ export default function LoginPage() {
       {/* Formulario */}
       <div className="flex w-full flex-1 items-center justify-center bg-bg p-6 md:w-1/2">
         <div className="w-full max-w-sm rounded-card bg-surface p-8 shadow-sm">
-          <Image src="/logo-closer.png" alt="Closer Logistics" width={180} height={43} className="mb-6 h-10 w-auto md:hidden" priority />
+          <Image src="/logo-closer-transparente.png" alt="Closer Logistics" width={150} height={36} className="mb-6 h-8 w-auto" priority />
           <h2 className="text-xl font-semibold text-ink">Iniciar sesión</h2>
           <p className="mt-1 text-sm text-ink-muted">
             Usa las credenciales que te ha dado tu administrador.

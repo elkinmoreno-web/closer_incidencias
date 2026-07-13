@@ -198,7 +198,9 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       fechaNacimiento: fechaOrNull(fila.fechaNacimiento),
       telefono: strOrNull(fila.telefono),
       direccion: strOrNull(fila.direccion),
-      activo: estadoTexto === 'activo',
+      // Tanto "Activo" como "Baja operativa" se marcan como activo: una
+      // baja operativa sigue siendo un rider que debe verse en el sistema.
+      activo: true,
       vehiculo: strOrNull(fila.vehiculo),
       horasTrabajo: fila.horasTrabajo ? Number(fila.horasTrabajo) : null,
       turno: strOrNull(fila.turno),

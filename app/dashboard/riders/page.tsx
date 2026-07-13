@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrearRiderForm } from '@/components/riders/CrearRiderForm';
 import { ImportRidersModal } from '@/components/riders/ImportRidersModal';
@@ -47,13 +48,14 @@ export default async function RidersPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: riders, count }, { data: centros }, { data: vehiculos }, { data: ciudades }, { data: gestores }] = await Promise.all([
+  const [{ data: riders, count }, { data: vehiculos }, { data: gestores }, zona] = await Promise.all([
     query,
-    supabase.from('centros').select('*').eq('activo', true).order('nombre'),
     supabase.from('vehiculos').select('*').eq('activo', true).order('nombre'),
-    supabase.from('ciudades').select('*').order('nombre'),
     supabase.from('gestores').select('*').order('nombre'),
+    ciudadesYCentrosDeMiZona(),
   ]);
+  const centros = zona.centros;
+  const ciudades = zona.ciudades;
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 

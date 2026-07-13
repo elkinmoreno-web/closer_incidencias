@@ -277,6 +277,33 @@ veces lo mismo y no pedir en serie lo que se puede pedir en paralelo:**
   centros a la vez, y dentro de cada centro los 7 días de la semana
   también en paralelo), en vez de uno detrás de otro como hacía el
   código original.
+- Ambas tablas se pueden **ordenar haciendo clic en cualquier
+  encabezado** (Centro, Rider, Fecha, Uber, On Demand, CH, WH, Balance,
+  etc.); un segundo clic invierte el orden.
+
+## 7.2. Auditoría por zona, retención y anuncios múltiples
+
+**Auditoría** (`/dashboard/auditoria`) ahora respeta zona igual que el
+resto del sistema: antes cualquier admin veía el historial completo de
+todo el país; ahora un admin/moderador solo ve la auditoría de sus
+ciudades, y el super_admin sigue viendo todo. Requiere ejecutar
+`schema_auditoria_anuncios.sql`.
+
+**Retención de auditoría: 6 meses, borrado automático.** Se programó con
+`pg_cron` para correr cada noche (03:00). Al ser solo texto, 6 meses no
+representa un problema de espacio; simplemente se decidió no acumular
+indefinidamente. Para comprobar cuántas filas se borrarían sin borrar
+nada: `select count(*) from auditoria where created_at < now() - interval '6 months';`.
+Para forzarlo ya: `select purgar_auditoria_antigua();`.
+
+**Anuncios**: ahora pueden coexistir varios anuncios activos a la vez
+(antes solo uno), y cada uno tiene dos dimensiones independientes:
+- **Alcance**: global (todas las ciudades) o una ciudad concreta. Un
+  administrador de zona solo puede publicar en sus propias ciudades,
+  nunca global; el super_admin puede ambas.
+- **Audiencia**: "para todos", "solo administradores" o "solo riders" —
+  útil para avisos de gestión interna (ej. "revisar horas extra") que no
+  tiene sentido que vea un rider.
 
 ## 7.1. Horas extra (Overtime) y CH vs WH
 

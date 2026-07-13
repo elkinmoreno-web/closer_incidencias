@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { formatFecha } from '@/lib/utils';
@@ -17,7 +18,7 @@ export default async function AuditoriaPage({
 
   let query = supabase
     .from('auditoria')
-    .select('id, accion, detalles, created_at, admins(usuario)', { count: 'exact' })
+    .select('id, accion, detalles, created_at, admins(usuario), centros(nombre)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -27,17 +28,24 @@ export default async function AuditoriaPage({
     const q = searchParams.q.replace(/[%,]/g, '');
     query = query.or(`accion.ilike.%${q}%,detalles.ilike.%${q}%`);
   }
+  if (searchParams.ciudad) {
+    const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(searchParams.ciudad));
+    query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
+  }
 
-  const { data: eventos, count } = await query;
+  const [{ data: eventos, count }, zona] = await Promise.all([query, ciudadesYCentrosDeMiZona()]);
 
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Auditoría</h1>
-        <p className="text-sm text-ink-muted">Registro de quién aprobó, rechazó, editó o creó cada cosa.</p>
+        <p className="text-sm text-ink-muted">
+          Registro de quién aprobó, rechazó, editó o creó cada cosa
+          {!zona.esSuperAdmin && ' — solo se muestra lo de tus ciudades'}.
+        </p>
       </div>
 
-      <TableFilters searchPlaceholder="Buscar por acción o detalle..." showDateRange />
+      <TableFilters searchPlaceholder="Buscar por acción o detalle..." ciudades={zona.ciudades} showDateRange />
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
         {!eventos || eventos.length === 0 ? (
@@ -48,6 +56,7 @@ export default async function AuditoriaPage({
               <tr>
                 <th className="px-4 py-3">Admin</th>
                 <th className="px-4 py-3">Acción</th>
+                <th className="px-4 py-3">Centro</th>
                 <th className="px-4 py-3">Detalles</th>
                 <th className="px-4 py-3">Fecha</th>
               </tr>
@@ -59,6 +68,9 @@ export default async function AuditoriaPage({
                     {(e.admins as unknown as { usuario: string } | null)?.usuario ?? '—'}
                   </td>
                   <td className="px-4 py-3">{e.accion}</td>
+                  <td className="px-4 py-3 text-xs text-ink-muted">
+                    {(e.centros as unknown as { nombre: string } | null)?.nombre ?? '—'}
+                  </td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{e.detalles}</td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(e.created_at)}</td>
                 </tr>

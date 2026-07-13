@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { centrosConsultablesOvertime, actualizarYObtenerOvertime, auditarOvertime, type FilaOvertime, type CentroConId } from '@/app/dashboard/overtime/actions';
+import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
+
+const ORDEN_DIA: Record<string, number> = { Lunes: 1, Martes: 2, Miércoles: 3, Jueves: 4, Viernes: 5, Sábado: 6, Domingo: 7 };
+const ORDEN_ESTADO: Record<string, number> = { Pendiente: 0, Confirmado: 1, Rechazado: 2 };
+type CampoOrdenOvertime = 'centro' | 'rider' | 'fecha' | 'zona' | 'horasUber' | 'horasOnDemand' | 'estado';
 
 /** Lunes (ISO yyyy-mm-dd) de la semana de una fecha dada. */
 function lunesDe(fechaIso: string): string {
@@ -82,7 +87,51 @@ export function OvertimePanel() {
     }
   }
 
+  const [ordenCampo, setOrdenCampo] = useState<CampoOrdenOvertime | null>(null);
+  const [ordenDir, setOrdenDir] = useState<Direccion>('asc');
+
+  function ordenarPor(campo: CampoOrdenOvertime) {
+    if (ordenCampo === campo) setOrdenDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setOrdenCampo(campo);
+      setOrdenDir('asc');
+    }
+  }
+
   const filasFiltradas = filas.filter((f) => filtroDia === 'Todos' || f.dia === filtroDia);
+
+  const filasOrdenadas = useMemo(() => {
+    if (!ordenCampo) return filasFiltradas;
+    const signo = ordenDir === 'asc' ? 1 : -1;
+    return [...filasFiltradas].sort((a, b) => {
+      let va: string | number;
+      let vb: string | number;
+      switch (ordenCampo) {
+        case 'fecha':
+          va = a.fecha + (ORDEN_DIA[a.dia] ?? 0);
+          vb = b.fecha + (ORDEN_DIA[b.dia] ?? 0);
+          break;
+        case 'estado':
+          va = ORDEN_ESTADO[a.estado] ?? 9;
+          vb = ORDEN_ESTADO[b.estado] ?? 9;
+          break;
+        case 'horasUber':
+          va = a.horasUber;
+          vb = b.horasUber;
+          break;
+        case 'horasOnDemand':
+          va = a.horasOnDemand;
+          vb = b.horasOnDemand;
+          break;
+        default:
+          va = String(a[ordenCampo] ?? '').toLowerCase();
+          vb = String(b[ordenCampo] ?? '').toLowerCase();
+      }
+      if (va < vb) return -1 * signo;
+      if (va > vb) return 1 * signo;
+      return 0;
+    });
+  }, [filasFiltradas, ordenCampo, ordenDir]);
 
   const totales = filasFiltradas.reduce(
     (acc, f) => {
@@ -214,18 +263,18 @@ export function OvertimePanel() {
               <div className="overflow-x-auto rounded-xl border border-border">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                      <th className="px-3 py-2">Centro</th>
-                      <th className="px-3 py-2">Rider</th>
-                      <th className="px-3 py-2">Día / Fecha</th>
-                      <th className="px-3 py-2">Horario / Zona</th>
-                      <th className="px-3 py-2 text-center">Uber</th>
-                      <th className="px-3 py-2 text-center">On Demand</th>
-                      <th className="px-3 py-2 text-center">Auditoría</th>
+                    <tr className="border-b border-border bg-surface uppercase tracking-wide text-ink-muted">
+                      <SortableTh campo="centro" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Centro</SortableTh>
+                      <SortableTh campo="rider" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Rider</SortableTh>
+                      <SortableTh campo="fecha" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Día / Fecha</SortableTh>
+                      <SortableTh campo="zona" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Horario / Zona</SortableTh>
+                      <SortableTh campo="horasUber" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Uber</SortableTh>
+                      <SortableTh campo="horasOnDemand" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">On Demand</SortableTh>
+                      <SortableTh campo="estado" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Auditoría</SortableTh>
                     </tr>
                   </thead>
                   <tbody>
-                    {filasFiltradas.map((f) => (
+                    {filasOrdenadas.map((f) => (
                       <tr key={f.id} className={`border-b border-border ${f.estado === 'Rechazado' ? 'opacity-40' : ''}`}>
                         <td className="max-w-[110px] truncate px-3 py-2 text-ink-muted" title={f.centro}>
                           {f.centro}
@@ -251,7 +300,7 @@ export function OvertimePanel() {
                         </td>
                       </tr>
                     ))}
-                    {filasFiltradas.length === 0 && (
+                    {filasOrdenadas.length === 0 && (
                       <tr>
                         <td colSpan={7} className="px-3 py-10 text-center text-ink-muted">
                           Sin registros para este filtro.

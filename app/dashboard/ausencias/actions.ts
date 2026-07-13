@@ -19,13 +19,15 @@ export async function aprobarAusencia(id: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdmin(supabase);
 
-  const { error } = await supabase
+  const { data: fila, error } = await supabase
     .from('ausencias')
     .update({ estado: 'aprobada', revisado_por_id: adminId, motivo_rechazo: null })
-    .eq('id', id);
+    .eq('id', id)
+    .select('centro_id')
+    .single();
 
   if (error) throw new Error(error.message);
-  await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Aprobar ausencia', detalles: `Aprobó la ausencia ${id}` });
+  await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Aprobar ausencia', detalles: `Aprobó la ausencia ${id}`, centro_id: fila?.centro_id ?? null });
   revalidatePath('/dashboard/ausencias');
 }
 
@@ -33,13 +35,15 @@ export async function rechazarAusencia(id: string, motivoRechazo: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdmin(supabase);
 
-  const { error } = await supabase
+  const { data: fila, error } = await supabase
     .from('ausencias')
     .update({ estado: 'rechazada', revisado_por_id: adminId, motivo_rechazo: motivoRechazo || null })
-    .eq('id', id);
+    .eq('id', id)
+    .select('centro_id')
+    .single();
 
   if (error) throw new Error(error.message);
-  await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Rechazar ausencia', detalles: `Rechazó la ausencia ${id}: ${motivoRechazo}` });
+  await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Rechazar ausencia', detalles: `Rechazó la ausencia ${id}: ${motivoRechazo}`, centro_id: fila?.centro_id ?? null });
   revalidatePath('/dashboard/ausencias');
 }
 
@@ -123,6 +127,7 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
     admin_id: admin.id,
     accion: 'Crear',
     detalles: `Registró manualmente una ausencia para ${rider.nombre} (${rider.dni})`,
+    centro_id: rider.centro_id,
   });
 
   revalidatePath('/dashboard/ausencias');

@@ -132,6 +132,8 @@ export default async function ConfiguracionPage() {
               key={a.id}
               admin={a}
               zonas={zonasPorAdmin.get(a.id) ?? []}
+              ciudadIdsActuales={ciudadIdsPorAdmin.get(a.id) ?? []}
+              ciudadesDisponibles={ciudades ?? []}
               esSuperAdmin={esSuperAdmin}
               esYoMismo={a.id === yo.id}
             />

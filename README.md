@@ -68,12 +68,17 @@ desplegar después de añadir/editar variables de entorno).
 
 ## 3. Variables de entorno
 
-Copia `.env.local.example` a `.env.local` y rellena los 3 valores. Solo
-son de Supabase — no hace falta ninguna credencial de Google.
+Copia `.env.local.example` a `.env.local` y rellena los valores.
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `OVERTIME_API_USERNAME` / `OVERTIME_API_PASSWORD` — credenciales de la
+  API externa de Closer Logistics (Backoffice) que usan los módulos
+  "Horas extra" y "CH vs WH". Son las mismas que antes estaban guardadas
+  en las Script Properties del proyecto de Apps Script. **En Vercel se
+  configuran como variables de entorno del proyecto (Settings →
+  Environment Variables), nunca en el código.**
 
 ### Almacenamiento de archivos (Supabase Storage)
 Las fotos de incidencias, los justificantes de ausencias y las capturas
@@ -250,6 +255,57 @@ Sección para registrar cuando un rider se conecta fuera de su zona
 habitual: buscas al rider por nombre o DNI (se autocompleta su centro),
 indicas la fecha, adjuntas una captura de pantalla y, si quieres, una
 observación.
+
+**Rendimiento — esto es importante, la API externa no tiene forma de
+pedir varios drivers a la vez, así que la estrategia es no pedir dos
+veces lo mismo y no pedir en serie lo que se puede pedir en paralelo:**
+- **"Calcula horario"** (dato del contrato del rider, casi nunca cambia)
+  se guarda de forma **persistente** en `overtime_drivers_calcula`. Solo
+  se pide a la API la primera vez que se ve un rider; las siguientes
+  consultas lo leen de la base de datos. Si alguna vez cambia, hay un
+  botón de refresco por fila y otro para refrescar todos los visibles en
+  la tabla de CH vs WH.
+- El resultado de **CH vs WH** por centro/semana se cachea **30
+  minutos** (`ch_vs_wh_cache`), pensado para que las ~3 consultas diarias
+  típicas casi nunca toquen la API.
+- **Horas extra** usa el propio historial guardado
+  (`overtime_registros`): si un centro ya tiene datos de los últimos 5
+  minutos, no se vuelve a pedir a la API para esa consulta.
+- En ambos paneles hay un checkbox **"Forzar actualización en vivo"**
+  para saltarse la caché cuando haga falta el dato exacto del momento.
+- Los centros que sí hay que consultar se piden **en paralelo** (varios
+  centros a la vez, y dentro de cada centro los 7 días de la semana
+  también en paralelo), en vez de uno detrás de otro como hacía el
+  código original.
+
+## 7.1. Horas extra (Overtime) y CH vs WH
+
+Reemplaza el antiguo "Panel Overtime" y el proyecto "CH vs WH" que vivían
+como apps aparte en Google Apps Script. Ahora son dos páginas del CRM
+(`/dashboard/overtime` y `/dashboard/ch-vs-wh`) que reutilizan el mismo
+sistema de roles/zonas: un administrador o moderador solo ve y audita
+los centros de sus ciudades asignadas; el super_admin ve todos. Ya no
+hay selector de gestor (sobra: la sesión ya determina qué ve cada uno).
+
+**Cómo funciona:**
+- `centros.api_centro_id` enlaza cada centro del CRM con su ID en la API
+  externa de Closer Logistics (son sistemas de identificación distintos).
+  Si en el futuro se abre un centro nuevo, hay que añadir su
+  equivalencia en `schema_overtime.sql` o vía SQL directo.
+- **Horas extra**: al pulsar "Obtener datos", se consulta la API externa
+  y el resultado se guarda en la tabla `overtime_registros` (sustituye a
+  la caché temporal y la hoja de auditoría que usaba Apps Script). La
+  auditoría (confirmar/rechazar) queda protegida por RLS de zona.
+- **CH vs WH**: es solo informativo (horas contratadas vs. trabajadas,
+  balance, horas extra, si el driver "calcula horario", incidencias del
+  horario). No se guarda en base de datos ni tiene auditoría; cada
+  consulta trae los números de ese momento.
+- Ninguno de los dos exporta a Excel/CSV/pestaña — todo queda en la base
+  de datos del CRM.
+
+**Antes de usarlo por primera vez:** ejecutar `schema_overtime.sql` en el
+SQL Editor de Supabase, y configurar `OVERTIME_API_USERNAME` /
+`OVERTIME_API_PASSWORD` en las variables de entorno de Vercel.
 
 ## 8. Qué incluye esta versión
 

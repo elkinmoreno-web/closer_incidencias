@@ -6,7 +6,7 @@ export default function ChVsWhPage() {
       <div>
         <h1 className="text-lg font-semibold text-ink">CH vs WH</h1>
         <p className="text-sm text-ink-muted">
-          Horas contratadas (CH) vs. horas trabajadas (WH) por rider y semana. Informativo, no requiere auditoría.
+          Horas contratadas (CH) vs. horas trabajadas (WH) por rider y semana.
         </p>
       </div>
       <ChVsWhPanel />

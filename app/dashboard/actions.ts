@@ -24,10 +24,11 @@ async function registrarAuditoria(
   supabase: ReturnType<typeof createClient>,
   adminId: string,
   accion: string,
-  detalles: string
+  detalles: string,
+  centroId: number | null = null
 ) {
   // No frenamos la acción principal si falla el log de auditoría.
-  await supabase.from('auditoria').insert({ admin_id: adminId, accion, detalles }).select().maybeSingle();
+  await supabase.from('auditoria').insert({ admin_id: adminId, accion, detalles, centro_id: centroId }).select().maybeSingle();
 }
 
 export async function signOut() {
@@ -63,7 +64,7 @@ export async function editarIncidencia(
     .eq('id', id);
 
   if (error) throw new Error(error.message);
-  await registrarAuditoria(supabase, adminId, 'Editar', `Editó campos de la incidencia ${id}`);
+  await registrarAuditoria(supabase, adminId, 'Editar', `Editó campos de la incidencia ${id}`, data.centroId);
   revalidatePath('/dashboard/incidencias');
   revalidatePath('/dashboard');
 }
@@ -72,7 +73,7 @@ export async function aprobarIncidencia(id: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdminId(supabase);
 
-  const { error } = await supabase
+  const { data: fila, error } = await supabase
     .from('incidencias')
     .update({
       estado: 'aprobada',
@@ -80,10 +81,12 @@ export async function aprobarIncidencia(id: string) {
       fecha_gestion: new Date().toISOString(),
       motivo_rechazo: null, // si venía de un rechazo, limpiamos el motivo anterior
     })
-    .eq('id', id);
+    .eq('id', id)
+    .select('centro_id')
+    .single();
 
   if (error) throw new Error(error.message);
-  await registrarAuditoria(supabase, adminId, 'Aprobar', `Aprobó la incidencia ${id}`);
+  await registrarAuditoria(supabase, adminId, 'Aprobar', `Aprobó la incidencia ${id}`, fila?.centro_id ?? null);
   revalidatePath('/dashboard/incidencias');
   revalidatePath('/dashboard');
 }
@@ -92,7 +95,7 @@ export async function rechazarIncidencia(id: string, motivoRechazo: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdminId(supabase);
 
-  const { error } = await supabase
+  const { data: fila, error } = await supabase
     .from('incidencias')
     .update({
       estado: 'rechazada',
@@ -100,10 +103,12 @@ export async function rechazarIncidencia(id: string, motivoRechazo: string) {
       fecha_gestion: new Date().toISOString(),
       motivo_rechazo: motivoRechazo || null,
     })
-    .eq('id', id);
+    .eq('id', id)
+    .select('centro_id')
+    .single();
 
   if (error) throw new Error(error.message);
-  await registrarAuditoria(supabase, adminId, 'Rechazar', `Rechazó la incidencia ${id}: ${motivoRechazo}`);
+  await registrarAuditoria(supabase, adminId, 'Rechazar', `Rechazó la incidencia ${id}: ${motivoRechazo}`, fila?.centro_id ?? null);
   revalidatePath('/dashboard/incidencias');
   revalidatePath('/dashboard');
 }
@@ -112,17 +117,19 @@ export async function enviarAPapelera(id: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdminId(supabase);
 
-  const { error } = await supabase
+  const { data: fila, error } = await supabase
     .from('incidencias')
     .update({
       estado: 'papelera',
       eliminado_por_id: adminId,
       fecha_eliminacion: new Date().toISOString(),
     })
-    .eq('id', id);
+    .eq('id', id)
+    .select('centro_id')
+    .single();
 
   if (error) throw new Error(error.message);
-  await registrarAuditoria(supabase, adminId, 'Enviar a papelera', `Movió a papelera la incidencia ${id}`);
+  await registrarAuditoria(supabase, adminId, 'Enviar a papelera', `Movió a papelera la incidencia ${id}`, fila?.centro_id ?? null);
   revalidatePath('/dashboard/incidencias');
   revalidatePath('/dashboard/papelera');
 }
@@ -131,13 +138,15 @@ export async function recuperarDePapelera(id: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdminId(supabase);
 
-  const { error } = await supabase
+  const { data: fila, error } = await supabase
     .from('incidencias')
     .update({ estado: 'pendiente', eliminado_por_id: null, fecha_eliminacion: null })
-    .eq('id', id);
+    .eq('id', id)
+    .select('centro_id')
+    .single();
 
   if (error) throw new Error(error.message);
-  await registrarAuditoria(supabase, adminId, 'Recuperar', `Recuperó de la papelera la incidencia ${id}`);
+  await registrarAuditoria(supabase, adminId, 'Recuperar', `Recuperó de la papelera la incidencia ${id}`, fila?.centro_id ?? null);
   revalidatePath('/dashboard/incidencias');
   revalidatePath('/dashboard/papelera');
 }

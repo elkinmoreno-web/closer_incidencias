@@ -70,6 +70,7 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
     admin_id: admin.id,
     accion: 'Conexión fuera de zona',
     detalles: `Registró una conexión fuera de zona para ${rider.nombre} (${rider.dni})`,
+    centro_id: rider.centro_id,
   });
 
   revalidatePath('/dashboard/conexiones');

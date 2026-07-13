@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NuevaConexionModal } from '@/components/conexiones/NuevaConexionModal';
 import { TableFilters } from '@/components/dashboard/TableFilters';
+import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { Pagination } from '@/components/dashboard/Pagination';
 import { formatFechaCorta, formatFecha } from '@/lib/utils';
 import { getSignedUrl } from '@/lib/storage';
@@ -36,12 +37,13 @@ export default async function ConexionesPage({
     query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
   }
 
-  const [{ data: conexiones, count }, { data: riders }, { data: centros }, { data: ciudades }] = await Promise.all([
+  const [{ data: conexiones, count }, { data: riders }, zona] = await Promise.all([
     query,
     supabase.from('riders').select('nombre, dni, centros(nombre)').eq('activo', true).order('nombre'),
-    supabase.from('centros').select('*').eq('activo', true).order('nombre'),
-    supabase.from('ciudades').select('*').order('nombre'),
+    ciudadesYCentrosDeMiZona(),
   ]);
+  const centros = zona.centros;
+  const ciudades = zona.ciudades;
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 

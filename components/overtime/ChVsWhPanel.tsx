@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Loader2, RefreshCw, Search, RotateCw } from 'lucide-react';
 import { centrosConsultablesChVsWh, obtenerChVsWh, refrescarCalculaHorario, type FilaChVsWh, type CentroConId } from '@/app/dashboard/ch-vs-wh/actions';
+import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
+
+type CampoOrdenChVsWh = 'centro' | 'rider' | 'ch' | 'wh' | 'balance' | 'horasExtra' | 'calculaHorario' | 'eventos';
 
 function lunesDe(fechaIso: string): string {
   const d = new Date(fechaIso + 'T12:00:00Z');
@@ -99,6 +102,31 @@ export function ChVsWhPanel() {
     });
   }
 
+  const [ordenCampo, setOrdenCampo] = useState<CampoOrdenChVsWh | null>(null);
+  const [ordenDir, setOrdenDir] = useState<Direccion>('asc');
+
+  function ordenarPor(campo: CampoOrdenChVsWh) {
+    if (ordenCampo === campo) setOrdenDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else {
+      setOrdenCampo(campo);
+      setOrdenDir('asc');
+    }
+  }
+
+  const filasOrdenadas = useMemo(() => {
+    if (!ordenCampo) return filas;
+    const signo = ordenDir === 'asc' ? 1 : -1;
+    return [...filas].sort((a, b) => {
+      let va: string | number = a[ordenCampo] as string | number;
+      let vb: string | number = b[ordenCampo] as string | number;
+      if (typeof va === 'string') va = va.toLowerCase();
+      if (typeof vb === 'string') vb = vb.toLowerCase();
+      if (va < vb) return -1 * signo;
+      if (va > vb) return 1 * signo;
+      return 0;
+    });
+  }, [filas, ordenCampo, ordenDir]);
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_1fr]">
       {/* Panel de filtros */}
@@ -193,19 +221,19 @@ export function ChVsWhPanel() {
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                    <th className="px-3 py-2">Centro</th>
-                    <th className="px-3 py-2">Rider</th>
-                    <th className="px-3 py-2 text-center">CH</th>
-                    <th className="px-3 py-2 text-center">WH</th>
-                    <th className="px-3 py-2 text-center">Balance</th>
-                    <th className="px-3 py-2 text-center">Horas extra</th>
-                    <th className="px-3 py-2 text-center">Calcula horario</th>
-                    <th className="px-3 py-2">Incidencias</th>
+                  <tr className="border-b border-border bg-surface uppercase tracking-wide text-ink-muted">
+                    <SortableTh campo="centro" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Centro</SortableTh>
+                    <SortableTh campo="rider" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Rider</SortableTh>
+                    <SortableTh campo="ch" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">CH</SortableTh>
+                    <SortableTh campo="wh" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">WH</SortableTh>
+                    <SortableTh campo="balance" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Balance</SortableTh>
+                    <SortableTh campo="horasExtra" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Horas extra</SortableTh>
+                    <SortableTh campo="calculaHorario" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Calcula horario</SortableTh>
+                    <SortableTh campo="eventos" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Incidencias</SortableTh>
                   </tr>
                 </thead>
                 <tbody>
-                  {filas.map((f, i) => (
+                  {filasOrdenadas.map((f, i) => (
                     <tr key={`${f.usuario}-${i}`} className="border-b border-border">
                       <td className="max-w-[110px] truncate px-3 py-2 text-ink-muted" title={f.centro}>
                         {f.centro}

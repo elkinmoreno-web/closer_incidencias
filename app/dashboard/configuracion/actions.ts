@@ -73,20 +73,36 @@ export async function toggleMotivoAusencia(id: number, activo: boolean) {
   revalidatePath('/dashboard/configuracion');
 }
 
-export async function publicarAnuncio(mensaje: string) {
-  const { supabase } = await assertSuperAdminOAdministrador();
+/**
+ * Publica un anuncio, global o dirigido a una ciudad concreta. Ahora
+ * pueden coexistir varios anuncios activos a la vez (uno global + varios
+ * por ciudad, o los que hagan falta) — ya no se desactivan los
+ * anteriores automáticamente.
+ *
+ * - Super Admin: puede publicar global (ciudadId = null) o en cualquier ciudad.
+ * - Administrador (zona limitada): SOLO puede publicar en una de sus
+ *   propias ciudades asignadas, nunca global ni en ciudad ajena.
+ */
+export async function publicarAnuncio(mensaje: string, ciudadId: number | null, audiencia: 'todos' | 'admins' | 'riders' = 'todos') {
+  const { supabase, rol } = await assertSuperAdminOAdministrador();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { data: admin } = await supabase.from('admins').select('id').eq('auth_user_id', user!.id).single();
 
-  // Solo un anuncio activo a la vez: desactivamos cualquier anterior.
-  await supabase.from('anuncios').update({ activo: false }).eq('activo', true);
+  if (rol !== 'super_admin') {
+    if (ciudadId === null) throw new Error('Solo un Super Admin puede publicar un anuncio global');
+    const { data: misCiudades } = await supabase.from('admin_ciudades').select('ciudad_id').eq('admin_id', admin!.id);
+    const permitido = (misCiudades ?? []).some((c) => c.ciudad_id === ciudadId);
+    if (!permitido) throw new Error('Solo puedes publicar anuncios en tus propias ciudades');
+  }
 
   const { error } = await supabase.from('anuncios').insert({
     mensaje: mensaje.trim(),
     activo: true,
+    ciudad_id: ciudadId,
+    audiencia,
     created_by: admin?.id ?? null,
   });
   if (error) throw new Error(error.message);
@@ -97,7 +113,21 @@ export async function publicarAnuncio(mensaje: string) {
 }
 
 export async function desactivarAnuncio(id: number) {
-  const { supabase } = await assertSuperAdminOAdministrador();
+  const { supabase, rol } = await assertSuperAdminOAdministrador();
+
+  if (rol !== 'super_admin') {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: admin } = await supabase.from('admins').select('id').eq('auth_user_id', user!.id).single();
+    const { data: anuncio } = await supabase.from('anuncios').select('ciudad_id').eq('id', id).single();
+    if (!anuncio) throw new Error('Anuncio no encontrado');
+    if (anuncio.ciudad_id === null) throw new Error('Solo un Super Admin puede quitar un anuncio global');
+    const { data: misCiudades } = await supabase.from('admin_ciudades').select('ciudad_id').eq('admin_id', admin!.id);
+    const permitido = (misCiudades ?? []).some((c) => c.ciudad_id === anuncio.ciudad_id);
+    if (!permitido) throw new Error('No puedes quitar un anuncio de una ciudad que no es tuya');
+  }
+
   const { error } = await supabase.from('anuncios').update({ activo: false }).eq('id', id);
   if (error) throw new Error(error.message);
 
@@ -225,4 +255,75 @@ export async function actualizarZonasAdmin(adminId: string, ciudadIds: number[])
     if (error) throw new Error(error.message);
   }
   revalidatePath('/dashboard/configuracion');
+}
+
+/**
+ * Cambia el rol de un administrador. Solo el Super Admin puede hacerlo.
+ * No se permite cambiar el propio rol (para no quedarse sin super_admin
+ * por error) ni dejar a alguien con un rol inválido.
+ */
+export async function cambiarRolAdmin(adminId: string, nuevoRol: 'super_admin' | 'administrador' | 'moderador') {
+  const supabase = await assertSuperAdmin();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: objetivo } = await supabase.from('admins').select('id, auth_user_id, rol').eq('id', adminId).single();
+  if (!objetivo) throw new Error('Administrador no encontrado');
+  if (objetivo.auth_user_id === user!.id) throw new Error('No puedes cambiar tu propio rol');
+
+  const admin = createAdminClient();
+  const { error } = await admin.from('admins').update({ rol: nuevoRol }).eq('id', adminId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard/configuracion');
+}
+
+/**
+ * Activa o desactiva un administrador (sin borrarlo). Un admin
+ * desactivado no puede entrar (is_admin() exige activo=true). No puedes
+ * desactivarte a ti mismo.
+ */
+export async function toggleAdminActivo(adminId: string, activo: boolean) {
+  const supabase = await assertSuperAdmin();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: objetivo } = await supabase.from('admins').select('id, auth_user_id').eq('id', adminId).single();
+  if (!objetivo) throw new Error('Administrador no encontrado');
+  if (objetivo.auth_user_id === user!.id) throw new Error('No puedes desactivar tu propia cuenta');
+
+  const admin = createAdminClient();
+  const { error } = await admin.from('admins').update({ activo }).eq('id', adminId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard/configuracion');
+}
+
+/**
+ * Establece una nueva contraseña para un administrador. Solo Super
+ * Admin. La contraseña la escribe el Super Admin en el momento (mínimo 8
+ * caracteres) y se aplica directamente en Auth; no se guarda en claro en
+ * ningún sitio.
+ */
+export async function cambiarPasswordAdmin(adminId: string, nuevaPassword: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await assertSuperAdmin();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+
+  if (!nuevaPassword || nuevaPassword.length < 8) {
+    return { ok: false, error: 'La contraseña debe tener al menos 8 caracteres' };
+  }
+
+  const admin = createAdminClient();
+  const { data: objetivo } = await admin.from('admins').select('auth_user_id').eq('id', adminId).single();
+  if (!objetivo?.auth_user_id) return { ok: false, error: 'Administrador no encontrado o sin cuenta de acceso' };
+
+  const { error } = await admin.auth.admin.updateUserById(objetivo.auth_user_id, { password: nuevaPassword });
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true };
 }

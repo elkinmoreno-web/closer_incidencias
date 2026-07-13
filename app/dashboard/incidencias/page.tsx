@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { Pagination } from '@/components/dashboard/Pagination';
 import { IncidenciaActions } from '@/components/dashboard/IncidenciaActions';
@@ -62,15 +63,16 @@ export default async function IncidenciasPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: incidencias, count }, { data: centros }, { data: motivos }, { data: ciudades }, { data: gestores }, { data: riders }] =
+  const [{ data: incidencias, count }, { data: motivos }, { data: gestores }, { data: riders }, zona] =
     await Promise.all([
       query,
-      supabase.from('centros').select('*').eq('activo', true).order('nombre'),
       supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
-      supabase.from('ciudades').select('*').order('nombre'),
       supabase.from('gestores').select('*').order('nombre'),
       supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
+      ciudadesYCentrosDeMiZona(),
     ]);
+  const centros = zona.centros;
+  const ciudades = zona.ciudades;
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 

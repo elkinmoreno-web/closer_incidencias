@@ -6,6 +6,7 @@ import { Pagination } from '@/components/dashboard/Pagination';
 import { NuevaAusenciaModal } from '@/components/dashboard/NuevaAusenciaModal';
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { TableFilters } from '@/components/dashboard/TableFilters';
+import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { estadoAusenciaColor, estadoAusenciaLabel, formatFechaCorta } from '@/lib/utils';
 import { listSignedUrls } from '@/lib/storage';
 
@@ -53,15 +54,16 @@ export default async function AusenciasPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }, { data: centros }, { data: ciudades }, { data: gestores }] =
+  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }, { data: gestores }, zona] =
     await Promise.all([
       query,
       supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
       supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
-      supabase.from('centros').select('*').eq('activo', true).order('nombre'),
-      supabase.from('ciudades').select('*').order('nombre'),
       supabase.from('gestores').select('*').order('nombre'),
+      ciudadesYCentrosDeMiZona(),
     ]);
+  const centros = zona.centros;
+  const ciudades = zona.ciudades;
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 

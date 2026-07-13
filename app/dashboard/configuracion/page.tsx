@@ -2,14 +2,9 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { CentrosList, VehiculosList, MotivosList, MotivosAusenciaList } from '@/components/config/CatalogLists';
 import { CrearAdminForm } from '@/components/config/CrearAdminForm';
+import { AdminRow } from '@/components/config/AdminRow';
 import { AnuncioForm } from '@/components/config/AnuncioForm';
 
-function etiquetaRol(rol: string) {
-  if (rol === 'super_admin') return 'Super Admin';
-  if (rol === 'administrador') return 'Administrador';
-  if (rol === 'admin_zona') return 'Moderador (rol antiguo, revisa)';
-  return 'Moderador';
-}
 
 export default async function ConfiguracionPage() {
   const supabase = createClient();
@@ -31,17 +26,27 @@ export default async function ConfiguracionPage() {
     ciudadesDelAdminActual = (data ?? []).map((c) => c.ciudad_id);
   }
 
-  const [{ data: centros }, { data: vehiculos }, { data: motivos }, { data: motivosAusencia }, { data: admins }, { data: anuncioActivo }, { data: ciudades }, { data: adminCiudades }] =
+  const [{ data: centros }, { data: vehiculos }, { data: motivos }, { data: motivosAusencia }, { data: admins }, { data: anunciosActivos }, { data: ciudades }, { data: adminCiudades }] =
     await Promise.all([
       supabase.from('centros').select('*, ciudades(nombre)').order('nombre'),
       supabase.from('vehiculos').select('*').order('nombre'),
       supabase.from('motivos').select('*').order('nombre'),
       supabase.from('motivos_ausencia').select('*').order('nombre'),
       supabase.from('admins').select('id, usuario, rol, activo').order('usuario'),
-      supabase.from('anuncios').select('id, mensaje').eq('activo', true).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('anuncios').select('id, mensaje, ciudad_id, audiencia, ciudades(nombre)').eq('activo', true).order('created_at', { ascending: false }),
       supabase.from('ciudades').select('*').order('nombre'),
       supabase.from('admin_ciudades').select('admin_id, ciudad_id, ciudades(nombre)'),
     ]);
+
+  // Anuncios visibles en Configuración: globales + los de mis ciudades
+  // (todos si soy super_admin), igual que en el banner.
+  const anunciosVisibles = (anunciosActivos ?? [])
+    .filter((a) => esSuperAdmin || a.ciudad_id === null || ciudadesDelAdminActual.includes(a.ciudad_id))
+    .map((a) => {
+      const ciudadRel = a.ciudades as unknown as { nombre: string } | { nombre: string }[] | null;
+      const nombre = Array.isArray(ciudadRel) ? ciudadRel[0]?.nombre : ciudadRel?.nombre;
+      return { id: a.id, mensaje: a.mensaje, ciudadNombre: nombre ?? null, audiencia: a.audiencia as 'todos' | 'admins' | 'riders' };
+    });
 
   const zonasPorAdmin = new Map<string, string[]>();
   const ciudadIdsPorAdmin = new Map<string, number[]>();
@@ -90,7 +95,7 @@ export default async function ConfiguracionPage() {
         <p className="mb-4 text-sm text-ink-muted">
           Se muestra como aviso en la parte superior de ambos portales (admin y riders).
         </p>
-        <AnuncioForm anuncioActivo={anuncioActivo ?? null} />
+        <AnuncioForm anunciosActivos={anunciosVisibles} ciudadesAsignables={ciudadesAsignables} esSuperAdmin={esSuperAdmin} />
       </div>
 
       {esSuperAdmin && (
@@ -123,15 +128,13 @@ export default async function ConfiguracionPage() {
 
         <div className="mt-6 divide-y divide-border border-t border-border">
           {adminsVisibles.map((a) => (
-            <div key={a.id} className="flex items-center justify-between py-2.5 text-sm">
-              <span className="font-medium text-ink">{a.usuario}</span>
-              <span className="text-right text-ink-muted">
-                {etiquetaRol(a.rol)} · {a.activo ? 'Activo' : 'Inactivo'}
-                {(a.rol === 'moderador' || a.rol === 'administrador' || a.rol === 'admin_zona') && (
-                  <div className="text-xs">{(zonasPorAdmin.get(a.id) ?? []).join(', ') || 'Sin ciudades asignadas'}</div>
-                )}
-              </span>
-            </div>
+            <AdminRow
+              key={a.id}
+              admin={a}
+              zonas={zonasPorAdmin.get(a.id) ?? []}
+              esSuperAdmin={esSuperAdmin}
+              esYoMismo={a.id === yo.id}
+            />
           ))}
         </div>
       </div>

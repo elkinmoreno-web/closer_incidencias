@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { RecoverButton } from '@/components/dashboard/RecoverButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableFilters } from '@/components/dashboard/TableFilters';
@@ -29,11 +30,12 @@ export default async function PapeleraPage({
     query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
   }
 
-  const [{ data: incidencias }, { data: centros }, { data: ciudades }] = await Promise.all([
+  const [{ data: incidencias }, zona] = await Promise.all([
     query,
-    supabase.from('centros').select('*').eq('activo', true).order('nombre'),
-    supabase.from('ciudades').select('*').order('nombre'),
+    ciudadesYCentrosDeMiZona(),
   ]);
+  const centros = zona.centros;
+  const ciudades = zona.ciudades;
 
   return (
     <div className="flex flex-col gap-4">

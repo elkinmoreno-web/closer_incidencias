@@ -91,6 +91,7 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
     admin_id: admin.id,
     accion: 'Crear',
     detalles: `Registró manualmente una incidencia para ${rider.nombre} (${rider.dni})`,
+    centro_id: rider.centro_id,
   });
 
   revalidatePath('/dashboard/incidencias');

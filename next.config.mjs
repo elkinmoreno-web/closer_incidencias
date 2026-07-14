@@ -12,6 +12,13 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Por defecto Next.js limita el cuerpo de una Server Action a 1MB.
+    // La importación de riders y de métricas ya trocea el envío en el
+    // cliente para no acercarse a ese límite, pero se sube el techo
+    // como margen de seguridad adicional.
+    serverActions: { bodySizeLimit: '5mb' },
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

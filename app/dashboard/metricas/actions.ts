@@ -22,14 +22,15 @@ export interface CentroConId {
 }
 
 /** Ciudades visibles del admin actual (mismo patrón de zona que el resto del CRM). */
-export async function ciudadesConsultablesMetricas(): Promise<string[]> {
+export async function ciudadesConsultablesMetricas(): Promise<{ ciudades: string[]; esSuperAdmin: boolean }> {
   const { supabase, admin } = await assertAdmin();
   if (admin.rol === 'super_admin') {
     const { data } = await supabase.from('ciudades').select('nombre').order('nombre');
-    return (data ?? []).map((c) => c.nombre);
+    return { ciudades: (data ?? []).map((c) => c.nombre), esSuperAdmin: true };
   }
   const { data } = await supabase.from('admin_ciudades').select('ciudades(nombre)').eq('admin_id', admin.id);
-  return (data ?? []).map((c) => (c.ciudades as unknown as { nombre: string } | null)?.nombre).filter((n): n is string => !!n);
+  const ciudades = (data ?? []).map((c) => (c.ciudades as unknown as { nombre: string } | null)?.nombre).filter((n): n is string => !!n);
+  return { ciudades, esSuperAdmin: false };
 }
 
 /**
@@ -102,25 +103,44 @@ export interface FilaMetricaAdmin {
 }
 
 /** Métricas de la semana para el admin, ya filtradas por su zona (ciudad como texto libre, emparejada por nombre). */
-export async function obtenerMetricasAdmin(fechaLunes: string, fechaDomingo: string, ciudadesFiltro: string[]): Promise<FilaMetricaAdmin[]> {
+/**
+ * Trae TODAS las filas de la semana (sin el límite de 1000 que aplica
+ * Supabase por defecto si no se pagina explícitamente), paginando en
+ * bloques de 1000 hasta agotar los resultados.
+ */
+export async function obtenerMetricasAdmin(fechaLunes: string, fechaDomingo: string, ciudadesFiltro: string[], soloTodas: boolean): Promise<FilaMetricaAdmin[]> {
   const { supabase } = await assertAdmin();
 
-  let query = supabase
-    .from('driver_daily_stats')
-    .select('day, city, name, email, sh, active_hours, tph, pct_accept, pct_cancel, completed_trips')
-    .gte('day', fechaLunes)
-    .lte('day', fechaDomingo)
-    .order('day', { ascending: false });
+  const PAGE = 1000;
+  let desde = 0;
+  const resultado: FilaMetricaAdmin[] = [];
 
-  if (ciudadesFiltro.length > 0) {
-    query = query.in(
-      'city',
-      ciudadesFiltro.flatMap((c) => [c, c.toLowerCase(), c.toUpperCase()])
-    );
+  while (true) {
+    let query = supabase
+      .from('driver_daily_stats')
+      .select('day, city, name, email, sh, active_hours, tph, pct_accept, pct_cancel, completed_trips')
+      .gte('day', fechaLunes)
+      .lte('day', fechaDomingo)
+      .order('email')
+      .range(desde, desde + PAGE - 1);
+
+    // "todas" para super_admin = sin filtro de ciudad en absoluto (ver
+    // todo, tal cual). Para admin de zona, comparamos por ciudad
+    // ignorando mayúsculas/minúsculas (ilike), no por igualdad exacta —
+    // así basta con que el texto coincida aunque venga con otro casing.
+    if (!soloTodas && ciudadesFiltro.length > 0) {
+      query = query.or(ciudadesFiltro.map((c) => `city.ilike.${c.replace(/[%,]/g, '')}`).join(','));
+    }
+
+    const { data, error } = await query;
+    if (error || !data || data.length === 0) break;
+    resultado.push(...data);
+    if (data.length < PAGE) break;
+    desde += PAGE;
+    if (desde > 200000) break; // límite de seguridad razonable
   }
 
-  const { data } = await query;
-  return data ?? [];
+  return resultado;
 }
 
 export interface EstadoSincronizacion {

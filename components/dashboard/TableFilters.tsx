@@ -121,6 +121,7 @@ export function TableFilters({
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
           <option value="">Todos los centros</option>
+          <option value="sin-centro">⚠️ Sin centro asignado</option>
           {centrosFiltrados.map((c) => (
             <option key={c.id} value={c.id}>{c.nombre}</option>
           ))}

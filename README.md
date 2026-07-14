@@ -79,46 +79,64 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
   en las Script Properties del proyecto de Apps Script. **En Vercel se
   configuran como variables de entorno del proyecto (Settings →
   Environment Variables), nunca en el código.**
+- `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` /
+  `GOOGLE_DRIVE_REFRESH_TOKEN` / `GOOGLE_DRIVE_FOLDER_ID` — para guardar
+  los archivos adjuntos en Google Drive. Ver más abajo cómo generarlas.
 
-### Almacenamiento de archivos (Supabase Storage)
+### Almacenamiento de archivos (Google Drive)
 Las fotos de incidencias, los justificantes de ausencias y las capturas
-de conexiones fuera de zona se guardan en **buckets privados de Supabase
-Storage** (`incidencias`, `ausencias`, `conexiones`), que crea el script
-`schema_almacenamiento_final.sql`. Nunca se exponen por enlace público:
-el panel genera URLs firmadas que caducan a los 5 minutos, y solo un
-admin con sesión puede pedirlas.
+de conexiones fuera de zona se guardan en el **Google Drive de la
+empresa** (Workspace), no en Supabase — así se ahorra el espacio/costo
+de Supabase y queda todo trazable en un Drive que el equipo ya usa.
 
-Se intentó usar Google Drive del Workspace para ahorrar coste, pero
-requiere permisos de administrador en Google Cloud (crear una cuenta de
-servicio) que no siempre están disponibles, así que el sistema usa
-Supabase Storage, que funciona sin depender de nadie más.
+Se organizan en carpetas por categoría y mes, dentro de una carpeta raíz
+que tú creas una vez en el Drive (ej. "Closer CRM - Archivos"):
+```
+Closer CRM - Archivos/
+├── Incidencias/2026-07/
+├── Ausencias/2026-07/
+└── Conexiones/2026-07/
+```
+Las subcarpetas de categoría y mes se crean solas la primera vez que
+hace falta. **Los archivos no se borran automáticamente** (a diferencia
+de la versión anterior con Supabase Storage): se conservan indefinidamente.
 
-### Ahorro de espacio: compresión + borrado automático
-Para que el 1 GB del plan gratuito de Supabase dure lo máximo posible:
-- **Compresión fuerte en el navegador** antes de subir: las imágenes se
-  reescalan a 1280px de ancho y se recomprimen (calidad 0.65). Una foto
-  de móvil de 4-8 MB acaba en ~100-250 KB, y sigue siendo legible. Los
-  PDF no se tocan.
-- **Borrado automático de fotos con 2+ meses** (`schema_limpieza_archivos.sql`):
-  cada noche se borran los archivos de incidencias/ausencias/conexiones
-  con dos meses o más. **El registro se conserva** (quién, cuándo,
-  motivo, estado); solo desaparece la foto, que es lo pesado, y el panel
-  muestra "Archivo eliminado por antigüedad".
+**Privacidad:** ningún archivo se comparte con enlace público. El panel
+sirve cada archivo a través de una ruta propia (`/api/drive-file`) que
+exige sesión de admin válida antes de descargarlo de Drive y entregarlo
+— el archivo en Drive en sí sigue siendo privado en todo momento.
 
-  Este script necesita un par de pasos de configuración (vienen
-  detallados dentro del propio archivo .sql):
-    1. Activar las extensiones `http` y `pg_cron` (Database → Extensions).
-    2. Guardar en Vault la URL del proyecto y la `service_role` key con
-       los dos `vault.create_secret(...)` que indica el script. Se hace
-       así, y no poniendo la clave en el código, porque borrar de verdad
-       un archivo (liberando espacio) obliga a llamar a la Storage API de
-       Supabase con permisos de servicio — borrarlo por SQL directo NO
-       libera el espacio, solo deja el archivo huérfano.
+#### Cómo configurarlo (una sola vez)
 
-  ⚠️ Esas fotos son evidencias. Confirma con RRHH/legal que 2 meses es
-  un plazo de conservación aceptable **antes** de ejecutar ese script.
-  Para cambiar el plazo, edita el `interval '2 months'` del script. Para
-  probar sin esperar a la noche: `select purgar_archivos_antiguos();`.
+No hace falta crear una app en Google Cloud con cuenta de servicio (eso
+fue lo que se intentó antes y no funcionó por permisos). En su lugar, se
+usa el mismo mecanismo que usa `rclone`: autorizas tu propia cuenta una
+vez, en tu ordenador, y el token que genera sirve indefinidamente sin
+volver a pedir nada (igual que ya usas en tu otro proyecto con GitHub
+Actions).
+
+1. Instala `rclone` en tu ordenador y ejecuta `rclone config`.
+2. Crea un remoto nuevo de tipo `drive` (Google Drive), inicia sesión
+   con la cuenta del Workspace de la empresa, y deja que autorice normal
+   (se abre el navegador, aceptas los permisos).
+3. Cuando termine, abre el archivo de configuración de rclone (normalmente
+   `~/.config/rclone/rclone.conf`) y copia estos 3 valores del remoto que
+   acabas de crear:
+   - `client_id`
+   - `client_secret`
+   - `token` → dentro de ese JSON, el campo `"refresh_token"`
+4. En Google Drive, crea la carpeta raíz (ej. "Closer CRM - Archivos"),
+   ábrela en el navegador y copia el ID de la carpeta desde la URL
+   (`https://drive.google.com/drive/folders/`**`ESTE_ID`**).
+5. En Vercel (Settings → Environment Variables) añade:
+   - `GOOGLE_DRIVE_CLIENT_ID`
+   - `GOOGLE_DRIVE_CLIENT_SECRET`
+   - `GOOGLE_DRIVE_REFRESH_TOKEN` (el `refresh_token` del paso 3)
+   - `GOOGLE_DRIVE_FOLDER_ID` (el ID del paso 4)
+
+Con esto, la app pide un token de acceso nuevo sola cada vez que hace
+falta, usando ese refresh token — no vuelve a pedir autorización nunca,
+salvo que revoques el acceso manualmente desde la cuenta de Google.
 
 ## 4. Desarrollo local
 
@@ -219,9 +237,10 @@ cual lo exporta vuestro sistema de RRHH. Está pensado para subir el
 **Excel completo todos los días** sin duplicar nada.
 
 Qué hace con cada fila:
-- **Solo importa** las de empresa contratante **Closer Logistics SL** con
-  Estado **"Activo"** o **"Baja operativa"**. El resto se omite y se
-  informa cuántas y por qué.
+- **Solo importa** las de empresa contratante **Closer Logistics SL** o
+  **Closer Go Germany GmbH**, con puesto **Rider** y Estado
+  **"Activo"** o **"Baja operativa"**. El resto se omite y se informa
+  cuántas y por qué.
 - **No duplica**: si el DNI ya existe, actualiza ese rider en vez de
   crear uno nuevo. Al terminar verás "X nuevos, Y actualizados".
 - **Deduplica dentro del propio archivo**: si el mismo DNI aparece varias
@@ -231,14 +250,17 @@ Qué hace con cada fila:
 - Si una celda de email trae **dos correos separados por coma**, se queda
   con el segundo.
 
-Sobre los **centros**: el Excel usa nombres como "FD Jerez" o "MCD Oliva",
-que se traducen al centro real del sistema mediante una tabla de
-equivalencias (`lib/mapeoCentros.ts`). **La importación nunca crea
-centros nuevos.** Si un centro del Excel no está en esa tabla (uno nuevo
-o mal escrito), el rider se importa igual pero **sin centro**, y al
-final se lista quiénes quedaron así para que les asignes el centro a
-mano desde Configuración. Si añadís centros nuevos en el futuro, hay que
-añadir su equivalencia en `lib/mapeoCentros.ts`.
+Sobre los **centros**: el Excel usa nombres como "FD Jerez", que se
+traducen al centro real del sistema mediante una tabla de equivalencias
+(`lib/mapeoCentros.ts`). La importación **no crea centros nuevos**,
+salvo una excepción: los centros **"MCD..."** (una operación aparte, con
+sus propios riders) **sí se crean automáticamente** la primera vez que
+aparecen, con una ciudad del mismo nombre. Para cualquier otro centro no
+reconocido (uno nuevo o mal escrito, que no sea MCD), el rider se
+importa igual pero **sin centro**, y al final se lista quiénes quedaron
+así para que les asignes el centro a mano desde Configuración. Si añadís
+centros nuevos (no-MCD) en el futuro, hay que añadir su equivalencia en
+`lib/mapeoCentros.ts`.
 
 **Rendimiento:** la importación procesa el archivo por lotes y resuelve
 en bloque (una consulta para saber quién ya existe, un único UPSERT para
@@ -333,6 +355,49 @@ hay selector de gestor (sobra: la sesión ya determina qué ve cada uno).
 **Antes de usarlo por primera vez:** ejecutar `schema_overtime.sql` en el
 SQL Editor de Supabase, y configurar `OVERTIME_API_USERNAME` /
 `OVERTIME_API_PASSWORD` en las variables de entorno de Vercel.
+
+## 7.3. Métricas operativas (conexión, aceptación, cancelación)
+
+Integra el panel "dashboard_riders" (proyecto separado en React+Vite) al
+CRM, migrando su tabla a este mismo Supabase. Ya no hay un segundo
+proyecto ni un segundo login:
+
+- **El rider** ve sus propias métricas en una pestaña nueva ("Mis
+  métricas") dentro de `/rider/dashboard`, con SU MISMA sesión (se
+  emparejan las filas por su email, ya guardado en `riders.email`). El
+  panel original identificaba al rider con email+teléfono sin
+  contraseña real (guardado en `localStorage`); aquí se aprovecha la
+  sesión de verdad que ya existe, más segura y sin nada nuevo que
+  aprender.
+- **El admin** ve `/dashboard/metricas`: una tabla agregada por rider de
+  la semana, filtrada por zona igual que el resto del CRM (comparando el
+  nombre de ciudad — que en esta tabla es texto libre, no un ID — contra
+  las ciudades asignadas al admin). El super_admin ve todas.
+- **Carga automática diaria**: sigue el mismo pipeline que ya tenías
+  (Python → Drive → Apps Script → Edge Function), solo que ahora la Edge
+  Function vive en este proyecto de Supabase. Ver `supabase/functions/sync-parquet/`.
+- **Carga manual de respaldo**: botón "Subir manualmente" en
+  `/dashboard/metricas`, para cuando la automatización falla — acepta
+  `.parquet` o `.xlsx/.csv` con columna "Day", igual que la página Admin
+  del proyecto original (versión simplificada: sin la vista previa de
+  "qué cambiaría", sube directo tras parsear y filtrar a las últimas 2
+  semanas).
+
+### Cómo activarlo
+
+1. Ejecutar `supabase/schema_metricas.sql` en el SQL Editor.
+2. Desplegar la Edge Function:
+   - Supabase Dashboard → Edge Functions → Create a new function → nombre `sync-parquet`
+   - Pega el contenido de `supabase/functions/sync-parquet/index.ts`
+   - Deploy
+   - En Secrets de esa función, añade `SYNC_TOKEN` (genera uno con `openssl rand -hex 32`)
+3. Actualizar el Apps Script existente (o crear uno nuevo con
+   `automation/apps-script.js` del proyecto original) para que apunte a
+   la URL de la Edge Function de **este** proyecto de Supabase, con el
+   `SUPABASE_URL`/`SUPABASE_ANON_KEY` de este proyecto y el nuevo
+   `SYNC_TOKEN`.
+4. El Python que genera el parquet no cambia — sigue escribiendo en el
+   mismo Drive de siempre.
 
 ## 8. Qué incluye esta versión
 

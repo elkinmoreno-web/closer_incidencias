@@ -8,7 +8,7 @@ import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { estadoAusenciaColor, estadoAusenciaLabel, formatFechaCorta } from '@/lib/utils';
-import { listSignedUrls } from '@/lib/storage';
+import { urlArchivoDrive } from '@/lib/driveUrl';
 
 const PAGE_SIZE = 10;
 
@@ -67,12 +67,13 @@ export default async function AusenciasPage({
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
-  const filas = await Promise.all(
-    (ausencias ?? []).map(async (a) => ({
-      ...a,
-      archivos: a.storage_prefix ? await listSignedUrls('ausencias', a.storage_prefix) : [],
-    }))
-  );
+  const filas = (ausencias ?? []).map((a) => ({
+    ...a,
+    archivos: (a.archivo_ids ?? []).map((fileId: string, idx: number) => ({
+      name: `Justificante ${idx + 1}`,
+      url: urlArchivoDrive(fileId),
+    })),
+  }));
 
   return (
     <div className="flex flex-col gap-4">

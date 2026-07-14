@@ -5,6 +5,7 @@ import { IncidenciaForm } from '@/components/rider/IncidenciaForm';
 import { AusenciaForm } from '@/components/rider/AusenciaForm';
 import { IncidenciasSemanaList } from '@/components/rider/IncidenciasSemanaList';
 import { AusenciasSemanaList } from '@/components/rider/AusenciasSemanaList';
+import { MetricasPanel } from '@/components/rider/MetricasPanel';
 import { inicioSemanaActualISO } from '@/lib/utils';
 
 export default async function RiderDashboardPage() {
@@ -63,6 +64,7 @@ export default async function RiderDashboardPage() {
             </div>
           </div>
         }
+        metricasPanel={<MetricasPanel />}
       />
     </div>
   );

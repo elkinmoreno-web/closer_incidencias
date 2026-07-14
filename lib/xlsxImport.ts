@@ -63,7 +63,7 @@ function normVal(v: string): string {
 }
 
 const ESTADOS_PERMITIDOS = ['activo', 'baja operativa'];
-const EMPRESA_PERMITIDA = 'closer logistics sl';
+const EMPRESAS_PERMITIDAS = ['closer logistics sl', 'closer go germany gmbh'];
 
 function strOrNull(v: unknown): string | null {
   if (v === null || v === undefined) return null;
@@ -140,11 +140,11 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       return;
     }
 
-    // Solo importamos riders de la empresa contratante correcta (puede
-    // haber otras empresas del grupo en el mismo Excel).
+    // Solo importamos riders de las empresas contratantes válidas del
+    // grupo (España y Alemania); el resto de empresas del Excel se omite.
     const empresaTexto = normVal(strOrNull(fila.empresaContratante) ?? '');
-    if (empresaTexto !== EMPRESA_PERMITIDA) {
-      omitidas.push(`Fila ${idx + 2} (${nombre}): empresa contratante "${fila.empresaContratante ?? '(vacío)'}" no es Closer Logistics SL, se omite`);
+    if (!EMPRESAS_PERMITIDAS.includes(empresaTexto)) {
+      omitidas.push(`Fila ${idx + 2} (${nombre}): empresa contratante "${fila.empresaContratante ?? '(vacío)'}" no es una empresa del grupo, se omite`);
       return;
     }
 
@@ -156,13 +156,9 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       return;
     }
 
-    // Los centros que empiezan por "MCD" son de otra operación, no de
-    // reparto; no se importan.
-    const centroTexto = strOrNull(fila.centro) ?? '';
-    if (normVal(centroTexto).startsWith('mcd')) {
-      omitidas.push(`Fila ${idx + 2} (${nombre}): centro "${centroTexto}" es MCD, se omite`);
-      return;
-    }
+    // Los centros MCD SÍ se importan (son una operación aparte, con sus
+    // propios riders): se tratan como cualquier otro centro nuevo, con
+    // su propia ciudad del mismo nombre.
 
     // Deduplicación: si este DNI ya salió antes en el mismo archivo, nos
     // quedamos con la primera aparición y omitimos las siguientes.

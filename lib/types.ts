@@ -95,9 +95,8 @@ export interface Incidencia {
   motivo_rechazo: string | null;
   direccion_recogida: string | null;
   direccion_entrega: string | null;
-  screenshot_url: string | null; // ruta dentro del bucket "incidencias"
-  evidencia_url: string | null;
-  archivos_purgados: boolean;
+  screenshot_url: string | null; // ID del archivo en Google Drive
+  evidencia_url: string | null; // ID del archivo en Google Drive
   estado: EstadoIncidencia;
   gestor_id: string | null;
   fecha_gestion: string | null;
@@ -122,8 +121,7 @@ export interface Ausencia {
   fecha_inicio: string;
   fecha_fin: string;
   comentario: string | null;
-  storage_prefix: string | null; // carpeta dentro del bucket "ausencias"
-  num_archivos: number;
+  archivo_ids: string[]; // IDs de los archivos en Google Drive
   estado: EstadoAusencia;
   revisado_por_id: string | null;
   created_at: string;
@@ -138,7 +136,7 @@ export interface ConexionFueraZona {
   nombre_rider: string;
   centro_id: number | null;
   fecha: string;
-  screenshot_url: string | null; // ruta dentro del bucket "conexiones"
+  screenshot_url: string | null; // ID del archivo en Google Drive
   observaciones: string | null;
   created_by: string | null;
   created_at: string;

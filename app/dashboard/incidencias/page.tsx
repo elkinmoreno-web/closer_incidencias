@@ -9,7 +9,7 @@ import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { estadoIncidenciaColor, estadoIncidenciaLabel, formatFecha } from '@/lib/utils';
-import { getSignedUrl } from '@/lib/storage';
+import { urlArchivoDrive } from '@/lib/driveUrl';
 import type { Incidencia } from '@/lib/types';
 
 const PAGE_SIZE = 10;
@@ -76,17 +76,15 @@ export default async function IncidenciasPage({
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
-  const filas = await Promise.all(
-    ((incidencias ?? []) as unknown as (Incidencia & {
-      centros: { nombre: string } | null;
-      motivos: { nombre: string } | null;
-      admins: { usuario: string } | null;
-    })[]).map(async (i) => ({
-      ...i,
-      screenshotSignedUrl: i.screenshot_url ? await getSignedUrl('incidencias', i.screenshot_url) : null,
-      evidenciaSignedUrl: i.evidencia_url ? await getSignedUrl('incidencias', i.evidencia_url) : null,
-    }))
-  );
+  const filas = ((incidencias ?? []) as unknown as (Incidencia & {
+    centros: { nombre: string } | null;
+    motivos: { nombre: string } | null;
+    admins: { usuario: string } | null;
+  })[]).map((i) => ({
+    ...i,
+    screenshotSignedUrl: urlArchivoDrive(i.screenshot_url),
+    evidenciaSignedUrl: urlArchivoDrive(i.evidencia_url),
+  }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -159,14 +157,7 @@ export default async function IncidenciasPage({
                           Ver evidencia
                         </a>
                       )}
-                      {!i.screenshotSignedUrl && !i.evidenciaSignedUrl &&
-                        (i.archivos_purgados ? (
-                          <span className="text-ink-muted" title="Los archivos se borran automáticamente tras 2 meses">
-                            Archivo eliminado por antigüedad
-                          </span>
-                        ) : (
-                          '—'
-                        ))}
+                      {!i.screenshotSignedUrl && !i.evidenciaSignedUrl && '—'}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(i.created_at)}</td>

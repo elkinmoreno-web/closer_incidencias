@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_DOC_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { subirArchivoDrive } from '@/lib/googleDrive';
 
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
@@ -100,11 +101,17 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
     if (err) return { error: err };
   }
 
-  const prefix = `${user.id}/${fechaInicio}_${fechaFin}_${Date.now()}`;
+  const prefix = `${rider.dni}_${fechaInicio}_${fechaFin}_${Date.now()}`;
+  const archivoIds: string[] = [];
   for (let i = 0; i < validos.length; i++) {
-    const path = `${prefix}/justificante_${i + 1}.${extFromMime(validos[i].type)}`;
-    const { error: upErr } = await supabase.storage.from('ausencias').upload(path, validos[i]);
-    if (upErr) return { error: 'No se pudo subir uno de los justificantes' };
+    const nombre = `${prefix}_justificante_${i + 1}.${extFromMime(validos[i].type)}`;
+    try {
+      const buffer = Buffer.from(await validos[i].arrayBuffer());
+      const fileId = await subirArchivoDrive('Ausencias', nombre, buffer, validos[i].type);
+      archivoIds.push(fileId);
+    } catch {
+      return { error: 'No se pudo subir uno de los justificantes' };
+    }
   }
 
   const { error: insertError } = await supabase.from('ausencias').insert({
@@ -116,8 +123,7 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
     fecha_inicio: fechaInicio,
     fecha_fin: fechaFin,
     comentario,
-    storage_prefix: validos.length > 0 ? prefix : null,
-    num_archivos: validos.length,
+    archivo_ids: archivoIds,
     estado: 'pendiente',
   });
 

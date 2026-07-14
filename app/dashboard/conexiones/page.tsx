@@ -5,7 +5,7 @@ import { TableFilters } from '@/components/dashboard/TableFilters';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { Pagination } from '@/components/dashboard/Pagination';
 import { formatFechaCorta, formatFecha } from '@/lib/utils';
-import { getSignedUrl } from '@/lib/storage';
+import { urlArchivoDrive } from '@/lib/driveUrl';
 
 const PAGE_SIZE = 10;
 
@@ -47,12 +47,10 @@ export default async function ConexionesPage({
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
-  const filas = await Promise.all(
-    (conexiones ?? []).map(async (c) => ({
-      ...c,
-      screenshotSignedUrl: c.screenshot_url ? await getSignedUrl('conexiones', c.screenshot_url) : null,
-    }))
-  );
+  const filas = (conexiones ?? []).map((c) => ({
+    ...c,
+    screenshotSignedUrl: urlArchivoDrive(c.screenshot_url),
+  }));
 
   const ridersParaModal = (riders ?? []).map((r) => ({
     nombre: r.nombre,

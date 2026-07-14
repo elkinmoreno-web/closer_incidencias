@@ -121,10 +121,12 @@ export function ImportRidersModal() {
                 <p className="text-sm text-ink-muted">
                   Sube el .xlsx con las columnas habituales (Empleado, DNI, Email, Centro, Empresa
                   contratante, Tipo de vehículo, Estado, etc.). Solo se cargan filas de{' '}
-                  <strong>Closer Logistics SL</strong> con estado Activo o Baja operativa. Si un
-                  rider ya existe (por DNI), se actualiza en vez de duplicarse. Los centros se
-                  asocian a los que ya existen en el sistema; si alguno no se reconoce, el rider se
-                  importa igual pero sin centro y te lo indicamos al final.
+                  <strong>Closer Logistics SL</strong> o <strong>Closer Go Germany GmbH</strong> con
+                  estado Activo o Baja operativa, y puesto Rider. Si un rider ya existe (por DNI), se
+                  actualiza en vez de duplicarse. Los centros se asocian a los que ya existen en el
+                  sistema; los centros <strong>MCD</strong> se crean automáticamente si no existen
+                  (con su propia ciudad). Si algún otro centro no se reconoce, el rider se importa
+                  igual pero sin centro y te lo indicamos al final.
                 </p>
                 <input
                   type="file"

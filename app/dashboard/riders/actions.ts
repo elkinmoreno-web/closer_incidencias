@@ -266,25 +266,31 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
   }
   if (validas.length === 0) return { creados: 0, actualizados: 0, errores, sinCentro };
 
-  // ---- 2. Traer centros y vehículos UNA vez para todo el lote ----
-  const [{ data: centros }, { data: vehiculos }] = await Promise.all([
+  // ---- 2. Traer centros, vehículos y ciudades UNA vez para todo el lote ----
+  const [{ data: centros }, { data: vehiculos }, { data: ciudades }] = await Promise.all([
     admin.from('centros').select('id, nombre'),
     admin.from('vehiculos').select('id, nombre'),
+    admin.from('ciudades').select('id, nombre'),
   ]);
 
   // Mapa de centros de la BD indexado por nombre normalizado, para
   // encontrarlos sin importar tildes/mayúsculas.
   const centroMap = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
   const vehiculoMap = new Map((vehiculos ?? []).map((v) => [v.nombre.toLowerCase().trim(), v.id]));
+  const ciudadMap = new Map((ciudades ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
 
   /**
-   * Traduce el nombre del Excel al centro real de la BD. NO crea centros.
+   * Traduce el nombre del Excel al centro real de la BD.
    * - Si el nombre del Excel está en el mapeo y ese centro existe → su id.
    * - Si no está en el mapeo, probamos por si el nombre del Excel ya
    *   coincide tal cual con un centro de la BD.
-   * - Si no hay forma → null, y lo anotamos para avisar.
+   * - Si es un centro "MCD" (operación aparte, con sus propios riders) y
+   *   no existe todavía, SÍ se crea: tanto el centro como una ciudad con
+   *   el mismo nombre (son riders fuera del mapeo normal de zonas).
+   * - Para cualquier otro centro no reconocido → no se crea nada, se
+   *   importa sin centro y se avisa para revisión manual.
    */
-  function resolverCentro(nombreExcel: string | null, nombreRider: string): number | null {
+  async function resolverCentro(nombreExcel: string | null, nombreRider: string): Promise<number | null> {
     if (!nombreExcel) return null;
 
     const oficial = nombreCentroOficial(nombreExcel);
@@ -296,6 +302,30 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
     // Por si el Excel ya trae el nombre tal cual está en la BD.
     const directo = centroMap.get(normalizarNombreCentro(nombreExcel));
     if (directo) return directo;
+
+    if (normalizarNombreCentro(nombreExcel).startsWith('mcd')) {
+      const nombreLimpio = nombreExcel.trim();
+      const claveNorm = normalizarNombreCentro(nombreLimpio);
+
+      let ciudadId = ciudadMap.get(claveNorm);
+      if (!ciudadId) {
+        const { data: ciudadNueva } = await admin.from('ciudades').insert({ nombre: nombreLimpio }).select('id').single();
+        if (ciudadNueva) {
+          ciudadId = ciudadNueva.id;
+          ciudadMap.set(claveNorm, ciudadNueva.id);
+        }
+      }
+
+      const { data: centroNuevo } = await admin
+        .from('centros')
+        .insert({ nombre: nombreLimpio, ciudad_id: ciudadId ?? null, activo: true })
+        .select('id')
+        .single();
+      if (centroNuevo) {
+        centroMap.set(claveNorm, centroNuevo.id);
+        return centroNuevo.id;
+      }
+    }
 
     sinCentro.push(`${nombreRider}: centro "${nombreExcel}" no reconocido, se importa sin centro`);
     return null;
@@ -316,7 +346,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
   // Resolver centro (en memoria, instantáneo) y vehículo de cada fila.
   const conIds = [];
   for (const v of validas) {
-    const centroId = resolverCentro(v.fila.centro, v.fila.nombre);
+    const centroId = await resolverCentro(v.fila.centro, v.fila.nombre);
     const vehiculoId = await resolverVehiculo(v.fila.vehiculo);
     conIds.push({ ...v, centroId, vehiculoId });
   }

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { subirArchivoDrive } from '@/lib/googleDrive';
 
 function validarArchivo(file: File | null, allowed: string[]): string | null {
   if (!file || file.size === 0) return null;
@@ -49,9 +50,14 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
   const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
   if (err) return { error: err };
 
-  const path = `${user.id}/conexion_${Date.now()}.${extFromMime(screenshot.type)}`;
-  const { error: upErr } = await supabase.storage.from('conexiones').upload(path, screenshot);
-  if (upErr) return { error: 'No se pudo subir la captura' };
+  const nombre = `${rider.dni}_conexion_${Date.now()}.${extFromMime(screenshot.type)}`;
+  let fileId: string;
+  try {
+    const buffer = Buffer.from(await screenshot.arrayBuffer());
+    fileId = await subirArchivoDrive('Conexiones', nombre, buffer, screenshot.type);
+  } catch {
+    return { error: 'No se pudo subir la captura' };
+  }
 
   const { error: insertError } = await supabase.from('conexiones_fuera_zona').insert({
     rider_id: rider.id,
@@ -59,7 +65,7 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
     nombre_rider: rider.nombre,
     centro_id: rider.centro_id,
     fecha,
-    screenshot_url: path,
+    screenshot_url: fileId,
     observaciones,
     created_by: admin.id,
   });

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { subirArchivoDrive } from '@/lib/googleDrive';
 
 export async function riderSignOut() {
   const supabase = createClient();
@@ -20,7 +21,7 @@ async function getCurrentRider() {
 
   const { data: rider, error } = await supabase
     .from('riders')
-    .select('id, nombre, dni, centro_id, activo')
+    .select('id, nombre, dni, email, centro_id, activo')
     .eq('auth_user_id', user.id)
     .single();
 
@@ -49,7 +50,7 @@ export type FormActionState = { error?: string; success?: boolean } | undefined;
 
 export async function enviarIncidencia(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   try {
-    const { supabase, user, rider } = await getCurrentRider();
+    const { supabase, rider } = await getCurrentRider();
 
     const parsed = incidenciaSchema.safeParse({
       dni: formData.get('dni'),
@@ -81,22 +82,30 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     }
 
     const stamp = Date.now();
-    let screenshotPath: string | null = null;
-    let evidenciaPath: string | null = null;
+    let screenshotFileId: string | null = null;
+    let evidenciaFileId: string | null = null;
 
     if (screenshot && screenshot.size > 0) {
       const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
       if (err) return { error: err };
-      screenshotPath = `${user.id}/${stamp}_captura.${extFromMime(screenshot.type)}`;
-      const { error: upErr } = await supabase.storage.from('incidencias').upload(screenshotPath, screenshot);
-      if (upErr) return { error: 'No se pudo subir la captura. Inténtalo de nuevo.' };
+      const nombre = `${rider.dni}_${stamp}_captura.${extFromMime(screenshot.type)}`;
+      try {
+        const buffer = Buffer.from(await screenshot.arrayBuffer());
+        screenshotFileId = await subirArchivoDrive('Incidencias', nombre, buffer, screenshot.type);
+      } catch {
+        return { error: 'No se pudo subir la captura. Inténtalo de nuevo.' };
+      }
     }
     if (evidencia && evidencia.size > 0) {
       const err = validarArchivo(evidencia, ALLOWED_IMAGE_MIME);
       if (err) return { error: err };
-      evidenciaPath = `${user.id}/${stamp}_evidencia.${extFromMime(evidencia.type)}`;
-      const { error: upErr } = await supabase.storage.from('incidencias').upload(evidenciaPath, evidencia);
-      if (upErr) return { error: 'No se pudo subir la evidencia. Inténtalo de nuevo.' };
+      const nombre = `${rider.dni}_${stamp}_evidencia.${extFromMime(evidencia.type)}`;
+      try {
+        const buffer = Buffer.from(await evidencia.arrayBuffer());
+        evidenciaFileId = await subirArchivoDrive('Incidencias', nombre, buffer, evidencia.type);
+      } catch {
+        return { error: 'No se pudo subir la evidencia. Inténtalo de nuevo.' };
+      }
     }
 
     const { error: insertError } = await supabase.from('incidencias').insert({
@@ -109,8 +118,8 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
       observaciones: parsed.data.observaciones,
       direccion_recogida: parsed.data.direccionRecogida,
       direccion_entrega: parsed.data.direccionEntrega,
-      screenshot_url: screenshotPath,
-      evidencia_url: evidenciaPath,
+      screenshot_url: screenshotFileId,
+      evidencia_url: evidenciaFileId,
       estado: 'pendiente',
     });
 
@@ -125,7 +134,7 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
 
 export async function enviarAusencia(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   try {
-    const { supabase, user, rider } = await getCurrentRider();
+    const { supabase, rider } = await getCurrentRider();
 
     const parsed = ausenciaSchema.safeParse({
       dni: formData.get('dni'),
@@ -148,11 +157,17 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
       if (err) return { error: err };
     }
 
-    const prefix = `${user.id}/${parsed.data.fechaInicio}_${parsed.data.fechaFin}_${Date.now()}`;
+    const nombreBase = `${rider.dni}_${parsed.data.fechaInicio}_${parsed.data.fechaFin}_${Date.now()}`;
+    const archivoIds: string[] = [];
     for (let i = 0; i < validos.length; i++) {
-      const path = `${prefix}/justificante_${i + 1}.${extFromMime(validos[i].type)}`;
-      const { error: upErr } = await supabase.storage.from('ausencias').upload(path, validos[i]);
-      if (upErr) return { error: 'No se pudo subir alguno de los justificantes. Inténtalo de nuevo.' };
+      const nombre = `${nombreBase}_justificante_${i + 1}.${extFromMime(validos[i].type)}`;
+      try {
+        const buffer = Buffer.from(await validos[i].arrayBuffer());
+        const fileId = await subirArchivoDrive('Ausencias', nombre, buffer, validos[i].type);
+        archivoIds.push(fileId);
+      } catch {
+        return { error: 'No se pudo subir alguno de los justificantes. Inténtalo de nuevo.' };
+      }
     }
 
     const { error: insertError } = await supabase.from('ausencias').insert({
@@ -164,8 +179,7 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
       fecha_inicio: parsed.data.fechaInicio,
       fecha_fin: parsed.data.fechaFin,
       comentario: parsed.data.comentario,
-      storage_prefix: prefix,
-      num_archivos: validos.length,
+      archivo_ids: archivoIds,
       estado: 'pendiente',
     });
 
@@ -176,4 +190,63 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+// ============================================================
+// MIS MÉTRICAS — datos operativos (conexión, aceptación, cancelación...)
+// ============================================================
+// Se emparejan por email con la sesión real del rider (ya autenticada
+// con DNI+contraseña), no con un segundo login por email+teléfono como
+// tenía el panel original. RLS en `driver_daily_stats` ya garantiza que
+// un rider solo puede leer sus propias filas.
+
+export interface FilaMetricaDiariaRider {
+  day: string;
+  city: string | null;
+  sh: number | null;
+  active_hours: number | null;
+  utilization_rate: number | null;
+  tph: number | null;
+  tpuh: number | null;
+  pct_accept: number | null;
+  pct_cancel: number | null;
+  total_dispatches: number | null;
+  accepted: number | null;
+  completed_trips: number | null;
+  rejected: number | null;
+  non_legit_cancel: number | null;
+  legit_cancel: number | null;
+}
+
+export async function obtenerMisMetricasSemana(fechaLunes: string, fechaDomingo: string): Promise<FilaMetricaDiariaRider[]> {
+  const { supabase, rider } = await getCurrentRider();
+  if (!rider.email) return [];
+
+  const { data } = await supabase
+    .from('driver_daily_stats')
+    .select('day, city, sh, active_hours, utilization_rate, tph, tpuh, pct_accept, pct_cancel, total_dispatches, accepted, completed_trips, rejected, non_legit_cancel, legit_cancel')
+    .ilike('email', rider.email)
+    .gte('day', fechaLunes)
+    .lte('day', fechaDomingo)
+    .order('day');
+
+  return data ?? [];
+}
+
+/** Días (fechas ISO) que tienen datos cargados en las últimas ~8 semanas, para saber qué semanas mostrar en el selector. */
+export async function obtenerSemanasConDatos(): Promise<string[]> {
+  const { supabase, rider } = await getCurrentRider();
+  if (!rider.email) return [];
+
+  const desde = new Date();
+  desde.setDate(desde.getDate() - 60);
+
+  const { data } = await supabase
+    .from('driver_daily_stats')
+    .select('day')
+    .ilike('email', rider.email)
+    .gte('day', desde.toISOString().split('T')[0])
+    .order('day');
+
+  return (data ?? []).map((d) => d.day as string);
 }

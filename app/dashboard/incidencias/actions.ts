@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { subirArchivoDrive } from '@/lib/googleDrive';
 
 function validarArchivo(file: File | null, allowed: string[]): string | null {
   if (!file || file.size === 0) return null;
@@ -62,13 +63,17 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
   }
 
   const screenshot = formData.get('screenshot') as File | null;
-  let screenshotPath: string | null = null;
+  let screenshotFileId: string | null = null;
   if (screenshot && screenshot.size > 0) {
     const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
     if (err) return { error: err };
-    screenshotPath = `${user.id}/admin_${Date.now()}_captura.${extFromMime(screenshot.type)}`;
-    const { error: upErr } = await supabase.storage.from('incidencias').upload(screenshotPath, screenshot);
-    if (upErr) return { error: 'No se pudo subir la captura' };
+    const nombre = `${rider.dni}_admin_${Date.now()}_captura.${extFromMime(screenshot.type)}`;
+    try {
+      const buffer = Buffer.from(await screenshot.arrayBuffer());
+      screenshotFileId = await subirArchivoDrive('Incidencias', nombre, buffer, screenshot.type);
+    } catch {
+      return { error: 'No se pudo subir la captura' };
+    }
   }
 
   const { error: insertError } = await supabase.from('incidencias').insert({
@@ -81,7 +86,7 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
     observaciones,
     direccion_recogida: direccionRecogida,
     direccion_entrega: direccionEntrega,
-    screenshot_url: screenshotPath,
+    screenshot_url: screenshotFileId,
     estado: 'pendiente',
   });
 

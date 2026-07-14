@@ -3,6 +3,7 @@ import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrearRiderForm } from '@/components/riders/CrearRiderForm';
 import { ImportRidersModal } from '@/components/riders/ImportRidersModal';
+import { RecalcularPasswordsButton } from '@/components/riders/RecalcularPasswordsButton';
 import { RidersList } from '@/components/riders/RidersList';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { Pagination } from '@/components/dashboard/Pagination';
@@ -20,19 +21,26 @@ export default async function RidersPage({
   searchParams: { [key: string]: string | undefined };
 }) {
   const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: yo } = user ? await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single() : { data: null };
+  const esSuperAdmin = yo?.rol === 'super_admin';
+
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
   let query = supabase
     .from('riders')
-    .select('id, nombre, dni, email, activo, provincia, centros(nombre), vehiculos(nombre)', { count: 'exact' })
+    .select('id, nombre, dni, email, email_metricas, activo, provincia, centros(nombre), vehiculos(nombre)', { count: 'exact' })
     .order('nombre')
     .range(from, to);
 
   if (searchParams.estado === 'activo') query = query.eq('activo', true);
   if (searchParams.estado === 'inactivo') query = query.eq('activo', false);
-  if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
+  if (searchParams.centro === 'sin-centro') query = query.is('centro_id', null);
+  else if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
   if (searchParams.q) {
     const q = searchParams.q.replace(/[%,]/g, '');
     query = query.or(`nombre.ilike.%${q}%,dni.ilike.%${q}%,email.ilike.%${q}%`);
@@ -66,7 +74,10 @@ export default async function RidersPage({
           <h1 className="text-2xl font-semibold text-ink">Riders</h1>
           <p className="text-sm text-ink-muted">{count ?? 0} rider(s) registrados.</p>
         </div>
-        <ImportRidersModal />
+        <div className="flex items-center gap-2">
+          {esSuperAdmin && <RecalcularPasswordsButton />}
+          <ImportRidersModal />
+        </div>
       </div>
 
       <div className="rounded-card border border-border bg-surface p-5">

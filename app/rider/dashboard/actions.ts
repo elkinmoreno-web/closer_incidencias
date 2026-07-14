@@ -219,13 +219,16 @@ export interface FilaMetricaDiariaRider {
 }
 
 export async function obtenerMisMetricasSemana(fechaLunes: string, fechaDomingo: string): Promise<FilaMetricaDiariaRider[]> {
-  const { supabase, rider } = await getCurrentRider();
-  if (!rider.email) return [];
+  const { supabase } = await getCurrentRider();
 
+  // No filtramos por email aquí: RLS ya restringe las filas visibles a
+  // las del rider autenticado (por email, email_metricas o teléfono
+  // normalizado — ver schema_metricas_fix.sql). Filtrar también aquí
+  // por email exacto excluiría justo los casos que coinciden solo por
+  // teléfono o email alternativo, que es lo que queremos rescatar.
   const { data } = await supabase
     .from('driver_daily_stats')
     .select('day, city, sh, active_hours, utilization_rate, tph, tpuh, pct_accept, pct_cancel, total_dispatches, accepted, completed_trips, rejected, non_legit_cancel, legit_cancel')
-    .ilike('email', rider.email)
     .gte('day', fechaLunes)
     .lte('day', fechaDomingo)
     .order('day');
@@ -235,8 +238,7 @@ export async function obtenerMisMetricasSemana(fechaLunes: string, fechaDomingo:
 
 /** Días (fechas ISO) que tienen datos cargados en las últimas ~8 semanas, para saber qué semanas mostrar en el selector. */
 export async function obtenerSemanasConDatos(): Promise<string[]> {
-  const { supabase, rider } = await getCurrentRider();
-  if (!rider.email) return [];
+  const { supabase } = await getCurrentRider();
 
   const desde = new Date();
   desde.setDate(desde.getDate() - 60);
@@ -244,7 +246,6 @@ export async function obtenerSemanasConDatos(): Promise<string[]> {
   const { data } = await supabase
     .from('driver_daily_stats')
     .select('day')
-    .ilike('email', rider.email)
     .gte('day', desde.toISOString().split('T')[0])
     .order('day');
 

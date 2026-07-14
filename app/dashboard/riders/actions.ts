@@ -280,17 +280,51 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
   const ciudadMap = new Map((ciudades ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
 
   /**
+   * Crea un centro nuevo (y su ciudad, si hace falta) y los guarda en
+   * los mapas en memoria para no repetir la creación dentro del mismo
+   * lote.
+   */
+  async function crearCentroYCiudad(nombreCentro: string, nombreCiudad: string): Promise<number | null> {
+    const claveCentro = normalizarNombreCentro(nombreCentro);
+    const claveCiudad = normalizarNombreCentro(nombreCiudad);
+
+    let ciudadId = ciudadMap.get(claveCiudad);
+    if (!ciudadId) {
+      const { data: ciudadNueva } = await admin.from('ciudades').insert({ nombre: nombreCiudad }).select('id').single();
+      if (ciudadNueva) {
+        ciudadId = ciudadNueva.id;
+        ciudadMap.set(claveCiudad, ciudadNueva.id);
+      }
+    }
+
+    const { data: centroNuevo } = await admin
+      .from('centros')
+      .insert({ nombre: nombreCentro, ciudad_id: ciudadId ?? null, activo: true })
+      .select('id')
+      .single();
+    if (centroNuevo) {
+      centroMap.set(claveCentro, centroNuevo.id);
+      return centroNuevo.id;
+    }
+    return null;
+  }
+
+  /**
    * Traduce el nombre del Excel al centro real de la BD.
    * - Si el nombre del Excel está en el mapeo y ese centro existe → su id.
    * - Si no está en el mapeo, probamos por si el nombre del Excel ya
    *   coincide tal cual con un centro de la BD.
    * - Si es un centro "MCD" (operación aparte, con sus propios riders) y
    *   no existe todavía, SÍ se crea: tanto el centro como una ciudad con
-   *   el mismo nombre (son riders fuera del mapeo normal de zonas).
+   *   el mismo nombre.
+   * - Si la fila es de Alemania (Closer Go Germany GmbH) y el centro no
+   *   existe todavía, TAMBIÉN se crea (es otra operación aparte, sin
+   *   mapeo de zonas de España): se usa el nombre sin el prefijo "FD"
+   *   como ciudad (ej. "FD Berlin" → ciudad "BERLIN").
    * - Para cualquier otro centro no reconocido → no se crea nada, se
    *   importa sin centro y se avisa para revisión manual.
    */
-  async function resolverCentro(nombreExcel: string | null, nombreRider: string): Promise<number | null> {
+  async function resolverCentro(nombreExcel: string | null, nombreRider: string, empresaContratante: string | null): Promise<number | null> {
     if (!nombreExcel) return null;
 
     const oficial = nombreCentroOficial(nombreExcel);
@@ -305,26 +339,15 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
 
     if (normalizarNombreCentro(nombreExcel).startsWith('mcd')) {
       const nombreLimpio = nombreExcel.trim();
-      const claveNorm = normalizarNombreCentro(nombreLimpio);
+      const id = await crearCentroYCiudad(nombreLimpio, nombreLimpio);
+      if (id) return id;
+    }
 
-      let ciudadId = ciudadMap.get(claveNorm);
-      if (!ciudadId) {
-        const { data: ciudadNueva } = await admin.from('ciudades').insert({ nombre: nombreLimpio }).select('id').single();
-        if (ciudadNueva) {
-          ciudadId = ciudadNueva.id;
-          ciudadMap.set(claveNorm, ciudadNueva.id);
-        }
-      }
-
-      const { data: centroNuevo } = await admin
-        .from('centros')
-        .insert({ nombre: nombreLimpio, ciudad_id: ciudadId ?? null, activo: true })
-        .select('id')
-        .single();
-      if (centroNuevo) {
-        centroMap.set(claveNorm, centroNuevo.id);
-        return centroNuevo.id;
-      }
+    const esAlemania = normalizarNombreCentro(empresaContratante ?? '') === 'closer go germany gmbh';
+    if (esAlemania) {
+      const nombreCiudad = nombreExcel.trim().replace(/^fd\s+/i, '').toUpperCase();
+      const id = await crearCentroYCiudad(nombreExcel.trim(), nombreCiudad);
+      if (id) return id;
     }
 
     sinCentro.push(`${nombreRider}: centro "${nombreExcel}" no reconocido, se importa sin centro`);
@@ -346,7 +369,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
   // Resolver centro (en memoria, instantáneo) y vehículo de cada fila.
   const conIds = [];
   for (const v of validas) {
-    const centroId = await resolverCentro(v.fila.centro, v.fila.nombre);
+    const centroId = await resolverCentro(v.fila.centro, v.fila.nombre, v.fila.empresaContratante);
     const vehiculoId = await resolverVehiculo(v.fila.vehiculo);
     conIds.push({ ...v, centroId, vehiculoId });
   }
@@ -446,4 +469,58 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
 
   revalidatePath('/dashboard/riders');
   return { creados, actualizados, errores, sinCentro };
+}
+
+/**
+ * Corrige el "email de métricas" de un rider, para cuando usa un correo
+ * distinto en la app de reparto (Uber/OnDemand) al que RRHH tiene
+ * registrado — es un caso real y frecuente (ej. añaden "+driver" o usan
+ * directamente otra cuenta). Con esto, sus métricas se emparejan por
+ * este email en vez del principal. Déjalo vacío para volver a usar el
+ * email normal.
+ */
+export async function actualizarEmailMetricas(riderId: string, emailMetricas: string | null) {
+  const supabase = await assertAdmin();
+  const valor = emailMetricas?.trim() || null;
+  const { error } = await supabase.from('riders').update({ email_metricas: valor }).eq('id', riderId);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/riders');
+}
+
+/**
+ * Recalcula la contraseña de TODOS los riders con acceso, usando el
+ * esquema actual. Pensado para cuando se ha reimportado el Excel y las
+ * contraseñas quedaron desactualizadas (ej. porque los riders no se
+ * borraron de verdad, solo se desactivaron, así que el import los trató
+ * como "ya existentes" y nunca tocó su contraseña). Requiere super_admin
+ * por lo disruptivo que es: cambia el acceso de todo el mundo de golpe.
+ */
+export async function recalcularTodasLasPasswords(): Promise<{ ok: boolean; actualizados: number; errores: string[] }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, actualizados: 0, errores: ['No autenticado'] };
+
+  const { data: yo } = await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single();
+  if (yo?.rol !== 'super_admin') return { ok: false, actualizados: 0, errores: ['Solo un Super Admin puede hacer esto'] };
+
+  const admin = createAdminClient();
+  const { data: riders } = await admin.from('riders').select('id, nombre, auth_user_id').not('auth_user_id', 'is', null);
+  if (!riders || riders.length === 0) return { ok: true, actualizados: 0, errores: [] };
+
+  const errores: string[] = [];
+  const resultados = await conConcurrencia(riders, 10, async (rider) => {
+    const nuevaPassword = generarPasswordRider(rider.nombre);
+    const { error } = await admin.auth.admin.updateUserById(rider.auth_user_id!, { password: nuevaPassword });
+    return { rider, ok: !error, error };
+  });
+
+  let actualizados = 0;
+  for (const { rider, ok, error } of resultados) {
+    if (ok) actualizados++;
+    else errores.push(`${rider.nombre}: ${error?.message}`);
+  }
+
+  return { ok: true, actualizados, errores };
 }

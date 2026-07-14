@@ -21,6 +21,32 @@ export interface CentroConId {
   nombre: string;
 }
 
+export interface RiderEncontrado {
+  nombre: string;
+  dni: string;
+  email: string;
+  emailMetricas: string | null;
+}
+
+/**
+ * Busca un rider en el CRM por DNI, nombre o email — para saber, ante
+ * una duda, con qué email(s) debería aparecer en las métricas (el
+ * normal o el de métricas, si se corrigió uno distinto).
+ */
+export async function buscarRiderPorTexto(texto: string): Promise<RiderEncontrado[]> {
+  const { supabase } = await assertAdmin();
+  const q = texto.trim().replace(/[%,]/g, '');
+  if (q.length < 2) return [];
+
+  const { data } = await supabase
+    .from('riders')
+    .select('nombre, dni, email, email_metricas')
+    .or(`dni.ilike.%${q}%,nombre.ilike.%${q}%,email.ilike.%${q}%,email_metricas.ilike.%${q}%`)
+    .limit(10);
+
+  return (data ?? []).map((r) => ({ nombre: r.nombre, dni: r.dni, email: r.email, emailMetricas: r.email_metricas }));
+}
+
 /** Ciudades visibles del admin actual (mismo patrón de zona que el resto del CRM). */
 export async function ciudadesConsultablesMetricas(): Promise<{ ciudades: string[]; esSuperAdmin: boolean }> {
   const { supabase, admin } = await assertAdmin();
@@ -141,6 +167,19 @@ export async function obtenerMetricasAdmin(fechaLunes: string, fechaDomingo: str
   }
 
   return resultado;
+}
+
+/**
+ * Devuelve el lunes (ISO) de la semana más reciente que tiene al menos
+ * un dato cargado. El panel arranca ahí por defecto en vez de en la
+ * semana calendario de "hoy" — que casi nunca tiene datos todavía,
+ * porque la sincronización diaria va con un día o dos de rezago.
+ * Si no hay datos en absoluto, cae de vuelta a la semana de hoy.
+ */
+export async function obtenerUltimaSemanaConDatos(): Promise<string | null> {
+  const { supabase } = await assertAdmin();
+  const { data } = await supabase.from('driver_daily_stats').select('day').order('day', { ascending: false }).limit(1).maybeSingle();
+  return data?.day ?? null;
 }
 
 export interface EstadoSincronizacion {

@@ -6,8 +6,11 @@ import {
   ciudadesConsultablesMetricas,
   obtenerMetricasAdmin,
   obtenerEstadoSincronizaciones,
+  obtenerUltimaSemanaConDatos,
+  buscarRiderPorTexto,
   type FilaMetricaAdmin,
   type EstadoSincronizacion,
+  type RiderEncontrado,
 } from '@/app/dashboard/metricas/actions';
 import { lunesDe, domingoDe, fmtDMY } from '@/lib/metricas';
 import { paginasAMostrar } from '@/lib/pagination';
@@ -21,6 +24,7 @@ const POR_PAGINA = 30;
 
 export function MetricasAdminPanel() {
   const [fechaLunes, setFechaLunes] = useState(() => lunesDe(new Date().toISOString().split('T')[0]));
+  const [semanaAjustada, setSemanaAjustada] = useState(false);
   const [ciudades, setCiudades] = useState<string[]>([]);
   const [esSuperAdmin, setEsSuperAdmin] = useState(false);
   const [ciudadFiltro, setCiudadFiltro] = useState<string>('todas');
@@ -29,6 +33,9 @@ export function MetricasAdminPanel() {
   const [mostrarSubida, setMostrarSubida] = useState(false);
   const [syncs, setSyncs] = useState<EstadoSincronizacion[]>([]);
   const [pagina, setPagina] = useState(1);
+  const [busqueda, setBusqueda] = useState('');
+  const [resultadoBusqueda, setResultadoBusqueda] = useState<RiderEncontrado[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
 
   useEffect(() => {
     ciudadesConsultablesMetricas().then((r) => {
@@ -36,9 +43,16 @@ export function MetricasAdminPanel() {
       setEsSuperAdmin(r.esSuperAdmin);
     });
     obtenerEstadoSincronizaciones().then(setSyncs);
+    // Al entrar, saltamos directo a la última semana con datos reales —
+    // "hoy" casi nunca tiene nada todavía por el rezago de la sincronización.
+    obtenerUltimaSemanaConDatos().then((ultimoDia) => {
+      if (ultimoDia) setFechaLunes(lunesDe(ultimoDia));
+      setSemanaAjustada(true);
+    });
   }, []);
 
   useEffect(() => {
+    if (!semanaAjustada) return;
     setCargando(true);
     setPagina(1);
     const soloTodas = ciudadFiltro === 'todas' && esSuperAdmin;
@@ -46,7 +60,7 @@ export function MetricasAdminPanel() {
     obtenerMetricasAdmin(fechaLunes, domingoDe(fechaLunes), filtro, soloTodas)
       .then(setFilas)
       .finally(() => setCargando(false));
-  }, [fechaLunes, ciudadFiltro, ciudades, esSuperAdmin]);
+  }, [fechaLunes, ciudadFiltro, ciudades, esSuperAdmin, semanaAjustada]);
 
   // Agregado por rider (sumando/promediando sus días de la semana)
   const porRider = useMemo(() => {
@@ -75,16 +89,39 @@ export function MetricasAdminPanel() {
       .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }, [filas]);
 
-  const totalPaginas = Math.max(1, Math.ceil(porRider.length / POR_PAGINA));
+  const porRiderFiltrado = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return porRider;
+    return porRider.filter((r) => (r.name ?? '').toLowerCase().includes(q) || r.email.toLowerCase().includes(q));
+  }, [porRider, busqueda]);
+
+  const emailsEnDatos = useMemo(() => new Set(filas.map((f) => f.email.toLowerCase())), [filas]);
+
+  const totalPaginas = Math.max(1, Math.ceil(porRiderFiltrado.length / POR_PAGINA));
   const paginaSegura = Math.min(pagina, totalPaginas);
   const desde = (paginaSegura - 1) * POR_PAGINA;
-  const filasPagina = porRider.slice(desde, desde + POR_PAGINA);
+  const filasPagina = porRiderFiltrado.slice(desde, desde + POR_PAGINA);
   const paginas = paginasAMostrar(paginaSegura, totalPaginas);
 
   const totales = porRider.reduce(
     (acc, r) => ({ sh: acc.sh + r.sh, completed_trips: acc.completed_trips + r.completed_trips, riders: acc.riders + 1 }),
     { sh: 0, completed_trips: 0, riders: 0 }
   );
+
+  useEffect(() => {
+    setPagina(1);
+  }, [busqueda]);
+
+  async function verificarRider() {
+    if (busqueda.trim().length < 2) return;
+    setBuscando(true);
+    try {
+      const encontrados = await buscarRiderPorTexto(busqueda);
+      setResultadoBusqueda(encontrados);
+    } finally {
+      setBuscando(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -120,6 +157,53 @@ export function MetricasAdminPanel() {
           Subir manualmente
         </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Filtrar por nombre o email en esta tabla..."
+          className="w-64 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
+        />
+        <button
+          onClick={verificarRider}
+          disabled={buscando || busqueda.trim().length < 2}
+          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+          title="Busca por DNI, nombre o email en el CRM y comprueba si ese rider tiene datos esta semana"
+        >
+          {buscando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Verificar en el CRM (por DNI/nombre/email)
+        </button>
+      </div>
+
+      {resultadoBusqueda && (
+        <div className="rounded-xl border border-border bg-card p-3 text-xs">
+          {resultadoBusqueda.length === 0 ? (
+            <p className="text-ink-muted">No se encontró ningún rider en el CRM con ese texto.</p>
+          ) : (
+            <div className="space-y-2">
+              {resultadoBusqueda.map((r) => {
+                const enDatos = emailsEnDatos.has(r.email.toLowerCase()) || (r.emailMetricas && emailsEnDatos.has(r.emailMetricas.toLowerCase()));
+                return (
+                  <div key={r.dni} className="flex items-center justify-between gap-3">
+                    <div>
+                      <span className="font-medium text-ink">{r.nombre}</span>{' '}
+                      <span className="text-ink-muted">
+                        · {r.dni} · {r.email}
+                        {r.emailMetricas && ` · email métricas: ${r.emailMetricas}`}
+                      </span>
+                    </div>
+                    <span className={enDatos ? 'font-semibold text-emerald-600' : 'font-semibold text-danger'}>
+                      {enDatos ? '✓ Tiene datos esta semana' : '✗ Sin datos esta semana'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl border border-border bg-card px-3 py-2.5">

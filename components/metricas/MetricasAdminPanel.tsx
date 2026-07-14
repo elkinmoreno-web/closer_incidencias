@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Upload, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Upload, CheckCircle2, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   ciudadesConsultablesMetricas,
   obtenerMetricasAdmin,
@@ -10,33 +10,43 @@ import {
   type EstadoSincronizacion,
 } from '@/app/dashboard/metricas/actions';
 import { lunesDe, domingoDe, fmtDMY } from '@/lib/metricas';
+import { paginasAMostrar } from '@/lib/pagination';
 import { SubirMetricasModal } from '@/components/metricas/SubirMetricasModal';
 
 const fmtInt = (n: number | null) => (n === null ? '—' : Math.round(n).toLocaleString('es-ES'));
 const fmtFloat = (n: number | null) => (n === null || !Number.isFinite(n) ? '—' : n.toFixed(2));
 const fmtPct = (n: number | null) => (n === null || !Number.isFinite(n) ? '—' : `${n.toFixed(0)}%`);
 
+const POR_PAGINA = 30;
+
 export function MetricasAdminPanel() {
   const [fechaLunes, setFechaLunes] = useState(() => lunesDe(new Date().toISOString().split('T')[0]));
   const [ciudades, setCiudades] = useState<string[]>([]);
+  const [esSuperAdmin, setEsSuperAdmin] = useState(false);
   const [ciudadFiltro, setCiudadFiltro] = useState<string>('todas');
   const [filas, setFilas] = useState<FilaMetricaAdmin[]>([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarSubida, setMostrarSubida] = useState(false);
   const [syncs, setSyncs] = useState<EstadoSincronizacion[]>([]);
+  const [pagina, setPagina] = useState(1);
 
   useEffect(() => {
-    ciudadesConsultablesMetricas().then(setCiudades);
+    ciudadesConsultablesMetricas().then((r) => {
+      setCiudades(r.ciudades);
+      setEsSuperAdmin(r.esSuperAdmin);
+    });
     obtenerEstadoSincronizaciones().then(setSyncs);
   }, []);
 
   useEffect(() => {
     setCargando(true);
+    setPagina(1);
+    const soloTodas = ciudadFiltro === 'todas' && esSuperAdmin;
     const filtro = ciudadFiltro === 'todas' ? ciudades : [ciudadFiltro];
-    obtenerMetricasAdmin(fechaLunes, domingoDe(fechaLunes), filtro)
+    obtenerMetricasAdmin(fechaLunes, domingoDe(fechaLunes), filtro, soloTodas)
       .then(setFilas)
       .finally(() => setCargando(false));
-  }, [fechaLunes, ciudadFiltro, ciudades]);
+  }, [fechaLunes, ciudadFiltro, ciudades, esSuperAdmin]);
 
   // Agregado por rider (sumando/promediando sus días de la semana)
   const porRider = useMemo(() => {
@@ -51,17 +61,25 @@ export function MetricasAdminPanel() {
       if (f.pct_accept !== null) acc.accepts.push(f.pct_accept);
       if (f.pct_cancel !== null) acc.cancels.push(f.pct_cancel);
     });
-    return Array.from(mapa.entries()).map(([email, v]) => ({
-      email,
-      name: v.name,
-      city: v.city,
-      sh: v.sh,
-      active_hours: v.active_hours,
-      completed_trips: v.completed_trips,
-      pct_accept: v.accepts.length ? v.accepts.reduce((a, b) => a + b, 0) / v.accepts.length : null,
-      pct_cancel: v.cancels.length ? v.cancels.reduce((a, b) => a + b, 0) / v.cancels.length : null,
-    }));
+    return Array.from(mapa.entries())
+      .map(([email, v]) => ({
+        email,
+        name: v.name,
+        city: v.city,
+        sh: v.sh,
+        active_hours: v.active_hours,
+        completed_trips: v.completed_trips,
+        pct_accept: v.accepts.length ? v.accepts.reduce((a, b) => a + b, 0) / v.accepts.length : null,
+        pct_cancel: v.cancels.length ? v.cancels.reduce((a, b) => a + b, 0) / v.cancels.length : null,
+      }))
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }, [filas]);
+
+  const totalPaginas = Math.max(1, Math.ceil(porRider.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const desde = (paginaSegura - 1) * POR_PAGINA;
+  const filasPagina = porRider.slice(desde, desde + POR_PAGINA);
+  const paginas = paginasAMostrar(paginaSegura, totalPaginas);
 
   const totales = porRider.reduce(
     (acc, r) => ({ sh: acc.sh + r.sh, completed_trips: acc.completed_trips + r.completed_trips, riders: acc.riders + 1 }),
@@ -86,7 +104,7 @@ export function MetricasAdminPanel() {
             onChange={(e) => setCiudadFiltro(e.target.value)}
             className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
           >
-            <option value="todas">Todas mis ciudades</option>
+            <option value="todas">{esSuperAdmin ? 'Todas las ciudades (sin filtrar)' : 'Todas mis ciudades'}</option>
             {ciudades.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -123,42 +141,78 @@ export function MetricasAdminPanel() {
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                <th className="px-3 py-2">Ciudad</th>
-                <th className="px-3 py-2">Rider</th>
-                <th className="px-3 py-2 text-center">Horas conectado</th>
-                <th className="px-3 py-2 text-center">Viajes</th>
-                <th className="px-3 py-2 text-center">Aceptación</th>
-                <th className="px-3 py-2 text-center">Cancelación</th>
-              </tr>
-            </thead>
-            <tbody>
-              {porRider.map((r) => (
-                <tr key={r.email} className="border-b border-border">
-                  <td className="px-3 py-2 text-ink-muted">{r.city ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-ink">{r.name ?? '—'}</div>
-                    <div className="font-mono text-[10px] text-ink-muted">{r.email}</div>
-                  </td>
-                  <td className="px-3 py-2 text-center font-mono">{fmtFloat(r.sh)}</td>
-                  <td className="px-3 py-2 text-center font-mono text-primary">{fmtInt(r.completed_trips)}</td>
-                  <td className="px-3 py-2 text-center font-mono">{fmtPct(r.pct_accept)}</td>
-                  <td className="px-3 py-2 text-center font-mono">{fmtPct(r.pct_cancel)}</td>
+        <>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
+                  <th className="px-3 py-2">Ciudad</th>
+                  <th className="px-3 py-2">Rider</th>
+                  <th className="px-3 py-2 text-center">Horas conectado</th>
+                  <th className="px-3 py-2 text-center">Viajes</th>
+                  <th className="px-3 py-2 text-center">Aceptación</th>
+                  <th className="px-3 py-2 text-center">Cancelación</th>
                 </tr>
-              ))}
-              {porRider.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-10 text-center text-ink-muted">
-                    Sin datos para esta semana.
-                  </td>
-                </tr>
+              </thead>
+              <tbody>
+                {filasPagina.map((r) => (
+                  <tr key={r.email} className="border-b border-border">
+                    <td className="px-3 py-2 text-ink-muted">{r.city ?? '—'}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-ink">{r.name ?? '—'}</div>
+                      <div className="font-mono text-[10px] text-ink-muted">{r.email}</div>
+                    </td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtFloat(r.sh)}</td>
+                    <td className="px-3 py-2 text-center font-mono text-primary">{fmtInt(r.completed_trips)}</td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtPct(r.pct_accept)}</td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtPct(r.pct_cancel)}</td>
+                  </tr>
+                ))}
+                {filasPagina.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-10 text-center text-ink-muted">
+                      Sin datos para esta semana.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPaginas > 1 && (
+            <div className="flex items-center justify-center gap-1.5">
+              <button
+                onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                disabled={paginaSegura === 1}
+                className="rounded-full p-1.5 text-ink-muted hover:bg-surface disabled:opacity-30"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {paginas.map((p, idx) =>
+                p === 'gap' ? (
+                  <span key={`gap-${idx}`} className="px-1 text-ink-muted">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPagina(p)}
+                    className={`min-w-[2rem] rounded-full px-2.5 py-1 text-xs ${p === paginaSegura ? 'bg-primary text-white' : 'text-ink-muted hover:bg-surface'}`}
+                  >
+                    {p}
+                  </button>
+                )
               )}
-            </tbody>
-          </table>
-        </div>
+              <button
+                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+                disabled={paginaSegura === totalPaginas}
+                className="rounded-full p-1.5 text-ink-muted hover:bg-surface disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {syncs.length > 0 && (

@@ -47,6 +47,7 @@ export function SubirMetricasModal({ onClose }: { onClose: () => void }) {
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ inserted: number; total: number; mergedDups: number } | null>(null);
+  const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
   const [filasParaSubir, setFilasParaSubir] = useState<{ filas: FilaMetricaParseada[]; fileName: string; total: number; mergedDups: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -105,14 +106,25 @@ export function SubirMetricasModal({ onClose }: { onClose: () => void }) {
     setSubiendo(true);
     setError(null);
     try {
-      const res = await subirLoteMetricas(filasParaSubir.filas, { fileName: filasParaSubir.fileName, parquetRows: filasParaSubir.total });
-      if (!res.ok) throw new Error(res.error || 'No se pudo subir');
-      setResultado({ inserted: res.inserted, total: filasParaSubir.filas.length, mergedDups: filasParaSubir.mergedDups });
+      const LOTE = 1500; // Enviar todo de una vez con miles de filas excede el límite de tamaño de una Server Action.
+      const { filas, fileName, total } = filasParaSubir;
+      let insertadas = 0;
+
+      for (let i = 0; i < filas.length; i += LOTE) {
+        const trozo = filas.slice(i, i + LOTE);
+        const res = await subirLoteMetricas(trozo, { fileName, parquetRows: i === 0 ? total : 0 });
+        if (!res || !res.ok) throw new Error(res?.error || `No se pudo subir el lote ${i / LOTE + 1}`);
+        insertadas += res.inserted;
+        setProgreso({ hechas: Math.min(filas.length, i + LOTE), total: filas.length });
+      }
+
+      setResultado({ inserted: insertadas, total: filas.length, mergedDups: filasParaSubir.mergedDups });
       setFilasParaSubir(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setSubiendo(false);
+      setProgreso(null);
     }
   }
 
@@ -170,6 +182,11 @@ export function SubirMetricasModal({ onClose }: { onClose: () => void }) {
                 Cancelar
               </button>
             </div>
+            {progreso && (
+              <p className="mt-2 text-xs text-ink-muted">
+                Subiendo... {progreso.hechas} / {progreso.total}
+              </p>
+            )}
           </div>
         )}
 

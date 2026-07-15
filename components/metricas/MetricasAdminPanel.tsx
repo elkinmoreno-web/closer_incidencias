@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import {
   centrosConsultablesMetricas,
-  obtenerMetricasAdmin,
+  obtenerMetricasAdminSemanal,
+  obtenerMetricasAdminDiario,
   buscarRiderPorTexto,
   semanaActual,
-  exportarMetricas,
-  exportarMetricasRango,
   type FilaMetricaAdmin,
   type RiderEncontrado,
   type CentroConId,
@@ -19,10 +18,15 @@ import { semanaIsoDe } from '@/lib/metricas';
 const fmtInt = (n: number | null) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('es-ES'));
 const fmtFloat = (n: number | null) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : n.toFixed(2));
 const fmtPct = (n: number | null) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : `${(n * 100).toFixed(0)}%`);
+const fmtDMY = (iso: string) => {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
 
 const POR_PAGINA = 30;
+type Modo = 'semanal' | 'diario';
 
-/** Lunes y domingo de una semana ISO (año + número de semana), para mostrar el rango. */
+/** Lunes y domingo de una semana ISO (año + número de semana). */
 function rangoSemanaIso(year: number, week: number): { lunes: string; domingo: string } {
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
   const dow = simple.getUTCDay();
@@ -35,8 +39,10 @@ function rangoSemanaIso(year: number, week: number): { lunes: string; domingo: s
 }
 
 export function MetricasAdminPanel() {
+  const [modo, setModo] = useState<Modo>('semanal');
   const [year, setYear] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
+  const [fechaDia, setFechaDia] = useState(() => new Date().toISOString().split('T')[0]);
   const [centros, setCentros] = useState<CentroConId[]>([]);
   const [centroFiltro, setCentroFiltro] = useState<string>('todos');
   const [filas, setFilas] = useState<FilaMetricaAdmin[]>([]);
@@ -48,16 +54,15 @@ export function MetricasAdminPanel() {
   const [busqueda, setBusqueda] = useState('');
   const [resultadoBusqueda, setResultadoBusqueda] = useState<RiderEncontrado[] | null>(null);
   const [buscando, setBuscando] = useState(false);
-  const [exportando, setExportando] = useState(false);
-  const [rangoExport, setRangoExport] = useState<{ desde: string; hasta: string }>(() => {
-    const hoy = new Date().toISOString().split('T')[0];
-    return { desde: hoy, hasta: hoy };
-  });
+
+  // Evita que una petición vieja (de un clic anterior en "siguiente/anterior"
+  // hecho muy rápido) sobreescriba el resultado de una más nueva que ya
+  // volvió antes. Cada consulta lleva un número de turno; solo se aplica
+  // el resultado si sigue siendo el turno más reciente cuando responde.
+  const turnoRef = useRef(0);
 
   useEffect(() => {
-    centrosConsultablesMetricas().then((r) => {
-      setCentros(r.centros);
-    });
+    centrosConsultablesMetricas().then((r) => setCentros(r.centros));
     semanaActual().then((s) => {
       setYear(s.year);
       setWeek(s.week);
@@ -65,7 +70,9 @@ export function MetricasAdminPanel() {
   }, []);
 
   useEffect(() => {
-    if (year === null || week === null) return;
+    if (modo === 'semanal' && (year === null || week === null)) return;
+    const miTurno = ++turnoRef.current;
+
     setCargando(true);
     setPagina(1);
     const ids = centroFiltro === 'todos' ? centros.map((c) => c.id) : [Number(centroFiltro)];
@@ -74,8 +81,12 @@ export function MetricasAdminPanel() {
       setCargando(false);
       return;
     }
-    obtenerMetricasAdmin(ids, year, week, forzar)
+
+    const promesa = modo === 'semanal' ? obtenerMetricasAdminSemanal(ids, year!, week!, forzar) : obtenerMetricasAdminDiario(ids, fechaDia, forzar);
+
+    promesa
       .then((res) => {
+        if (turnoRef.current !== miTurno) return; // llegó una respuesta más nueva antes: ignorar esta
         setFilas(res.filas);
         setErrores(res.errores);
         const desdeCache = ids.length - res.consultados;
@@ -87,8 +98,10 @@ export function MetricasAdminPanel() {
             : `${res.consultados} centro(s) consultados a la API`
         );
       })
-      .finally(() => setCargando(false));
-  }, [year, week, centroFiltro, centros, forzar]);
+      .finally(() => {
+        if (turnoRef.current === miTurno) setCargando(false);
+      });
+  }, [modo, year, week, fechaDia, centroFiltro, centros, forzar]);
 
   function cambiarSemana(delta: number) {
     if (year === null || week === null) return;
@@ -100,7 +113,20 @@ export function MetricasAdminPanel() {
     setWeek(nueva.week);
   }
 
-  const rango = year !== null && week !== null ? rangoSemanaIso(year, week) : null;
+  function cambiarDia(delta: number) {
+    const d = new Date(fechaDia + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + delta);
+    setFechaDia(d.toISOString().split('T')[0]);
+  }
+
+  const rango = modo === 'semanal' && year !== null && week !== null ? rangoSemanaIso(year, week) : null;
+  const hoy = new Date().toISOString().split('T')[0];
+  const esHoyODespues = modo === 'diario' ? fechaDia >= hoy : rango ? rango.lunes >= semanaIsoDeHoyLunes() : false;
+
+  function semanaIsoDeHoyLunes(): string {
+    const s = semanaIsoDe(new Date());
+    return rangoSemanaIso(s.year, s.week).lunes;
+  }
 
   const filasFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -118,7 +144,7 @@ export function MetricasAdminPanel() {
   const filasPagina = filasFiltradas.slice(desde, desde + POR_PAGINA);
   const paginas = paginasAMostrar(paginaSegura, totalPaginas);
 
-  const totales = filas.reduce(
+  const totales = filasFiltradas.reduce(
     (acc, f) => ({ online: acc.online + f.online_hours, viajes: acc.viajes + f.num_of_trips, riders: acc.riders + 1 }),
     { online: 0, viajes: 0, riders: 0 }
   );
@@ -133,34 +159,11 @@ export function MetricasAdminPanel() {
     }
   }
 
-  async function exportarSemanaActual() {
-    if (year === null || week === null) return;
-    setExportando(true);
-    try {
-      const ids = centroFiltro === 'todos' ? centros.map((c) => c.id) : [Number(centroFiltro)];
-      const res = await exportarMetricas(ids, year, week);
-      await descargarXlsx(res.filas, `metricas_semana_${year}-W${week}`);
-    } finally {
-      setExportando(false);
-    }
-  }
-
-  async function exportarPorRango() {
-    setExportando(true);
-    try {
-      const ids = centroFiltro === 'todos' ? centros.map((c) => c.id) : [Number(centroFiltro)];
-      const res = await exportarMetricasRango(ids, rangoExport.desde, rangoExport.hasta);
-      if (res.errores.length > 0) setErrores(res.errores);
-      await descargarXlsx(res.filas, `metricas_${rangoExport.desde}_a_${rangoExport.hasta}`);
-    } finally {
-      setExportando(false);
-    }
-  }
-
-  async function descargarXlsx(filasExport: FilaMetricaAdmin[], nombreArchivo: string) {
+  /** Exporta EXACTAMENTE lo que se ve en pantalla ahora mismo (con el filtro de búsqueda aplicado, si hay uno) — nada nuevo se pide al servidor. */
+  async function exportarVisible() {
     const XLSX = await import('xlsx');
     const hoja = XLSX.utils.json_to_sheet(
-      filasExport.map((f) => ({
+      filasFiltradas.map((f) => ({
         Centro: f.centro,
         DNI: f.dni,
         Nombre: f.nombre,
@@ -175,22 +178,65 @@ export function MetricasAdminPanel() {
     );
     const libro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(libro, hoja, 'Métricas');
-    XLSX.writeFile(libro, `${nombreArchivo}.xlsx`);
+    const sufijo = modo === 'diario' ? fechaDia : rango ? `${rango.lunes}_a_${rango.domingo}` : 'export';
+    XLSX.writeFile(libro, `metricas_${sufijo}.xlsx`);
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={() => cambiarSemana(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink">
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="text-xs text-brand-text">
-            {rango ? `${rango.lunes} → ${rango.domingo}` : '—'} {year && week ? `(semana ISO ${week})` : ''}
-          </span>
-          <button onClick={() => cambiarSemana(1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink">
-            <ChevronRight className="h-4 w-4" />
-          </button>
+          <div className="flex gap-1 rounded-full bg-bg p-1">
+            <button
+              onClick={() => setModo('semanal')}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${modo === 'semanal' ? 'bg-primary text-white' : 'text-ink-muted'}`}
+            >
+              Semanal
+            </button>
+            <button
+              onClick={() => setModo('diario')}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${modo === 'diario' ? 'bg-primary text-white' : 'text-ink-muted'}`}
+            >
+              Diario
+            </button>
+          </div>
+
+          {modo === 'semanal' ? (
+            <>
+              <button onClick={() => cambiarSemana(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs font-medium text-brand-text">{rango ? `Semana del ${fmtDMY(rango.lunes)} al ${fmtDMY(rango.domingo)}` : '—'}</span>
+              <button
+                onClick={() => cambiarSemana(1)}
+                disabled={esHoyODespues}
+                className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => cambiarDia(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <input
+                type="date"
+                value={fechaDia}
+                max={hoy}
+                onChange={(e) => setFechaDia(e.target.value)}
+                className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
+              />
+              <button
+                onClick={() => cambiarDia(1)}
+                disabled={fechaDia >= hoy}
+                className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:opacity-30"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </>
+          )}
+
           <select
             value={centroFiltro}
             onChange={(e) => setCentroFiltro(e.target.value)}
@@ -209,39 +255,13 @@ export function MetricasAdminPanel() {
           </label>
         </div>
         <button
-          onClick={exportarSemanaActual}
-          disabled={exportando}
+          onClick={exportarVisible}
+          disabled={filasFiltradas.length === 0}
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
         >
-          {exportando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          Exportar esta semana
+          <Download className="h-3.5 w-3.5" />
+          Exportar esta tabla
         </button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
-        <span className="text-xs font-semibold text-ink-muted">Exportar por rango de fechas:</span>
-        <input
-          type="date"
-          value={rangoExport.desde}
-          onChange={(e) => setRangoExport((r) => ({ ...r, desde: e.target.value }))}
-          className="rounded-lg border border-border bg-surface px-2 py-1 text-xs focus:border-primary focus:outline-none"
-        />
-        <span className="text-xs text-ink-muted">hasta</span>
-        <input
-          type="date"
-          value={rangoExport.hasta}
-          onChange={(e) => setRangoExport((r) => ({ ...r, hasta: e.target.value }))}
-          className="rounded-lg border border-border bg-surface px-2 py-1 text-xs focus:border-primary focus:outline-none"
-        />
-        <button
-          onClick={exportarPorRango}
-          disabled={exportando}
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-        >
-          {exportando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Exportar rango
-        </button>
-        <span className="text-[10px] text-ink-muted">(máx. 31 días; consulta día por día, puede tardar un poco)</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -279,7 +299,7 @@ export function MetricasAdminPanel() {
                       <span className="font-medium text-ink">{r.nombre}</span> <span className="text-ink-muted">· {r.dni} · {r.email}</span>
                     </span>
                     <span className={enDatos ? 'font-semibold text-emerald-600' : 'font-semibold text-danger'}>
-                      {enDatos ? '✓ Tiene datos esta semana' : '✗ Sin datos esta semana'}
+                      {enDatos ? '✓ Tiene datos en este periodo' : '✗ Sin datos en este periodo'}
                     </span>
                   </div>
                 );
@@ -350,7 +370,7 @@ export function MetricasAdminPanel() {
                 {filasPagina.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-3 py-10 text-center text-ink-muted">
-                      Sin datos para esta semana.
+                      Sin datos para este periodo.
                     </td>
                   </tr>
                 )}

@@ -198,9 +198,12 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
 // Se piden en vivo a la API de Fleet Manager, filtradas al centro del
 // propio rider y buscando su fila por DNI — ya no hace falta emparejar
 // por email/teléfono, la API identifica al rider directamente por su
-// documento.
+// documento. Se reutiliza la misma caché de 30 min que usa el admin
+// (fleet_metrics_cache / fleet_metrics_cache_diario), así que si varios
+// riders del mismo centro consultan el mismo día, solo el primero
+// golpea la API de verdad.
 
-export interface MisMetricasSemana {
+export interface MisMetricasResumen {
   centro: string | null;
   online_hours: number;
   active_hours: number;
@@ -211,22 +214,70 @@ export interface MisMetricasSemana {
   hayDatos: boolean;
 }
 
-export async function obtenerMisMetricasSemana(year: number, week: number): Promise<MisMetricasSemana> {
-  const { supabase, rider } = await getCurrentRider();
-  const vacio: MisMetricasSemana = { centro: null, online_hours: 0, active_hours: 0, num_of_trips: 0, acceptance_rate: 0, cancelation_rate: 0, tph: 0, hayDatos: false };
-  if (!rider.centro_id) return vacio;
+export interface MisMetricasDia {
+  dia: string; // "Lunes", "Martes"...
+  fecha: string; // yyyy-mm-dd
+  num_of_trips: number;
+  online_hours: number;
+  tph: number;
+  acceptance_rate: number;
+  cancelation_rate: number;
+  hayDatos: boolean;
+}
 
+const CACHE_TTL_MINUTOS_RIDER = 30;
+
+async function centroDelRider() {
+  const { supabase, rider } = await getCurrentRider();
+  if (!rider.centro_id) return null;
   const { data: centro } = await supabase.from('centros').select('nombre, api_centro_id').eq('id', rider.centro_id).maybeSingle();
-  if (!centro?.api_centro_id) return vacio;
+  if (!centro?.api_centro_id) return null;
+  return { rider, centroNombre: centro.nombre, apiCentroId: centro.api_centro_id as number };
+}
+
+/** Resumen semanal (agregado), igual que ve el admin, pero solo la fila propia del rider. */
+export async function obtenerMiResumenSemanal(year: number, week: number, forzar = false): Promise<MisMetricasResumen> {
+  const vacio: MisMetricasResumen = { centro: null, online_hours: 0, active_hours: 0, num_of_trips: 0, acceptance_rate: 0, cancelation_rate: 0, tph: 0, hayDatos: false };
+  const info = await centroDelRider();
+  if (!info) return vacio;
 
   try {
+    const { createAdminClient } = await import('@/lib/supabase/server');
     const { obtenerRendimientoSemanal } = await import('@/lib/fleetManagerApi');
-    const drivers = await obtenerRendimientoSemanal(centro.api_centro_id, year, week);
-    const mio = drivers.find((d) => d.document_number.toUpperCase() === rider.dni.toUpperCase());
-    if (!mio) return { ...vacio, centro: centro.nombre };
+    const admClient = createAdminClient();
+
+    let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoSemanal>> | null;
+    if (!forzar) {
+      const limite = new Date(Date.now() - CACHE_TTL_MINUTOS_RIDER * 60 * 1000).toISOString();
+      const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
+      if (centroFila) {
+        const { data: cacheRow } = await admClient
+          .from('fleet_metrics_cache')
+          .select('datos')
+          .eq('centro_id', centroFila.id)
+          .eq('year', year)
+          .eq('week', week)
+          .gte('actualizado_en', limite)
+          .maybeSingle();
+        if (cacheRow) drivers = cacheRow.datos as typeof drivers;
+      }
+    }
+
+    if (!drivers) {
+      drivers = await obtenerRendimientoSemanal(info.apiCentroId, year, week);
+      const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
+      if (centroFila) {
+        await admClient
+          .from('fleet_metrics_cache')
+          .upsert({ centro_id: centroFila.id, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
+      }
+    }
+
+    const mio = drivers.find((d) => d.document_number.toUpperCase() === info.rider.dni.toUpperCase());
+    if (!mio) return { ...vacio, centro: info.centroNombre };
 
     return {
-      centro: centro.nombre,
+      centro: info.centroNombre,
       online_hours: mio.online_hours,
       active_hours: mio.active_hours,
       num_of_trips: mio.num_of_trips,
@@ -236,6 +287,79 @@ export async function obtenerMisMetricasSemana(year: number, week: number): Prom
       hayDatos: true,
     };
   } catch {
-    return { ...vacio, centro: centro.nombre };
+    return { ...vacio, centro: info.centroNombre };
   }
+}
+
+/**
+ * Día a día de la semana (year, week), SOLO hasta hoy si es la semana
+ * en curso (no tiene sentido pedir días futuros). Cada día se cachea
+ * por separado (fleet_metrics_cache_diario), igual que en el admin.
+ */
+export async function obtenerMisDiasSemana(year: number, week: number, forzar = false): Promise<MisMetricasDia[]> {
+  const info = await centroDelRider();
+  if (!info) return [];
+
+  const NOMBRES_DIA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
+  const dow = simple.getUTCDay();
+  const lunes = new Date(simple);
+  lunes.setUTCDate(simple.getUTCDate() - ((dow + 6) % 7));
+
+  const hoyIso = new Date().toISOString().split('T')[0];
+  const dias: { dia: string; fecha: string }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(lunes);
+    d.setUTCDate(lunes.getUTCDate() + i);
+    const fecha = d.toISOString().split('T')[0];
+    if (fecha > hoyIso) break; // no pedir días futuros
+    dias.push({ dia: NOMBRES_DIA[i], fecha });
+  }
+  if (dias.length === 0) return [];
+
+  const { createAdminClient } = await import('@/lib/supabase/server');
+  const { obtenerRendimientoDiario } = await import('@/lib/fleetManagerApi');
+  const admClient = createAdminClient();
+  const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
+
+  const resultado: MisMetricasDia[] = [];
+  for (const { dia, fecha } of dias) {
+    try {
+      let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoDiario>> | null;
+      if (!forzar && centroFila) {
+        const limite = new Date(Date.now() - CACHE_TTL_MINUTOS_RIDER * 60 * 1000).toISOString();
+        const { data: cacheRow } = await admClient
+          .from('fleet_metrics_cache_diario')
+          .select('datos')
+          .eq('centro_id', centroFila.id)
+          .eq('fecha', fecha)
+          .gte('actualizado_en', limite)
+          .maybeSingle();
+        if (cacheRow) drivers = cacheRow.datos as typeof drivers;
+      }
+      if (!drivers) {
+        drivers = await obtenerRendimientoDiario(info.apiCentroId, fecha);
+        if (centroFila) {
+          await admClient
+            .from('fleet_metrics_cache_diario')
+            .upsert({ centro_id: centroFila.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
+        }
+      }
+      const mio = drivers.find((d) => d.document_number.toUpperCase() === info.rider.dni.toUpperCase());
+      resultado.push({
+        dia,
+        fecha,
+        num_of_trips: mio?.num_of_trips ?? 0,
+        online_hours: mio?.online_hours ?? 0,
+        tph: mio?.tph ?? 0,
+        acceptance_rate: mio?.acceptance_rate ?? 0,
+        cancelation_rate: mio?.cancelation_rate ?? 0,
+        hayDatos: !!mio,
+      });
+    } catch {
+      resultado.push({ dia, fecha, num_of_trips: 0, online_hours: 0, tph: 0, acceptance_rate: 0, cancelation_rate: 0, hayDatos: false });
+    }
+  }
+
+  return resultado;
 }

@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock, Gauge, TrendingUp, Ban, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { obtenerMisMetricasSemana, obtenerSemanasConDatos, type FilaMetricaDiariaRider } from '@/app/rider/dashboard/actions';
-import { summarizeRows, lunesDe, domingoDe, fmtDMY } from '@/lib/metricas';
+import { obtenerMisMetricasSemana, type MisMetricasSemana } from '@/app/rider/dashboard/actions';
+import { semanaIsoDe } from '@/lib/metricas';
 
-const fmtInt = (n: number | null | undefined) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('es-ES'));
-const fmtFloat = (n: number | null | undefined, d = 2) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : n.toFixed(d));
-const fmtPct = (n: number | null | undefined) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : `${n.toFixed(0)}%`);
+const fmtInt = (n: number) => Math.round(n).toLocaleString('es-ES');
+const fmtFloat = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
+const fmtPct = (n: number) => (Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : '—');
 
 function Tile({ icon: Icon, label, value, tono }: { icon: typeof Clock; label: string; value: string; tono?: 'green' | 'red' }) {
   const color = tono === 'green' ? 'text-emerald-600' : tono === 'red' ? 'text-danger' : 'text-ink';
@@ -25,34 +25,26 @@ function Tile({ icon: Icon, label, value, tono }: { icon: typeof Clock; label: s
 }
 
 export function MetricasPanel() {
-  const [fechaLunes, setFechaLunes] = useState(() => lunesDe(new Date().toISOString().split('T')[0]));
-  const [filas, setFilas] = useState<FilaMetricaDiariaRider[]>([]);
-  const [semanasConDatos, setSemanasConDatos] = useState<Set<string>>(new Set());
+  const [semana, setSemana] = useState(() => semanaIsoDe(new Date()));
+  const [datos, setDatos] = useState<MisMetricasSemana | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
-    obtenerSemanasConDatos().then((dias) => {
-      setSemanasConDatos(new Set(dias.map((d) => lunesDe(d))));
-    });
-  }, []);
-
-  useEffect(() => {
     setCargando(true);
-    obtenerMisMetricasSemana(fechaLunes, domingoDe(fechaLunes))
-      .then(setFilas)
+    obtenerMisMetricasSemana(semana.year, semana.week)
+      .then(setDatos)
       .finally(() => setCargando(false));
-  }, [fechaLunes]);
-
-  const resumen = useMemo(() => summarizeRows(filas), [filas]);
+  }, [semana]);
 
   function cambiarSemana(delta: number) {
-    const d = new Date(fechaLunes + 'T12:00:00Z');
-    d.setUTCDate(d.getUTCDate() + delta * 7);
-    setFechaLunes(d.toISOString().split('T')[0]);
+    // Aproximación simple: mover 7 días desde el lunes de la semana ISO actual.
+    const base = new Date(Date.UTC(semana.year, 0, 1 + (semana.week - 1) * 7));
+    base.setUTCDate(base.getUTCDate() + delta * 7);
+    setSemana(semanaIsoDe(base));
   }
 
-  const hoy = lunesDe(new Date().toISOString().split('T')[0]);
-  const esSemanaActual = fechaLunes === hoy;
+  const semanaHoy = semanaIsoDe(new Date());
+  const esSemanaActual = semana.year === semanaHoy.year && semana.week === semanaHoy.week;
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,9 +53,7 @@ export function MetricasPanel() {
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-center">
-          <p className="text-sm font-semibold text-ink">
-            {fmtDMY(fechaLunes)} → {fmtDMY(domingoDe(fechaLunes))}
-          </p>
+          <p className="text-sm font-semibold text-ink">Semana ISO {semana.week} · {semana.year}</p>
           <p className="text-xs text-brand-text">{esSemanaActual ? 'Esta semana' : 'Semana anterior'}</p>
         </div>
         <button
@@ -80,26 +70,19 @@ export function MetricasPanel() {
         <div className="flex justify-center py-10 text-ink-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
-      ) : !resumen ? (
+      ) : !datos || !datos.hayDatos ? (
         <div className="flex flex-col items-center gap-1 py-10 text-center text-ink-muted">
           <p className="text-sm font-medium">Sin datos para esta semana</p>
-          <p className="text-xs">
-            {semanasConDatos.has(fechaLunes) ? 'Puede tardar unas horas en actualizarse.' : 'Prueba con la semana anterior.'}
-          </p>
+          <p className="text-xs">Prueba con la semana anterior.</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          <Tile icon={CheckCircle2} label="Viajes realizados" value={fmtInt(resumen.completed_trips)} />
-          <Tile icon={Clock} label="Horas conectado" value={fmtFloat(resumen.sh)} />
-          <Tile icon={Gauge} label="Viajes / hora" value={fmtFloat(resumen.tph)} />
-          <Tile icon={TrendingUp} label="Aceptación" value={fmtPct(resumen.pct_accept)} tono={resumen.pct_accept !== null && resumen.pct_accept >= 95 ? 'green' : undefined} />
+          <Tile icon={CheckCircle2} label="Viajes realizados" value={fmtInt(datos.num_of_trips)} />
+          <Tile icon={Clock} label="Horas online" value={fmtFloat(datos.online_hours)} />
+          <Tile icon={Gauge} label="Viajes / hora" value={fmtFloat(datos.tph)} />
+          <Tile icon={TrendingUp} label="Aceptación" value={fmtPct(datos.acceptance_rate)} tono={datos.acceptance_rate >= 0.95 ? 'green' : undefined} />
           <div className="col-span-2">
-            <Tile
-              icon={Ban}
-              label="Cancelación"
-              value={fmtPct(resumen.pct_cancel)}
-              tono={resumen.pct_cancel === 0 ? 'green' : resumen.pct_cancel !== null && resumen.pct_cancel >= 10 ? 'red' : undefined}
-            />
+            <Tile icon={Ban} label="Cancelación" value={fmtPct(datos.cancelation_rate)} tono={datos.cancelation_rate === 0 ? 'green' : datos.cancelation_rate >= 0.1 ? 'red' : undefined} />
           </div>
         </div>
       )}

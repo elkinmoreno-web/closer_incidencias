@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { NuevaConexionModal } from '@/components/conexiones/NuevaConexionModal';
+import { ExportarConexionesButton } from '@/components/conexiones/ExportarConexionesButton';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { Pagination } from '@/components/dashboard/Pagination';
@@ -65,7 +66,10 @@ export default async function ConexionesPage({
           <h1 className="text-2xl font-semibold text-ink">Conexiones fuera de zona</h1>
           <p className="text-sm text-ink-muted">{count ?? 0} resultado(s)</p>
         </div>
-        <NuevaConexionModal riders={ridersParaModal} />
+        <div className="flex items-center gap-2">
+          <ExportarConexionesButton />
+          <NuevaConexionModal riders={ridersParaModal} />
+        </div>
       </div>
 
       <TableFilters

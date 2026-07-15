@@ -41,6 +41,7 @@ function formatHora(iso: string) {
 export function RiderNotificationBell({ riderId }: { riderId: string }) {
   const [notis, setNotis] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
+  const [popupInstrucciones, setPopupInstrucciones] = useState<{ motivo: string; texto: string } | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const storageKey = `${STORAGE_KEY_PREFIX}${riderId}`;
 
@@ -84,10 +85,24 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'incidencias', filter: `rider_id=eq.${riderId}` },
         (payload) => {
-          const nuevo = payload.new as { estado?: string };
+          const nuevo = payload.new as { estado?: string; motivo_id?: number };
           const anterior = payload.old as { estado?: string };
           if (nuevo.estado === anterior.estado) return; // solo avisar si cambió el estado
-          if (nuevo.estado === 'aprobada') agregar('Tu incidencia fue aprobada');
+          if (nuevo.estado === 'aprobada') {
+            agregar('Tu incidencia fue aprobada');
+            if (nuevo.motivo_id) {
+              supabase
+                .from('motivos')
+                .select('nombre, instrucciones_aprobacion')
+                .eq('id', nuevo.motivo_id)
+                .maybeSingle()
+                .then(({ data }) => {
+                  if (data?.instrucciones_aprobacion) {
+                    setPopupInstrucciones({ motivo: data.nombre, texto: data.instrucciones_aprobacion });
+                  }
+                });
+            }
+          }
           if (nuevo.estado === 'rechazada') agregar('Tu incidencia fue rechazada');
         }
       )
@@ -155,6 +170,22 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {popupInstrucciones && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-card bg-surface p-6 shadow-lg">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">✓ Incidencia aprobada</p>
+            <h3 className="mb-3 text-base font-semibold text-ink">{popupInstrucciones.motivo}</h3>
+            <p className="mb-5 whitespace-pre-wrap text-sm text-ink-muted">{popupInstrucciones.texto}</p>
+            <button
+              onClick={() => setPopupInstrucciones(null)}
+              className="w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

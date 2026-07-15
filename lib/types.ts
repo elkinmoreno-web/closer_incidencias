@@ -36,6 +36,7 @@ export interface Motivo {
   requiere_captura: boolean;
   requiere_observaciones: boolean;
   requiere_direcciones: boolean;
+  instrucciones_aprobacion?: string | null;
   activo: boolean;
 }
 

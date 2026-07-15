@@ -82,6 +82,9 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
 - `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` /
   `GOOGLE_DRIVE_REFRESH_TOKEN` / `GOOGLE_DRIVE_FOLDER_ID` — para guardar
   los archivos adjuntos en Google Drive. Ver más abajo cómo generarlas.
+- `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — DNI y contraseña
+  de una cuenta de servicio para las métricas operativas (ver sección
+  "Métricas operativas" más abajo).
 
 ### Almacenamiento de archivos (Google Drive)
 Las fotos de incidencias, los justificantes de ausencias y las capturas
@@ -358,46 +361,59 @@ SQL Editor de Supabase, y configurar `OVERTIME_API_USERNAME` /
 
 ## 7.3. Métricas operativas (conexión, aceptación, cancelación)
 
-Integra el panel "dashboard_riders" (proyecto separado en React+Vite) al
-CRM, migrando su tabla a este mismo Supabase. Ya no hay un segundo
-proyecto ni un segundo login:
+Se piden **en vivo** a la API de Fleet Manager
+(`fleet-manager.ondemand.closerlogistics.com`) — ya no hay tabla propia,
+ni parquet, ni Apps Script, ni Edge Function, ni carga manual. Es la
+versión más simple y confiable de las tres que tuvo este módulo:
 
-- **El rider** ve sus propias métricas en una pestaña nueva ("Mis
-  métricas") dentro de `/rider/dashboard`, con SU MISMA sesión (se
-  emparejan las filas por su email, ya guardado en `riders.email`). El
-  panel original identificaba al rider con email+teléfono sin
-  contraseña real (guardado en `localStorage`); aquí se aprovecha la
-  sesión de verdad que ya existe, más segura y sin nada nuevo que
-  aprender.
-- **El admin** ve `/dashboard/metricas`: una tabla agregada por rider de
-  la semana, filtrada por zona igual que el resto del CRM (comparando el
-  nombre de ciudad — que en esta tabla es texto libre, no un ID — contra
-  las ciudades asignadas al admin). El super_admin ve todas.
-- **Carga automática diaria**: sigue el mismo pipeline que ya tenías
-  (Python → Drive → Apps Script → Edge Function), solo que ahora la Edge
-  Function vive en este proyecto de Supabase. Ver `supabase/functions/sync-parquet/`.
-- **Carga manual de respaldo**: botón "Subir manualmente" en
-  `/dashboard/metricas`, para cuando la automatización falla — acepta
-  `.parquet` o `.xlsx/.csv` con columna "Day", igual que la página Admin
-  del proyecto original (versión simplificada: sin la vista previa de
-  "qué cambiaría", sube directo tras parsear y filtrar a las últimas 2
-  semanas).
+- **Emparejamiento por DNI**: la API devuelve el `document_number` (el
+  DNI) de cada rider directamente, así que ya no hace falta el
+  emparejamiento por email (que fallaba cuando un rider usaba un email
+  distinto en la app de reparto que en RRHH — llegó a pasar).
+- **El rider** ve sus propias métricas en la pestaña "Mis métricas" de
+  `/rider/dashboard`: se pide el rendimiento semanal de SU centro y se
+  busca su fila por su propio DNI.
+- **El admin** ve `/dashboard/metricas`: tabla agregada por rider,
+  filtrada a los centros de su zona (super_admin ve todos), con buscador
+  por nombre/DNI, exportación a Excel (de la semana en pantalla o de un
+  rango de fechas libre), y una caché de 30 min por centro/semana (la
+  respuesta de la API puede pesar más de 1 MB por centro, así que no se
+  repite la petición en cada clic).
 
 ### Cómo activarlo
 
-1. Ejecutar `supabase/schema_metricas.sql` en el SQL Editor.
-2. Desplegar la Edge Function:
-   - Supabase Dashboard → Edge Functions → Create a new function → nombre `sync-parquet`
-   - Pega el contenido de `supabase/functions/sync-parquet/index.ts`
-   - Deploy
-   - En Secrets de esa función, añade `SYNC_TOKEN` (genera uno con `openssl rand -hex 32`)
-3. Actualizar el Apps Script existente (o crear uno nuevo con
-   `automation/apps-script.js` del proyecto original) para que apunte a
-   la URL de la Edge Function de **este** proyecto de Supabase, con el
-   `SUPABASE_URL`/`SUPABASE_ANON_KEY` de este proyecto y el nuevo
-   `SYNC_TOKEN`.
-4. El Python que genera el parquet no cambia — sigue escribiendo en el
-   mismo Drive de siempre.
+1. Ejecutar `supabase/schema_metricas_api.sql` — elimina las tablas del
+   sistema anterior (`driver_daily_stats`, `sync_audit_log`,
+   `email_metricas`) y añade la caché nueva (`fleet_metrics_cache`) y el
+   mapeo de centros de Alemania.
+2. Variables de entorno en Vercel: `FLEET_MANAGER_USERNAME` (el DNI de
+   una cuenta de servicio con acceso a Fleet Manager) y
+   `FLEET_MANAGER_PASSWORD`.
+
+**Nota sobre la autenticación**: la API usa login con DNI+contraseña que
+devuelve una cookie de sesión (confirmado por la cabecera `vary: Cookie`
+de sus respuestas). El `csrf_token` que devuelve el login no parece
+necesario para peticiones de solo lectura (GET) como las que usamos
+aquí — si en producción diera error 401/403, es la primera pista a
+revisar.
+
+## 7.4. Instrucciones al aprobar una incidencia
+
+Cada **motivo** de incidencia puede tener un texto de "instrucciones al
+aprobar" (Configuración → Motivos → icono de lápiz). Si está definido,
+cuando se aprueba una incidencia de ese motivo, al rider le aparece un
+popup ("✓ Incidencia aprobada" + el texto) además del aviso normal en la
+campanita. Si no se define nada para ese motivo, solo sale el aviso
+normal, sin popup. Requiere `schema_instrucciones_aprobacion.sql`.
+
+## 7.5. Exportar a Excel
+
+- **Conexiones fuera de zona** (`/dashboard/conexiones`): botón
+  "Exportar a Excel" — exporta las filas que cumplen los filtros activos
+  en pantalla (ciudad, centro, fechas, búsqueda), hasta 5000 filas.
+- **Métricas** (`/dashboard/metricas`): dos formas de exportar — la
+  semana que estás viendo en pantalla, o un rango de fechas libre
+  (desde–hasta, máx. 31 días, se pide día por día a la API).
 
 ## 8. Qué incluye esta versión
 

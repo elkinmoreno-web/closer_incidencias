@@ -1,8 +1,9 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
+import { Pencil, Check, X } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
-import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia, asignarCiudadCentro } from '@/app/dashboard/configuracion/actions';
+import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia, asignarCiudadCentro, actualizarInstruccionesMotivo } from '@/app/dashboard/configuracion/actions';
 import type { Centro, Vehiculo, Motivo, MotivoAusencia, Ciudad } from '@/lib/types';
 
 function CatalogRow({
@@ -79,11 +80,77 @@ export function VehiculosList({ vehiculos }: { vehiculos: Vehiculo[] }) {
   );
 }
 
+function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; valorActual: string | null | undefined }) {
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(valorActual ?? '');
+  const [pending, startTransition] = useTransition();
+
+  if (!editando) {
+    return (
+      <button
+        onClick={() => setEditando(true)}
+        className="mt-0.5 flex items-center gap-1 text-[11px] text-ink-muted hover:text-primary"
+        title="Instrucciones que verá el rider cuando se apruebe una incidencia de este motivo"
+      >
+        {valorActual ? (
+          <span className="max-w-[220px] truncate italic">&quot;{valorActual}&quot;</span>
+        ) : (
+          <span className="italic opacity-60">Sin instrucciones al aprobar</span>
+        )}
+        <Pencil size={10} />
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex items-start gap-1">
+      <textarea
+        autoFocus
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        placeholder="Ej: Recuerda entregar el paquete en la oficina antes de las 18:00..."
+        rows={2}
+        className="w-64 rounded border border-border bg-surface px-1.5 py-1 text-xs focus:border-primary focus:outline-none"
+      />
+      <div className="flex flex-col gap-1">
+        <button
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              await actualizarInstruccionesMotivo(motivoId, valor);
+              setEditando(false);
+            })
+          }
+          className="text-emerald-600 hover:text-emerald-700"
+        >
+          <Check size={14} />
+        </button>
+        <button
+          disabled={pending}
+          onClick={() => {
+            setValor(valorActual ?? '');
+            setEditando(false);
+          }}
+          className="text-ink-muted hover:text-ink"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function MotivosList({ motivos }: { motivos: Motivo[] }) {
   return (
     <div>
       {motivos.map((m) => (
-        <CatalogRow key={m.id} nombre={m.nombre} activo={m.activo} onToggle={(v) => toggleMotivo(m.id, v)} />
+        <div key={m.id} className="border-b border-border py-2.5 last:border-0">
+          <div className="flex items-center justify-between">
+            <div className={m.activo ? 'text-ink' : 'text-ink-muted line-through'}>{m.nombre}</div>
+            <ToggleSwitch activo={m.activo} onToggle={(v) => toggleMotivo(m.id, v)} />
+          </div>
+          <InstruccionesAprobacion motivoId={m.id} valorActual={m.instrucciones_aprobacion} />
+        </div>
       ))}
     </div>
   );

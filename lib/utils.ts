@@ -70,9 +70,9 @@ export function estadoAusenciaColor(estado: EstadoAusencia): string {
 export function normalizeName(str: string | null | undefined): string {
   if (!str) return '';
   return str
-      .trim()
-      .toLowerCase()
-      .replace(/(^|\s)\w/g, (letter) => letter.toUpperCase());
+    .trim()
+    .toLowerCase()
+    .replace(/(^|\s)\w/g, (letter) => letter.toUpperCase());
 }
 
 /** Inicio del día de hoy en horario de Madrid, en formato ISO (para filtrar consultas). */
@@ -147,3 +147,4 @@ export function generarPasswordRider(nombreCompleto: string): string {
   const letra2 = (apellido[0] ?? 'x').toLowerCase();
   return `${letra1}${letra2}123456`;
 }
+

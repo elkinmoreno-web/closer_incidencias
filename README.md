@@ -82,9 +82,15 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
 - `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` /
   `GOOGLE_DRIVE_REFRESH_TOKEN` / `GOOGLE_DRIVE_FOLDER_ID` — para guardar
   los archivos adjuntos en Google Drive. Ver más abajo cómo generarlas.
-- `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — DNI y contraseña
-  de una cuenta de servicio para las métricas operativas (ver sección
-  "Métricas operativas" más abajo).
+- `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — el **mismo DNI y
+  contraseña** con los que un gestor/admin ya inicia sesión normalmente
+  en Fleet Manager (no es una cuenta de servicio aparte ni nada que haya
+  que crear). El sistema usa esta credencial para todas las peticiones a
+  la API, tanto para el panel del admin como para "Mis métricas" de cada
+  rider. **Importante**: como es una única credencial compartida en todo
+  el sistema, si esa persona cambia su contraseña en Fleet Manager o
+  pierde el acceso, las métricas de todo el CRM dejan de funcionar hasta
+  que se actualice esta variable con una credencial válida.
 
 ### Almacenamiento de archivos (Google Drive)
 Las fotos de incidencias, los justificantes de ausencias y las capturas

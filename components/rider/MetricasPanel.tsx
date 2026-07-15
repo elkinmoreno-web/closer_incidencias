@@ -1,13 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clock, Gauge, TrendingUp, Ban, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { obtenerMisMetricasSemana, type MisMetricasSemana } from '@/app/rider/dashboard/actions';
+import { obtenerMiResumenSemanal, obtenerMisDiasSemana, type MisMetricasResumen, type MisMetricasDia } from '@/app/rider/dashboard/actions';
 import { semanaIsoDe } from '@/lib/metricas';
 
 const fmtInt = (n: number) => Math.round(n).toLocaleString('es-ES');
 const fmtFloat = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
 const fmtPct = (n: number) => (Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : '—');
+const fmtDMY = (iso: string) => {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+
+function rangoSemanaIso(year: number, week: number): { lunes: string; domingo: string } {
+  const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
+  const dow = simple.getUTCDay();
+  const lunes = new Date(simple);
+  lunes.setUTCDate(simple.getUTCDate() - ((dow + 6) % 7));
+  const domingo = new Date(lunes);
+  domingo.setUTCDate(lunes.getUTCDate() + 6);
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  return { lunes: fmt(lunes), domingo: fmt(domingo) };
+}
 
 function Tile({ icon: Icon, label, value, tono }: { icon: typeof Clock; label: string; value: string; tono?: 'green' | 'red' }) {
   const color = tono === 'green' ? 'text-emerald-600' : tono === 'red' ? 'text-danger' : 'text-ink';
@@ -26,23 +41,33 @@ function Tile({ icon: Icon, label, value, tono }: { icon: typeof Clock; label: s
 
 export function MetricasPanel() {
   const [semana, setSemana] = useState(() => semanaIsoDe(new Date()));
-  const [datos, setDatos] = useState<MisMetricasSemana | null>(null);
+  const [resumen, setResumen] = useState<MisMetricasResumen | null>(null);
+  const [dias, setDias] = useState<MisMetricasDia[]>([]);
   const [cargando, setCargando] = useState(true);
+  const turnoRef = useRef(0);
 
   useEffect(() => {
+    const miTurno = ++turnoRef.current;
     setCargando(true);
-    obtenerMisMetricasSemana(semana.year, semana.week)
-      .then(setDatos)
-      .finally(() => setCargando(false));
+    Promise.all([obtenerMiResumenSemanal(semana.year, semana.week), obtenerMisDiasSemana(semana.year, semana.week)])
+      .then(([r, d]) => {
+        if (turnoRef.current !== miTurno) return; // respuesta vieja de un clic anterior: ignorar
+        setResumen(r);
+        setDias(d);
+      })
+      .finally(() => {
+        if (turnoRef.current === miTurno) setCargando(false);
+      });
   }, [semana]);
 
   function cambiarSemana(delta: number) {
-    // Aproximación simple: mover 7 días desde el lunes de la semana ISO actual.
-    const base = new Date(Date.UTC(semana.year, 0, 1 + (semana.week - 1) * 7));
-    base.setUTCDate(base.getUTCDate() + delta * 7);
-    setSemana(semanaIsoDe(base));
+    const { lunes } = rangoSemanaIso(semana.year, semana.week);
+    const d = new Date(lunes + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + delta * 7);
+    setSemana(semanaIsoDe(d));
   }
 
+  const rango = rangoSemanaIso(semana.year, semana.week);
   const semanaHoy = semanaIsoDe(new Date());
   const esSemanaActual = semana.year === semanaHoy.year && semana.week === semanaHoy.week;
 
@@ -53,7 +78,9 @@ export function MetricasPanel() {
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-center">
-          <p className="text-sm font-semibold text-ink">Semana ISO {semana.week} · {semana.year}</p>
+          <p className="text-sm font-semibold text-ink">
+            Semana del {fmtDMY(rango.lunes)} al {fmtDMY(rango.domingo)}
+          </p>
           <p className="text-xs text-brand-text">{esSemanaActual ? 'Esta semana' : 'Semana anterior'}</p>
         </div>
         <button
@@ -70,21 +97,63 @@ export function MetricasPanel() {
         <div className="flex justify-center py-10 text-ink-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
-      ) : !datos || !datos.hayDatos ? (
+      ) : !resumen || !resumen.hayDatos ? (
         <div className="flex flex-col items-center gap-1 py-10 text-center text-ink-muted">
           <p className="text-sm font-medium">Sin datos para esta semana</p>
           <p className="text-xs">Prueba con la semana anterior.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <Tile icon={CheckCircle2} label="Viajes realizados" value={fmtInt(datos.num_of_trips)} />
-          <Tile icon={Clock} label="Horas online" value={fmtFloat(datos.online_hours)} />
-          <Tile icon={Gauge} label="Viajes / hora" value={fmtFloat(datos.tph)} />
-          <Tile icon={TrendingUp} label="Aceptación" value={fmtPct(datos.acceptance_rate)} tono={datos.acceptance_rate >= 0.95 ? 'green' : undefined} />
-          <div className="col-span-2">
-            <Tile icon={Ban} label="Cancelación" value={fmtPct(datos.cancelation_rate)} tono={datos.cancelation_rate === 0 ? 'green' : datos.cancelation_rate >= 0.1 ? 'red' : undefined} />
+        <>
+          {/* Día a día: solo los días que ya pasaron de esta semana (como el panel anterior) */}
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
+                  <th className="px-3 py-2">Día</th>
+                  <th className="px-3 py-2 text-center">Viajes</th>
+                  <th className="px-3 py-2 text-center">Horas</th>
+                  <th className="px-3 py-2 text-center">TPH</th>
+                  <th className="px-3 py-2 text-center">Aceptación</th>
+                  <th className="px-3 py-2 text-center">Cancelación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dias.map((d) => (
+                  <tr key={d.fecha} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-ink">{d.dia}</div>
+                      <div className="font-mono text-[10px] text-ink-muted">{fmtDMY(d.fecha)}</div>
+                    </td>
+                    <td className="px-3 py-2 text-center font-mono text-primary">{d.hayDatos ? fmtInt(d.num_of_trips) : '—'}</td>
+                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtFloat(d.online_hours) : '—'}</td>
+                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtFloat(d.tph) : '—'}</td>
+                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtPct(d.acceptance_rate) : '—'}</td>
+                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtPct(d.cancelation_rate) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+
+          {/* Resumen de toda la semana */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Resumen de la semana</p>
+            <div className="grid grid-cols-2 gap-3">
+              <Tile icon={CheckCircle2} label="Viajes realizados" value={fmtInt(resumen.num_of_trips)} />
+              <Tile icon={Clock} label="Horas online" value={fmtFloat(resumen.online_hours)} />
+              <Tile icon={Gauge} label="Viajes / hora" value={fmtFloat(resumen.tph)} />
+              <Tile icon={TrendingUp} label="Aceptación" value={fmtPct(resumen.acceptance_rate)} tono={resumen.acceptance_rate >= 0.95 ? 'green' : undefined} />
+              <div className="col-span-2">
+                <Tile
+                  icon={Ban}
+                  label="Cancelación"
+                  value={fmtPct(resumen.cancelation_rate)}
+                  tono={resumen.cancelation_rate === 0 ? 'green' : resumen.cancelation_rate >= 0.1 ? 'red' : undefined}
+                />
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

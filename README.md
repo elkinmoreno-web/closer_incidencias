@@ -82,15 +82,10 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
 - `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` /
   `GOOGLE_DRIVE_REFRESH_TOKEN` / `GOOGLE_DRIVE_FOLDER_ID` — para guardar
   los archivos adjuntos en Google Drive. Ver más abajo cómo generarlas.
-- `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — el **mismo DNI y
-  contraseña** con los que un gestor/admin ya inicia sesión normalmente
-  en Fleet Manager (no es una cuenta de servicio aparte ni nada que haya
-  que crear). El sistema usa esta credencial para todas las peticiones a
-  la API, tanto para el panel del admin como para "Mis métricas" de cada
-  rider. **Importante**: como es una única credencial compartida en todo
-  el sistema, si esa persona cambia su contraseña en Fleet Manager o
-  pierde el acceso, las métricas de todo el CRM dejan de funcionar hasta
-  que se actualice esta variable con una credencial válida.
+- `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — el DNI y
+  contraseña que **todos los gestores usan por igual** para entrar a
+  Fleet Manager (es una credencial compartida a nivel de empresa, no la
+  cuenta personal de una persona concreta). Se configura una sola vez.
 
 ### Almacenamiento de archivos (Google Drive)
 Las fotos de incidencias, los justificantes de ausencias y las capturas
@@ -376,25 +371,32 @@ versión más simple y confiable de las tres que tuvo este módulo:
   DNI) de cada rider directamente, así que ya no hace falta el
   emparejamiento por email (que fallaba cuando un rider usaba un email
   distinto en la app de reparto que en RRHH — llegó a pasar).
-- **El rider** ve sus propias métricas en la pestaña "Mis métricas" de
-  `/rider/dashboard`: se pide el rendimiento semanal de SU centro y se
-  busca su fila por su propio DNI.
+- **Diario y semanal, en ambos lados**: tanto el rider como el admin
+  pueden alternar entre ver un día concreto o una semana completa.
+- **El rider** ve, en la pestaña "Mis métricas" de `/rider/dashboard`,
+  una tabla día a día de la semana (solo los días que ya pasaron, igual
+  que el panel anterior) más el resumen agregado de toda la semana.
 - **El admin** ve `/dashboard/metricas`: tabla agregada por rider,
-  filtrada a los centros de su zona (super_admin ve todos), con buscador
-  por nombre/DNI, exportación a Excel (de la semana en pantalla o de un
-  rango de fechas libre), y una caché de 30 min por centro/semana (la
-  respuesta de la API puede pesar más de 1 MB por centro, así que no se
-  repite la petición en cada clic).
+  filtrada a los centros de su zona (super_admin ve todos), con
+  selector Diario/Semanal, buscador por nombre/DNI, y una caché de 30
+  min por centro/día o centro/semana (la respuesta de la API puede
+  pesar más de 1 MB por centro, así que no se repite la petición en
+  cada clic).
+- **Protección contra clics rápidos**: si cambias de semana/día varias
+  veces seguidas antes de que responda la API, solo se aplica el
+  resultado de la consulta más reciente — las respuestas "viejas" que
+  llegan tarde se descartan, para que nunca se vea el dato de un periodo
+  con la etiqueta de otro.
 
 ### Cómo activarlo
 
 1. Ejecutar `supabase/schema_metricas_api.sql` — elimina las tablas del
    sistema anterior (`driver_daily_stats`, `sync_audit_log`,
-   `email_metricas`) y añade la caché nueva (`fleet_metrics_cache`) y el
-   mapeo de centros de Alemania.
-2. Variables de entorno en Vercel: `FLEET_MANAGER_USERNAME` (el DNI de
-   una cuenta de servicio con acceso a Fleet Manager) y
-   `FLEET_MANAGER_PASSWORD`.
+   `email_metricas`) y añade las cachés nuevas (`fleet_metrics_cache`
+   para semanal, `fleet_metrics_cache_diario` para diario) y el mapeo de
+   centros de Alemania.
+2. Variables de entorno en Vercel: `FLEET_MANAGER_USERNAME` /
+   `FLEET_MANAGER_PASSWORD` (ver más abajo qué credencial va aquí).
 
 **Nota sobre la autenticación**: la API usa login con DNI+contraseña que
 devuelve una cookie de sesión (confirmado por la cabecera `vary: Cookie`
@@ -417,9 +419,10 @@ normal, sin popup. Requiere `schema_instrucciones_aprobacion.sql`.
 - **Conexiones fuera de zona** (`/dashboard/conexiones`): botón
   "Exportar a Excel" — exporta las filas que cumplen los filtros activos
   en pantalla (ciudad, centro, fechas, búsqueda), hasta 5000 filas.
-- **Métricas** (`/dashboard/metricas`): dos formas de exportar — la
-  semana que estás viendo en pantalla, o un rango de fechas libre
-  (desde–hasta, máx. 31 días, se pide día por día a la API).
+- **Métricas** (`/dashboard/metricas`): botón "Exportar esta tabla" —
+  exporta exactamente lo que se ve en pantalla en ese momento (diario o
+  semanal, con el centro y la búsqueda que tengas activos), sin volver a
+  consultar la API ni pedir un rango aparte.
 
 ## 8. Qué incluye esta versión
 

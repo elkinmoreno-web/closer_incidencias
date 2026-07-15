@@ -82,3 +82,50 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
   revalidatePath('/dashboard/conexiones');
   return { success: true };
 }
+
+export interface FilaExportConexion {
+  fecha: string;
+  rider: string;
+  dni: string;
+  centro: string;
+  observaciones: string | null;
+}
+
+/**
+ * Trae TODAS las conexiones que cumplen los filtros (sin paginar), para
+ * exportarlas a Excel. Respeta la zona del admin vía RLS normal.
+ */
+export async function exportarConexiones(filtros: { centro?: string; ciudad?: string; desde?: string; hasta?: string; q?: string }): Promise<FilaExportConexion[]> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  let query = supabase
+    .from('conexiones_fuera_zona')
+    .select('fecha, nombre_rider, dni, observaciones, centros(nombre)')
+    .order('fecha', { ascending: false });
+
+  if (filtros.centro) query = query.eq('centro_id', Number(filtros.centro));
+  if (filtros.desde) query = query.gte('fecha', filtros.desde);
+  if (filtros.hasta) query = query.lte('fecha', filtros.hasta);
+  if (filtros.q) {
+    const q = filtros.q.replace(/[%,]/g, '');
+    query = query.or(`nombre_rider.ilike.%${q}%,dni.ilike.%${q}%`);
+  }
+  if (filtros.ciudad) {
+    const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(filtros.ciudad));
+    query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
+  }
+
+  const { data } = await query.limit(5000);
+
+  return (data ?? []).map((c) => ({
+    fecha: c.fecha,
+    rider: c.nombre_rider,
+    dni: c.dni,
+    centro: (c.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
+    observaciones: c.observaciones,
+  }));
+}

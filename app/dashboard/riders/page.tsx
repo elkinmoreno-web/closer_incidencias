@@ -33,7 +33,7 @@ export default async function RidersPage({
 
   let query = supabase
     .from('riders')
-    .select('id, nombre, dni, email, email_metricas, activo, provincia, centros(nombre), vehiculos(nombre)', { count: 'exact' })
+    .select('id, nombre, dni, email, activo, provincia, centros(nombre), vehiculos(nombre)', { count: 'exact' })
     .order('nombre')
     .range(from, to);
 

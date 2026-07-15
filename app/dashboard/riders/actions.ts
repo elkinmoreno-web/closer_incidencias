@@ -472,22 +472,6 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
 }
 
 /**
- * Corrige el "email de métricas" de un rider, para cuando usa un correo
- * distinto en la app de reparto (Uber/OnDemand) al que RRHH tiene
- * registrado — es un caso real y frecuente (ej. añaden "+driver" o usan
- * directamente otra cuenta). Con esto, sus métricas se emparejan por
- * este email en vez del principal. Déjalo vacío para volver a usar el
- * email normal.
- */
-export async function actualizarEmailMetricas(riderId: string, emailMetricas: string | null) {
-  const supabase = await assertAdmin();
-  const valor = emailMetricas?.trim() || null;
-  const { error } = await supabase.from('riders').update({ email_metricas: valor }).eq('id', riderId);
-  if (error) throw new Error(error.message);
-  revalidatePath('/dashboard/riders');
-}
-
-/**
  * Recalcula la contraseña de TODOS los riders con acceso, usando el
  * esquema actual. Pensado para cuando se ha reimportado el Excel y las
  * contraseñas quedaron desactualizadas (ej. porque los riders no se

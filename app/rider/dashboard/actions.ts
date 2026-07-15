@@ -195,59 +195,47 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
 // ============================================================
 // MIS MÉTRICAS — datos operativos (conexión, aceptación, cancelación...)
 // ============================================================
-// Se emparejan por email con la sesión real del rider (ya autenticada
-// con DNI+contraseña), no con un segundo login por email+teléfono como
-// tenía el panel original. RLS en `driver_daily_stats` ya garantiza que
-// un rider solo puede leer sus propias filas.
+// Se piden en vivo a la API de Fleet Manager, filtradas al centro del
+// propio rider y buscando su fila por DNI — ya no hace falta emparejar
+// por email/teléfono, la API identifica al rider directamente por su
+// documento.
 
-export interface FilaMetricaDiariaRider {
-  day: string;
-  city: string | null;
-  sh: number | null;
-  active_hours: number | null;
-  utilization_rate: number | null;
-  tph: number | null;
-  tpuh: number | null;
-  pct_accept: number | null;
-  pct_cancel: number | null;
-  total_dispatches: number | null;
-  accepted: number | null;
-  completed_trips: number | null;
-  rejected: number | null;
-  non_legit_cancel: number | null;
-  legit_cancel: number | null;
+export interface MisMetricasSemana {
+  centro: string | null;
+  online_hours: number;
+  active_hours: number;
+  num_of_trips: number;
+  acceptance_rate: number;
+  cancelation_rate: number;
+  tph: number;
+  hayDatos: boolean;
 }
 
-export async function obtenerMisMetricasSemana(fechaLunes: string, fechaDomingo: string): Promise<FilaMetricaDiariaRider[]> {
-  const { supabase } = await getCurrentRider();
+export async function obtenerMisMetricasSemana(year: number, week: number): Promise<MisMetricasSemana> {
+  const { supabase, rider } = await getCurrentRider();
+  const vacio: MisMetricasSemana = { centro: null, online_hours: 0, active_hours: 0, num_of_trips: 0, acceptance_rate: 0, cancelation_rate: 0, tph: 0, hayDatos: false };
+  if (!rider.centro_id) return vacio;
 
-  // No filtramos por email aquí: RLS ya restringe las filas visibles a
-  // las del rider autenticado (por email, email_metricas o teléfono
-  // normalizado — ver schema_metricas_fix.sql). Filtrar también aquí
-  // por email exacto excluiría justo los casos que coinciden solo por
-  // teléfono o email alternativo, que es lo que queremos rescatar.
-  const { data } = await supabase
-    .from('driver_daily_stats')
-    .select('day, city, sh, active_hours, utilization_rate, tph, tpuh, pct_accept, pct_cancel, total_dispatches, accepted, completed_trips, rejected, non_legit_cancel, legit_cancel')
-    .gte('day', fechaLunes)
-    .lte('day', fechaDomingo)
-    .order('day');
+  const { data: centro } = await supabase.from('centros').select('nombre, api_centro_id').eq('id', rider.centro_id).maybeSingle();
+  if (!centro?.api_centro_id) return vacio;
 
-  return data ?? [];
-}
+  try {
+    const { obtenerRendimientoSemanal } = await import('@/lib/fleetManagerApi');
+    const drivers = await obtenerRendimientoSemanal(centro.api_centro_id, year, week);
+    const mio = drivers.find((d) => d.document_number.toUpperCase() === rider.dni.toUpperCase());
+    if (!mio) return { ...vacio, centro: centro.nombre };
 
-/** Días (fechas ISO) que tienen datos cargados en las últimas ~8 semanas, para saber qué semanas mostrar en el selector. */
-export async function obtenerSemanasConDatos(): Promise<string[]> {
-  const { supabase } = await getCurrentRider();
-
-  const desde = new Date();
-  desde.setDate(desde.getDate() - 60);
-
-  const { data } = await supabase
-    .from('driver_daily_stats')
-    .select('day')
-    .gte('day', desde.toISOString().split('T')[0])
-    .order('day');
-
-  return (data ?? []).map((d) => d.day as string);
+    return {
+      centro: centro.nombre,
+      online_hours: mio.online_hours,
+      active_hours: mio.active_hours,
+      num_of_trips: mio.num_of_trips,
+      acceptance_rate: mio.acceptance_rate,
+      cancelation_rate: mio.cancelation_rate,
+      tph: mio.tph,
+      hayDatos: true,
+    };
+  } catch {
+    return { ...vacio, centro: centro.nombre };
+  }
 }

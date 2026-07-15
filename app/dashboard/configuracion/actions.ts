@@ -66,6 +66,18 @@ export async function toggleMotivo(id: number, activo: boolean) {
   revalidatePath('/dashboard/configuracion');
 }
 
+/**
+ * Guarda las instrucciones que ve el rider en un popup cuando se aprueba
+ * una incidencia de este motivo. Vacío = no se muestra ningún popup.
+ */
+export async function actualizarInstruccionesMotivo(id: number, instrucciones: string) {
+  const supabase = await assertSuperAdmin();
+  const valor = instrucciones.trim() || null;
+  const { error } = await supabase.from('motivos').update({ instrucciones_aprobacion: valor }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
 export async function toggleMotivoAusencia(id: number, activo: boolean) {
   const supabase = await assertSuperAdmin();
   const { error } = await supabase.from('motivos_ausencia').update({ activo }).eq('id', id);

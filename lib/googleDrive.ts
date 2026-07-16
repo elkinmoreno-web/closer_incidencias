@@ -1,80 +1,104 @@
 import 'server-only';
-import { google } from 'googleapis';
-import { Readable } from 'stream';
+import { createAdminClient } from '@/lib/supabase/server';
 
 /**
  * Cliente de Google Drive para guardar los archivos adjuntos
  * (capturas de incidencias, justificantes de ausencias, evidencias de
- * conexiones fuera de zona) en el Drive de la empresa (Google
- * Workspace), en vez de en Supabase Storage.
+ * conexiones fuera de zona) en el Drive de la empresa.
  *
- * Autenticación: OAuth con refresh token de larga duración (el mismo
- * patrón que usa rclone). El token se generó UNA VEZ de forma manual —
- * ver README, sección "Google Drive" — y desde entonces esta app pide
- * un access token nuevo automáticamente en cada uso, sin intervención
- * humana, igual que ya lo hace tu otro proyecto con GitHub Actions.
+ * IMPORTANTE — por qué esto NO usa OAuth2Client con Client ID/Secret:
+ * crear un Client ID propio en Google Cloud Console requiere permisos
+ * de administrador de Google Workspace que en esta empresa no están
+ * disponibles. En vez de eso:
  *
- * Variables de entorno necesarias (en Vercel, nunca en el código):
- *   GOOGLE_DRIVE_CLIENT_ID
- *   GOOGLE_DRIVE_CLIENT_SECRET
- *   GOOGLE_DRIVE_REFRESH_TOKEN
- *   GOOGLE_DRIVE_FOLDER_ID   (carpeta raíz "Closer CRM - Archivos")
+ *   1. En tu propio ordenador, rclone YA mantiene una sesión válida con
+ *      Google Drive (usando su propio client_id interno, de forma
+ *      legítima — es su uso normal).
+ *   2. Un GitHub Action programado (ver .github/workflows/refrescar-drive-token.yml)
+ *      corre cada ~45 min, deja que rclone renueve el token si hace
+ *      falta, y guarda ese access_token vigente en la tabla
+ *      `google_drive_token` de Supabase.
+ *   3. Esta app SOLO LEE ese token de la tabla y lo usa directo como
+ *      Bearer token contra la API REST de Drive — nunca intenta
+ *      renovarlo por su cuenta, así que nunca necesita Client ID/Secret.
  *
- * Privacidad: los archivos se crean SIN compartir con nadie (ni
- * siquiera "cualquiera con el enlace"). Para mostrarlos en el panel, el
- * servidor los descarga bajo demanda con este mismo cliente y se los
- * entrega al navegador ya autenticado — el archivo en Drive nunca queda
- * expuesto por un enlace público.
+ * El token dura ~60 minutos y el GitHub Action lo refresca cada 45, así
+ * que siempre debería haber uno vigente. Si por lo que sea el Action no
+ * ha corrido a tiempo y el token ya caducó, las llamadas a Drive
+ * devuelven 401 y se lanza un error claro para poder diagnosticarlo.
+ *
+ * Variable de entorno necesaria: GOOGLE_DRIVE_FOLDER_ID (carpeta raíz
+ * "Closer CRM - Archivos"). Ya no hacen falta CLIENT_ID/CLIENT_SECRET/
+ * REFRESH_TOKEN.
  */
 
-let clienteCache: ReturnType<typeof google.drive> | null = null;
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 
-function obtenerClienteDrive() {
-  if (clienteCache) return clienteCache;
+let tokenCache: { token: string; expira: number } | null = null;
 
-  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Faltan variables de entorno de Google Drive (GOOGLE_DRIVE_CLIENT_ID / GOOGLE_DRIVE_CLIENT_SECRET / GOOGLE_DRIVE_REFRESH_TOKEN)');
+/** Lee el access_token vigente guardado por el GitHub Action. Cachea unos segundos en memoria del proceso para no golpear Supabase en cada operación de una misma request. */
+async function obtenerAccessToken(): Promise<string> {
+  if (tokenCache && tokenCache.expira > Date.now()) return tokenCache.token;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.from('google_drive_token').select('access_token, actualizado_en').eq('id', true).single();
+
+  if (error || !data) {
+    throw new Error('No hay token de Google Drive guardado todavía. Revisa que el GitHub Action de renovación haya corrido al menos una vez.');
   }
 
-  const auth = new google.auth.OAuth2(clientId, clientSecret);
-  auth.setCredentials({ refresh_token: refreshToken });
+  const minutosDesdeActualizacion = (Date.now() - new Date(data.actualizado_en).getTime()) / 60000;
+  if (minutosDesdeActualizacion > 55) {
+    throw new Error(
+      `El token de Google Drive tiene ${Math.round(minutosDesdeActualizacion)} minutos y probablemente ya caducó. Revisa que el GitHub Action "refrescar-drive-token" se esté ejecutando (cada ~45 min).`
+    );
+  }
 
-  clienteCache = google.drive({ version: 'v3', auth });
-  return clienteCache;
+  tokenCache = { token: data.access_token, expira: Date.now() + 60 * 1000 };
+  return data.access_token;
+}
+
+async function driveFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const token = await obtenerAccessToken();
+  const resp = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
+  if (resp.status === 401) {
+    tokenCache = null; // el token pudo caducar justo ahora; no reintentamos aquí, el próximo intento leerá uno fresco si ya se renovó
+    throw new Error('Google Drive respondió 401 (token caducado o inválido). Revisa el GitHub Action de renovación.');
+  }
+  return resp;
 }
 
 // Cache en memoria del proceso para no crear la misma carpeta dos veces
 // en la misma ejecución (p. ej. varias fotos de la misma incidencia).
 const carpetaCache = new Map<string, string>();
 
-/**
- * Busca (o crea si no existe) una carpeta por nombre dentro de un padre.
- * Devuelve el ID de la carpeta.
- */
+/** Busca (o crea si no existe) una carpeta por nombre dentro de un padre. Devuelve el ID de la carpeta. */
 async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<string> {
   const clave = `${padreId}/${nombre}`;
   const enCache = carpetaCache.get(clave);
   if (enCache) return enCache;
 
-  const drive = obtenerClienteDrive();
   const q = `name = '${nombre.replace(/'/g, "\\'")}' and '${padreId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-  const { data } = await drive.files.list({ q, fields: 'files(id, name)', spaces: 'drive' });
+  const resp = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`);
+  if (!resp.ok) throw new Error(`No se pudo buscar la carpeta "${nombre}" en Drive (HTTP ${resp.status})`);
+  const data = await resp.json();
 
   if (data.files && data.files.length > 0 && data.files[0].id) {
     carpetaCache.set(clave, data.files[0].id);
     return data.files[0].id;
   }
 
-  const { data: creada } = await drive.files.create({
-    requestBody: { name: nombre, mimeType: 'application/vnd.google-apps.folder', parents: [padreId] },
-    fields: 'id',
+  const creada = await driveFetch(`${DRIVE_API}/files?fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nombre, mimeType: 'application/vnd.google-apps.folder', parents: [padreId] }),
   });
-  if (!creada.id) throw new Error('No se pudo crear la carpeta en Drive');
-  carpetaCache.set(clave, creada.id);
-  return creada.id;
+  if (!creada.ok) throw new Error(`No se pudo crear la carpeta "${nombre}" en Drive (HTTP ${creada.status})`);
+  const creadaData = await creada.json();
+  if (!creadaData.id) throw new Error('No se pudo crear la carpeta en Drive');
+  carpetaCache.set(clave, creadaData.id);
+  return creadaData.id;
 }
 
 /** Carpeta del mes actual dentro de una categoría (Incidencias/Ausencias/Conexiones), creando lo que falte. */
@@ -99,14 +123,26 @@ export async function subirArchivoDrive(
   contenido: Buffer,
   mimeType: string
 ): Promise<string> {
-  const drive = obtenerClienteDrive();
   const carpetaId = await carpetaDelMes(categoria);
 
-  const { data } = await drive.files.create({
-    requestBody: { name: nombreArchivo, parents: [carpetaId] },
-    media: { mimeType, body: Readable.from(contenido) },
-    fields: 'id',
+  // Subida multipart: una parte con los metadatos (nombre, carpeta) y
+  // otra con el contenido del archivo, en una sola petición.
+  const boundary = `closer_crm_${Date.now()}`;
+  const metadata = JSON.stringify({ name: nombreArchivo, parents: [carpetaId] });
+  const cuerpo = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
+    contenido,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+
+  const resp = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body: cuerpo,
   });
+  if (!resp.ok) throw new Error(`No se pudo subir el archivo a Drive (HTTP ${resp.status}): ${await resp.text()}`);
+  const data = await resp.json();
   if (!data.id) throw new Error('No se pudo subir el archivo a Drive');
   return data.id;
 }
@@ -118,15 +154,13 @@ export async function subirArchivoDrive(
  */
 export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   try {
-    const drive = obtenerClienteDrive();
-    const [contenido, metadata] = await Promise.all([
-      drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' }),
-      drive.files.get({ fileId, fields: 'mimeType' }),
+    const [contenidoResp, metaResp] = await Promise.all([
+      driveFetch(`${DRIVE_API}/files/${fileId}?alt=media`),
+      driveFetch(`${DRIVE_API}/files/${fileId}?fields=mimeType`),
     ]);
-    return {
-      buffer: Buffer.from(contenido.data as ArrayBuffer),
-      mimeType: metadata.data.mimeType ?? 'application/octet-stream',
-    };
+    if (!contenidoResp.ok || !metaResp.ok) return null;
+    const [buffer, meta] = await Promise.all([contenidoResp.arrayBuffer(), metaResp.json()]);
+    return { buffer: Buffer.from(buffer), mimeType: meta.mimeType ?? 'application/octet-stream' };
   } catch {
     return null;
   }
@@ -135,8 +169,7 @@ export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: B
 /** Borra un archivo de Drive (por si se necesita en el futuro, ej. al eliminar un registro). */
 export async function borrarArchivoDrive(fileId: string): Promise<void> {
   try {
-    const drive = obtenerClienteDrive();
-    await drive.files.delete({ fileId });
+    await driveFetch(`${DRIVE_API}/files/${fileId}`, { method: 'DELETE' });
   } catch {
     // Si ya no existe o falla, no bloqueamos la operación principal.
   }

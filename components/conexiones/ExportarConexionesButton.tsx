@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { exportarConexiones } from '@/app/dashboard/conexiones/actions';
 
+import { mensajeError } from '@/lib/utils';
 export function ExportarConexionesButton() {
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -33,7 +34,7 @@ export function ExportarConexionesButton() {
         XLSX.utils.book_append_sheet(libro, hoja, 'Conexiones');
         XLSX.writeFile(libro, 'conexiones_fuera_zona.xlsx');
       } catch (e) {
-        setError((e as Error).message);
+        setError(mensajeError(e));
       }
     });
   }

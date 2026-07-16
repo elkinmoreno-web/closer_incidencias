@@ -148,3 +148,28 @@ export function generarPasswordRider(nombreCompleto: string): string {
   return `${letra1}${letra2}123456`;
 }
 
+/**
+ * Convierte CUALQUIER cosa que se haya lanzado (Error normal, string,
+ * un objeto raro de una librería externa, incluso null/undefined) en un
+ * texto legible, sin arriesgarse a lanzar una excepción nueva al
+ * intentar leerlo. Antes usábamos `(e as Error).message` directamente,
+ * pero si lo lanzado no era un Error de verdad (pasa con algunas
+ * librerías, incluida la de Google), leer `.message` podía fallar y esa
+ * fallo SIN CONTROLAR hacía que Next.js ocultara el error real,
+ * mostrando "undefined" en vez del motivo — exactamente lo que pasaba.
+ */
+export function mensajeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  if (e && typeof e === 'object') {
+    const conMensaje = e as { message?: unknown; error?: unknown };
+    if (typeof conMensaje.message === 'string') return conMensaje.message;
+    if (typeof conMensaje.error === 'string') return conMensaje.error;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return 'Error desconocido (no se pudo describir)';
+    }
+  }
+  return 'Error desconocido';
+}

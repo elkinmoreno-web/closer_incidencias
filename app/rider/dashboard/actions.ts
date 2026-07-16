@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
+import { mensajeError } from '@/lib/utils';
 export async function riderSignOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
@@ -93,7 +94,7 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
         const buffer = Buffer.from(await screenshot.arrayBuffer());
         screenshotFileId = await subirArchivoDrive('Incidencias', nombre, buffer, screenshot.type);
       } catch (e) {
-        return { error: `No se pudo subir la captura: ${(e as Error).message}` };
+        return { error: `No se pudo subir la captura: ${mensajeError(e)}` };
       }
     }
     if (evidencia && evidencia.size > 0) {
@@ -104,7 +105,7 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
         const buffer = Buffer.from(await evidencia.arrayBuffer());
         evidenciaFileId = await subirArchivoDrive('Incidencias', nombre, buffer, evidencia.type);
       } catch (e) {
-        return { error: `No se pudo subir la evidencia: ${(e as Error).message}` };
+        return { error: `No se pudo subir la evidencia: ${mensajeError(e)}` };
       }
     }
 
@@ -128,7 +129,7 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     revalidatePath('/rider/dashboard');
     return { success: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: mensajeError(e) };
   }
 }
 
@@ -166,7 +167,7 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
         const fileId = await subirArchivoDrive('Ausencias', nombre, buffer, validos[i].type);
         archivoIds.push(fileId);
       } catch (e) {
-        return { error: `No se pudo subir uno de los justificantes: ${(e as Error).message}` };
+        return { error: `No se pudo subir uno de los justificantes: ${mensajeError(e)}` };
       }
     }
 
@@ -188,7 +189,7 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
     revalidatePath('/rider/dashboard');
     return { success: true };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: mensajeError(e) };
   }
 }
 

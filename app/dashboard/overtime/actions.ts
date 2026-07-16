@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { obtenerOvertimeCentro } from '@/lib/overtimeApi';
 
+import { mensajeError } from '@/lib/utils';
 async function assertAdmin() {
   const supabase = createClient();
   const {
@@ -150,7 +151,7 @@ export async function actualizarYObtenerOvertime(
         .upsert(filasUpsert, { onConflict: 'centro_id,rider_usuario,fecha', ignoreDuplicates: false });
       if (error) errores.push(`${centro.nombre}: ${error.message}`);
     } catch (e) {
-      errores.push(`${centro.nombre}: ${(e as Error).message}`);
+      errores.push(`${centro.nombre}: ${mensajeError(e)}`);
     }
   });
 

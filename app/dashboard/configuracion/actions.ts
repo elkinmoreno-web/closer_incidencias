@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
+import { mensajeError } from '@/lib/utils';
 async function getCallerRol(): Promise<{ supabase: ReturnType<typeof createClient>; rol: string }> {
   const supabase = createClient();
   const {
@@ -170,7 +171,7 @@ export async function crearAdmin(_prev: CrearAdminState, formData: FormData): Pr
     const res = await assertSuperAdminOAdministrador();
     callerRol = res.rol;
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: mensajeError(e) };
   }
 
   const parsed = crearAdminSchema.safeParse({
@@ -343,7 +344,7 @@ export async function cambiarPasswordAdmin(adminId: string, nuevaPassword: strin
   try {
     await assertSuperAdmin();
   } catch (e) {
-    return { ok: false, error: (e as Error).message };
+    return { ok: false, error: mensajeError(e) };
   }
 
   if (!nuevaPassword || nuevaPassword.length < 8) {

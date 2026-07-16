@@ -5,6 +5,7 @@ import { Pencil, X } from 'lucide-react';
 import { editarIncidencia } from '@/app/dashboard/actions';
 import type { Centro, Motivo } from '@/lib/types';
 
+import { mensajeError } from '@/lib/utils';
 interface IncidenciaEditable {
   id: string;
   motivo_id: number | null;
@@ -55,7 +56,7 @@ export function EditIncidenciaModal({
         });
         setOpen(false);
       } catch (e) {
-        setError((e as Error).message);
+        setError(mensajeError(e));
       }
     });
   }

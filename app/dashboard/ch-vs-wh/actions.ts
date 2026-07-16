@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { obtenerChVsWhCentro, obtenerCalculaHorarioBulk, type AgregadoChVsWh } from '@/lib/overtimeApi';
 
+import { mensajeError } from '@/lib/utils';
 async function assertAdmin() {
   const supabase = createClient();
   const {
@@ -127,7 +128,7 @@ export async function obtenerChVsWh(
         .from('ch_vs_wh_cache')
         .upsert({ centro_id: centro.id, fecha_lunes: fechaLunes, datos: agregados, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha_lunes' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${(e as Error).message}`);
+      errores.push(`${centro.nombre}: ${mensajeError(e)}`);
     }
   });
 

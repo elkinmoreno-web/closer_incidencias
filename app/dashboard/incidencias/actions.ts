@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
+import { mensajeError } from '@/lib/utils';
 function validarArchivo(file: File | null, allowed: string[]): string | null {
   if (!file || file.size === 0) return null;
   if (!allowed.includes(file.type)) return 'Formato de archivo no permitido';
@@ -72,7 +73,7 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
       const buffer = Buffer.from(await screenshot.arrayBuffer());
       screenshotFileId = await subirArchivoDrive('Incidencias', nombre, buffer, screenshot.type);
     } catch (e) {
-      return { error: `No se pudo subir la captura: ${(e as Error).message}` };
+      return { error: `No se pudo subir la captura: ${mensajeError(e)}` };
     }
   }
 

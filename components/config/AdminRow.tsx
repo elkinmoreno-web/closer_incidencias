@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { KeyRound, Loader2 } from 'lucide-react';
 import { cambiarRolAdmin, toggleAdminActivo, cambiarPasswordAdmin } from '@/app/dashboard/configuracion/actions';
 
+import { mensajeError } from '@/lib/utils';
 function etiquetaRol(rol: string) {
   if (rol === 'super_admin') return 'Super Admin';
   if (rol === 'administrador') return 'Administrador';
@@ -54,7 +55,7 @@ export function AdminRow({
           await cambiarRolAdmin(admin.id, 'super_admin');
           setRolPendiente(null);
         } catch (e) {
-          setErrorRol((e as Error).message);
+          setErrorRol(mensajeError(e));
         }
       });
       return;
@@ -85,7 +86,7 @@ export function AdminRow({
         await cambiarRolAdmin(admin.id, rolPendiente as 'administrador' | 'moderador', Array.from(ciudadesSeleccionadas));
         setRolPendiente(null);
       } catch (e) {
-        setErrorRol((e as Error).message);
+        setErrorRol(mensajeError(e));
       }
     });
   }
@@ -95,7 +96,7 @@ export function AdminRow({
       try {
         await toggleAdminActivo(admin.id, !admin.activo);
       } catch (e) {
-        alert((e as Error).message);
+        alert(mensajeError(e));
       }
     });
   }

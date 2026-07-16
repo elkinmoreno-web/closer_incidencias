@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { dniSchema } from '@/lib/validations';
-import { generarPasswordRider } from '@/lib/utils';
+import { generarPasswordRider, mensajeError } from '@/lib/utils';
 import { nombreCentroOficial, normalizarNombreCentro } from '@/lib/mapeoCentros';
 
 async function assertAdmin() {
@@ -118,7 +118,7 @@ export async function crearRider(_prev: RiderFormState, formData: FormData): Pro
   try {
     await assertAdmin();
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: mensajeError(e) };
   }
 
   const parsed = riderSchema.safeParse({
@@ -155,7 +155,7 @@ export async function restablecerPasswordRider(riderId: string): Promise<{ ok: b
   try {
     await assertAdmin();
   } catch (e) {
-    return { ok: false, motivo: (e as Error).message };
+    return { ok: false, motivo: mensajeError(e) };
   }
 
   const admin = createAdminClient();
@@ -241,7 +241,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
   try {
     await assertAdmin();
   } catch (e) {
-    return { creados: 0, actualizados: 0, errores: [(e as Error).message], sinCentro: [] };
+    return { creados: 0, actualizados: 0, errores: [mensajeError(e)], sinCentro: [] };
   }
 
   const admin = createAdminClient();

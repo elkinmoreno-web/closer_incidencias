@@ -92,8 +92,8 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
       try {
         const buffer = Buffer.from(await screenshot.arrayBuffer());
         screenshotFileId = await subirArchivoDrive('Incidencias', nombre, buffer, screenshot.type);
-      } catch {
-        return { error: 'No se pudo subir la captura. Inténtalo de nuevo.' };
+      } catch (e) {
+        return { error: `No se pudo subir la captura: ${(e as Error).message}` };
       }
     }
     if (evidencia && evidencia.size > 0) {
@@ -103,8 +103,8 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
       try {
         const buffer = Buffer.from(await evidencia.arrayBuffer());
         evidenciaFileId = await subirArchivoDrive('Incidencias', nombre, buffer, evidencia.type);
-      } catch {
-        return { error: 'No se pudo subir la evidencia. Inténtalo de nuevo.' };
+      } catch (e) {
+        return { error: `No se pudo subir la evidencia: ${(e as Error).message}` };
       }
     }
 
@@ -165,8 +165,8 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
         const buffer = Buffer.from(await validos[i].arrayBuffer());
         const fileId = await subirArchivoDrive('Ausencias', nombre, buffer, validos[i].type);
         archivoIds.push(fileId);
-      } catch {
-        return { error: 'No se pudo subir alguno de los justificantes. Inténtalo de nuevo.' };
+      } catch (e) {
+        return { error: `No se pudo subir uno de los justificantes: ${(e as Error).message}` };
       }
     }
 
@@ -306,13 +306,14 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
   const lunes = new Date(simple);
   lunes.setUTCDate(simple.getUTCDate() - ((dow + 6) % 7));
 
-  const hoyIso = new Date().toISOString().split('T')[0];
+  const { fechaLimiteMetricas } = await import('@/lib/metricas');
+  const limiteIso = fechaLimiteMetricas(); // los últimos 2 días no se muestran: los datos aún se están asentando
   const dias: { dia: string; fecha: string }[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(lunes);
     d.setUTCDate(lunes.getUTCDate() + i);
     const fecha = d.toISOString().split('T')[0];
-    if (fecha > hoyIso) break; // no pedir días futuros
+    if (fecha > limiteIso) break;
     dias.push({ dia: NOMBRES_DIA[i], fecha });
   }
   if (dias.length === 0) return [];
@@ -322,44 +323,45 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
   const admClient = createAdminClient();
   const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
 
-  const resultado: MisMetricasDia[] = [];
-  for (const { dia, fecha } of dias) {
-    try {
-      let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoDiario>> | null;
-      if (!forzar && centroFila) {
-        const limite = new Date(Date.now() - CACHE_TTL_MINUTOS_RIDER * 60 * 1000).toISOString();
-        const { data: cacheRow } = await admClient
-          .from('fleet_metrics_cache_diario')
-          .select('datos')
-          .eq('centro_id', centroFila.id)
-          .eq('fecha', fecha)
-          .gte('actualizado_en', limite)
-          .maybeSingle();
-        if (cacheRow) drivers = cacheRow.datos as typeof drivers;
-      }
-      if (!drivers) {
-        drivers = await obtenerRendimientoDiario(info.apiCentroId, fecha);
-        if (centroFila) {
-          await admClient
+  const resultado = await Promise.all(
+    dias.map(async ({ dia, fecha }): Promise<MisMetricasDia> => {
+      try {
+        let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoDiario>> | null;
+        if (!forzar && centroFila) {
+          const limite = new Date(Date.now() - CACHE_TTL_MINUTOS_RIDER * 60 * 1000).toISOString();
+          const { data: cacheRow } = await admClient
             .from('fleet_metrics_cache_diario')
-            .upsert({ centro_id: centroFila.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
+            .select('datos')
+            .eq('centro_id', centroFila.id)
+            .eq('fecha', fecha)
+            .gte('actualizado_en', limite)
+            .maybeSingle();
+          if (cacheRow) drivers = cacheRow.datos as typeof drivers;
         }
+        if (!drivers) {
+          drivers = await obtenerRendimientoDiario(info.apiCentroId, fecha);
+          if (centroFila) {
+            await admClient
+              .from('fleet_metrics_cache_diario')
+              .upsert({ centro_id: centroFila.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
+          }
+        }
+        const mio = drivers.find((d) => d.document_number.toUpperCase() === info.rider.dni.toUpperCase());
+        return {
+          dia,
+          fecha,
+          num_of_trips: mio?.num_of_trips ?? 0,
+          online_hours: mio?.online_hours ?? 0,
+          tph: mio?.tph ?? 0,
+          acceptance_rate: mio?.acceptance_rate ?? 0,
+          cancelation_rate: mio?.cancelation_rate ?? 0,
+          hayDatos: !!mio,
+        };
+      } catch {
+        return { dia, fecha, num_of_trips: 0, online_hours: 0, tph: 0, acceptance_rate: 0, cancelation_rate: 0, hayDatos: false };
       }
-      const mio = drivers.find((d) => d.document_number.toUpperCase() === info.rider.dni.toUpperCase());
-      resultado.push({
-        dia,
-        fecha,
-        num_of_trips: mio?.num_of_trips ?? 0,
-        online_hours: mio?.online_hours ?? 0,
-        tph: mio?.tph ?? 0,
-        acceptance_rate: mio?.acceptance_rate ?? 0,
-        cancelation_rate: mio?.cancelation_rate ?? 0,
-        hayDatos: !!mio,
-      });
-    } catch {
-      resultado.push({ dia, fecha, num_of_trips: 0, online_hours: 0, tph: 0, acceptance_rate: 0, cancelation_rate: 0, hayDatos: false });
-    }
-  }
+    })
+  );
 
   return resultado;
 }

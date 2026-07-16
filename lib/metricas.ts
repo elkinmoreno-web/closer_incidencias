@@ -90,6 +90,17 @@ export function fmtDMY(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/**
+ * Fecha límite para las métricas: los últimos 2 días no se muestran
+ * porque los datos de Fleet Manager tardan ese margen en asentarse del
+ * todo. Si hoy es jueves 16, el día más reciente visible es el martes 14.
+ */
+export function fechaLimiteMetricas(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 2);
+  return d.toISOString().split('T')[0];
+}
+
 /** Número de semana ISO-8601 de una fecha (para pedir el rendimiento semanal a Fleet Manager). */
 export function semanaIsoDe(fecha: Date): { year: number; week: number } {
   const d = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));

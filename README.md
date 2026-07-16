@@ -79,9 +79,10 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
   en las Script Properties del proyecto de Apps Script. **En Vercel se
   configuran como variables de entorno del proyecto (Settings →
   Environment Variables), nunca en el código.**
-- `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` /
-  `GOOGLE_DRIVE_REFRESH_TOKEN` / `GOOGLE_DRIVE_FOLDER_ID` — para guardar
-  los archivos adjuntos en Google Drive. Ver más abajo cómo generarlas.
+- `GOOGLE_DRIVE_FOLDER_ID` — la carpeta raíz donde se guardan los
+  archivos adjuntos en Google Drive. Ver más abajo por qué esta es la
+  ÚNICA variable de Drive que hace falta en Vercel (el resto de la
+  configuración vive en un GitHub Action, no aquí).
 - `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — el DNI y
   contraseña que **todos los gestores usan por igual** para entrar a
   Fleet Manager (es una credencial compartida a nivel de empresa, no la
@@ -102,45 +103,62 @@ Closer CRM - Archivos/
 └── Conexiones/2026-07/
 ```
 Las subcarpetas de categoría y mes se crean solas la primera vez que
-hace falta. **Los archivos no se borran automáticamente** (a diferencia
-de la versión anterior con Supabase Storage): se conservan indefinidamente.
+hace falta. **Los archivos no se borran automáticamente**: se conservan
+indefinidamente.
 
 **Privacidad:** ningún archivo se comparte con enlace público. El panel
 sirve cada archivo a través de una ruta propia (`/api/drive-file`) que
-exige sesión de admin válida antes de descargarlo de Drive y entregarlo
-— el archivo en Drive en sí sigue siendo privado en todo momento.
+exige sesión de admin válida antes de descargarlo de Drive y entregarlo.
 
-#### Cómo configurarlo (una sola vez)
+#### Por qué esto NO usa un Client ID de Google Cloud
 
-No hace falta crear una app en Google Cloud con cuenta de servicio (eso
-fue lo que se intentó antes y no funcionó por permisos). En su lugar, se
-usa el mismo mecanismo que usa `rclone`: autorizas tu propia cuenta una
-vez, en tu ordenador, y el token que genera sirve indefinidamente sin
-volver a pedir nada (igual que ya usas en tu otro proyecto con GitHub
-Actions).
+Crear un Client ID/Secret propio en Google Cloud Console requiere
+permisos de administrador de Workspace que no están disponibles en esta
+empresa. La alternativa que sí funciona sin esos permisos:
 
-1. Instala `rclone` en tu ordenador y ejecuta `rclone config`.
-2. Crea un remoto nuevo de tipo `drive` (Google Drive), inicia sesión
-   con la cuenta del Workspace de la empresa, y deja que autorice normal
-   (se abre el navegador, aceptas los permisos).
-3. Cuando termine, abre el archivo de configuración de rclone (normalmente
-   `~/.config/rclone/rclone.conf`) y copia estos 3 valores del remoto que
-   acabas de crear:
-   - `client_id`
-   - `client_secret`
-   - `token` → dentro de ese JSON, el campo `"refresh_token"`
-4. En Google Drive, crea la carpeta raíz (ej. "Closer CRM - Archivos"),
+1. En tu ordenador, **`rclone` ya mantiene una sesión válida con Google
+   Drive** (usando su propio client_id interno — es su uso normal y
+   legítimo, no requiere nada especial de tu parte).
+2. Un **GitHub Action programado** (`.github/workflows/refrescar-drive-token.yml`,
+   corre cada 45 min) deja que rclone renueve el token si hace falta, y
+   guarda ese `access_token` vigente en una tabla de Supabase
+   (`google_drive_token`).
+3. La app (en Vercel) **solo lee** ese token de Supabase y lo usa
+   directo contra la API de Drive — nunca intenta renovarlo por su
+   cuenta, así que nunca necesita Client ID ni Secret.
+
+El token dura ~60 minutos; al renovarse cada 45, siempre debería haber
+uno vigente. Si el Action deja de correr por más de ~55 min, las subidas
+fallan con un mensaje claro indicando justamente eso (revisar que el
+Action esté corriendo).
+
+#### Cómo configurarlo
+
+1. Ejecutar `supabase/schema_drive_token.sql` en el SQL Editor.
+
+2. En Google Drive, crea la carpeta raíz (ej. "Closer CRM - Archivos"),
    ábrela en el navegador y copia el ID de la carpeta desde la URL
    (`https://drive.google.com/drive/folders/`**`ESTE_ID`**).
-5. En Vercel (Settings → Environment Variables) añade:
-   - `GOOGLE_DRIVE_CLIENT_ID`
-   - `GOOGLE_DRIVE_CLIENT_SECRET`
-   - `GOOGLE_DRIVE_REFRESH_TOKEN` (el `refresh_token` del paso 3)
-   - `GOOGLE_DRIVE_FOLDER_ID` (el ID del paso 4)
 
-Con esto, la app pide un token de acceso nuevo sola cada vez que hace
-falta, usando ese refresh token — no vuelve a pedir autorización nunca,
-salvo que revoques el acceso manualmente desde la cuenta de Google.
+3. En Vercel (Settings → Environment Variables) añade solo:
+   - `GOOGLE_DRIVE_FOLDER_ID` (el ID del paso anterior)
+
+4. En el repositorio de GitHub de este proyecto, ve a Settings → Secrets
+   and variables → Actions, y añade estos secrets:
+   - `RCLONE_CONF` — el contenido completo de tu `~/.config/rclone/rclone.conf`
+     (el mismo que ya usas para el pipeline de métricas — puedes copiar
+     literalmente el mismo secret que ya tienes en el otro repositorio,
+     o crear uno nuevo aquí con el mismo contenido)
+   - `RCLONE_REMOTE_NAME` — el nombre del remoto dentro de ese archivo
+     (ej. `closer_drive_dashboard`, es lo que aparece entre corchetes
+     `[...]` en el rclone.conf)
+   - `GOOGLE_DRIVE_FOLDER_ID` — el mismo ID del paso 2
+   - `SUPABASE_URL` — la URL de tu proyecto de Supabase
+   - `SUPABASE_SERVICE_ROLE_KEY` — la service role key de Supabase
+
+5. Corre el Action manualmente una vez (Actions → "Refrescar token de
+   Google Drive" → Run workflow) para confirmar que guarda el token
+   correctamente, antes de esperar a que corra solo por el cron.
 
 ## 4. Desarrollo local
 

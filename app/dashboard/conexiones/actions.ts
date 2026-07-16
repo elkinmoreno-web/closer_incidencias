@@ -55,8 +55,8 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
   try {
     const buffer = Buffer.from(await screenshot.arrayBuffer());
     fileId = await subirArchivoDrive('Conexiones', nombre, buffer, screenshot.type);
-  } catch {
-    return { error: 'No se pudo subir la captura' };
+  } catch (e) {
+    return { error: `No se pudo subir la captura: ${(e as Error).message}` };
   }
 
   const { error: insertError } = await supabase.from('conexiones_fuera_zona').insert({

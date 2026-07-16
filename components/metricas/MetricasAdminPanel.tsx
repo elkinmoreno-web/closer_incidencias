@@ -13,7 +13,7 @@ import {
   type CentroConId,
 } from '@/app/dashboard/metricas/actions';
 import { paginasAMostrar } from '@/lib/pagination';
-import { semanaIsoDe } from '@/lib/metricas';
+import { semanaIsoDe, fechaLimiteMetricas } from '@/lib/metricas';
 
 const fmtInt = (n: number | null) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('es-ES'));
 const fmtFloat = (n: number | null) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : n.toFixed(2));
@@ -42,7 +42,7 @@ export function MetricasAdminPanel() {
   const [modo, setModo] = useState<Modo>('semanal');
   const [year, setYear] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
-  const [fechaDia, setFechaDia] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fechaDia, setFechaDia] = useState(() => fechaLimiteMetricas());
   const [centros, setCentros] = useState<CentroConId[]>([]);
   const [centroFiltro, setCentroFiltro] = useState<string>('todos');
   const [filas, setFilas] = useState<FilaMetricaAdmin[]>([]);
@@ -120,8 +120,8 @@ export function MetricasAdminPanel() {
   }
 
   const rango = modo === 'semanal' && year !== null && week !== null ? rangoSemanaIso(year, week) : null;
-  const hoy = new Date().toISOString().split('T')[0];
-  const esHoyODespues = modo === 'diario' ? fechaDia >= hoy : rango ? rango.lunes >= semanaIsoDeHoyLunes() : false;
+  const limite = fechaLimiteMetricas(); // los últimos 2 días no se muestran: los datos aún se están asentando
+  const esHoyODespues = modo === 'diario' ? fechaDia >= limite : rango ? rango.lunes >= semanaIsoDeHoyLunes() : false;
 
   function semanaIsoDeHoyLunes(): string {
     const s = semanaIsoDe(new Date());
@@ -223,13 +223,13 @@ export function MetricasAdminPanel() {
               <input
                 type="date"
                 value={fechaDia}
-                max={hoy}
+                max={limite}
                 onChange={(e) => setFechaDia(e.target.value)}
                 className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
               />
               <button
                 onClick={() => cambiarDia(1)}
-                disabled={fechaDia >= hoy}
+                disabled={fechaDia >= limite}
                 className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:opacity-30"
               >
                 <ChevronRight className="h-4 w-4" />

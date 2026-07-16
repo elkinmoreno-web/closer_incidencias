@@ -71,8 +71,8 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
     try {
       const buffer = Buffer.from(await screenshot.arrayBuffer());
       screenshotFileId = await subirArchivoDrive('Incidencias', nombre, buffer, screenshot.type);
-    } catch {
-      return { error: 'No se pudo subir la captura' };
+    } catch (e) {
+      return { error: `No se pudo subir la captura: ${(e as Error).message}` };
     }
   }
 

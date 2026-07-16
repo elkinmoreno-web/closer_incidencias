@@ -109,8 +109,8 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
       const buffer = Buffer.from(await validos[i].arrayBuffer());
       const fileId = await subirArchivoDrive('Ausencias', nombre, buffer, validos[i].type);
       archivoIds.push(fileId);
-    } catch {
-      return { error: 'No se pudo subir uno de los justificantes' };
+    } catch (e) {
+      return { error: `No se pudo subir uno de los justificantes: ${(e as Error).message}` };
     }
   }
 

@@ -118,19 +118,26 @@ export function MetricasPanel() {
                 </tr>
               </thead>
               <tbody>
-                {dias.map((d) => (
+                {dias.filter((d) => d.hayDatos).map((d) => (
                   <tr key={d.fecha} className="border-b border-border last:border-0">
                     <td className="px-3 py-2">
                       <div className="font-medium text-ink">{d.dia}</div>
                       <div className="font-mono text-[10px] text-ink-muted">{fmtDMY(d.fecha)}</div>
                     </td>
-                    <td className="px-3 py-2 text-center font-mono text-primary">{d.hayDatos ? fmtInt(d.num_of_trips) : '—'}</td>
-                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtFloat(d.online_hours) : '—'}</td>
-                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtFloat(d.tph) : '—'}</td>
-                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtPct(d.acceptance_rate) : '—'}</td>
-                    <td className="px-3 py-2 text-center font-mono">{d.hayDatos ? fmtPct(d.cancelation_rate) : '—'}</td>
+                    <td className="px-3 py-2 text-center font-mono text-primary">{fmtInt(d.num_of_trips)}</td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtFloat(d.online_hours)}</td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtFloat(d.tph)}</td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtPct(d.acceptance_rate)}</td>
+                    <td className="px-3 py-2 text-center font-mono">{fmtPct(d.cancelation_rate)}</td>
                   </tr>
                 ))}
+                {dias.filter((d) => d.hayDatos).length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-center text-ink-muted">
+                      Todavía no hay días con datos registrados esta semana.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

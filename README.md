@@ -140,8 +140,10 @@ Action esté corriendo).
    ábrela en el navegador y copia el ID de la carpeta desde la URL
    (`https://drive.google.com/drive/folders/`**`ESTE_ID`**).
 
-3. En Vercel (Settings → Environment Variables) añade solo:
+3. En Vercel (Settings → Environment Variables) añade:
    - `GOOGLE_DRIVE_FOLDER_ID` (el ID del paso anterior)
+   - `GITHUB_PAT` y `GITHUB_REPO` (ver "Autocorrección" más abajo — sin
+     estas dos, todo funciona igual, solo que sin ese respaldo)
 
 4. En el repositorio de GitHub de este proyecto, ve a Settings → Secrets
    and variables → Actions, y añade estos secrets:
@@ -159,6 +161,32 @@ Action esté corriendo).
 5. Corre el Action manualmente una vez (Actions → "Refrescar token de
    Google Drive" → Run workflow) para confirmar que guarda el token
    correctamente, antes de esperar a que corra solo por el cron.
+
+#### Autocorrección (recomendado)
+
+Los cron de GitHub Actions son "best effort": GitHub mismo documenta
+que pueden atrasarse, sobre todo en cuentas gratuitas. Si el Action
+llega tarde y el token ya caducó, la app puede dispararlo ella misma al
+instante (en vez de solo fallar y esperar al próximo cron) y reintentar
+sola en unos segundos. Para activar esto:
+
+1. En GitHub, ve a tu foto de perfil → Settings → Developer settings →
+   Personal access tokens → **Fine-grained tokens** → Generate new token.
+2. Dale un nombre (ej. "closer-crm-drive-autocorreccion"), sin fecha de
+   caducidad muy corta (o la que prefieras, solo recuerda renovarlo).
+3. En "Repository access", elige **Only select repositories** y marca
+   únicamente este repositorio (no le des acceso a otros).
+4. En "Permissions" → "Repository permissions", busca **Actions** y
+   ponlo en **Read and write**. No hace falta ningún otro permiso.
+5. Generate token, y cópialo (empieza por `github_pat_...`).
+6. En Vercel (Settings → Environment Variables) añade:
+   - `GITHUB_PAT` — el token del paso anterior
+   - `GITHUB_REPO` — `usuario/nombre-del-repositorio` (tal cual aparece
+     en la URL de tu repositorio)
+
+Sin estas dos variables, todo sigue funcionando igual que antes — solo
+que si el token caduca, se ve el error de siempre en vez de
+autocorregirse sola.
 
 ## 4. Desarrollo local
 

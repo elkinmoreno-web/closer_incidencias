@@ -50,9 +50,20 @@ jobs:
 
       - name: Guardar el token en Supabase
         run: |
-          curl -sf -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/google_drive_token" \
+          RESPUESTA=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/google_drive_token?on_conflict=id" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -H "Prefer: resolution=merge-duplicates" \
-            -d '{"id": true, "access_token": "${{ steps.token.outputs.access_token }}", "actualizado_en": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}'
+            -d '{"id": true, "access_token": "${{ steps.token.outputs.access_token }}", "actualizado_en": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}')
+
+          HTTP_CODE=$(echo "$RESPUESTA" | tail -n1)
+          BODY=$(echo "$RESPUESTA" | sed '$d')
+
+          echo "Código HTTP: $HTTP_CODE"
+          echo "Respuesta de Supabase: $BODY"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Supabase devolvió un error al guardar el token (ver 'Respuesta de Supabase' arriba)"
+            exit 1
+          fi

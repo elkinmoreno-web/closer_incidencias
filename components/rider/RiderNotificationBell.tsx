@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell } from 'lucide-react';
+import { Bell, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const STORAGE_KEY_PREFIX = 'notificacionesRider_';
@@ -64,6 +64,7 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
   const [notis, setNotis] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
   const [popupInstrucciones, setPopupInstrucciones] = useState<{ motivo: string; texto: string } | null>(null);
+  const [popupRechazo, setPopupRechazo] = useState<{ motivo: string; razon: string } | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
   const storageKey = `${STORAGE_KEY_PREFIX}${riderId}`;
   const ultimoVistoKey = `${ULTIMO_VISTO_PREFIX}${riderId}`;
@@ -111,6 +112,11 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       }
     }
 
+    async function mostrarPopupRechazo(motivoId: number | null | undefined, motivoRechazo: string | null | undefined) {
+      const { data } = motivoId ? await supabase.from('motivos').select('nombre').eq('id', motivoId).maybeSingle() : { data: null };
+      setPopupRechazo({ motivo: data?.nombre ?? 'Tu incidencia', razon: motivoRechazo?.trim() || 'No se indicó un motivo específico.' });
+    }
+
     /** Revisa qué cambió desde la última vez que el rider abrió la app — el respaldo para cuando no estaba mirando en el momento exacto. */
     async function revisarCambiosPerdidos() {
       const ultimoVisto = localStorage.getItem(ultimoVistoKey) ?? new Date(Date.now() - DIAS_HACIA_ATRAS_PRIMERA_VEZ * 86400000).toISOString();
@@ -119,7 +125,7 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       const [incRes, ausRes] = await Promise.all([
         supabase
           .from('incidencias')
-          .select('id, estado, motivo_id, updated_at')
+          .select('id, estado, motivo_id, motivo_rechazo, updated_at')
           .eq('rider_id', riderId)
           .in('estado', ['aprobada', 'rechazada'])
           .gt('updated_at', ultimoVisto)
@@ -148,11 +154,13 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
         agregar(aus.estado === 'aprobada' ? 'Tu ausencia fue aprobada' : 'Tu ausencia fue rechazada');
       }
 
-      // Si hubo alguna incidencia recién aprobada, mostramos el popup de
-      // instrucciones de la MÁS RECIENTE que tenga (si tiene varias, no
-      // apilamos varios popups, solo el último).
-      const ultimaAprobada = [...incidenciasNuevas].reverse().find((i) => i.estado === 'aprobada');
-      if (ultimaAprobada) await mostrarPopupSiHayInstrucciones(ultimaAprobada.motivo_id);
+      // Si hubo varias incidencias que cambiaron mientras no estaba, solo
+      // mostramos UN popup — el de la más reciente de todas (por
+      // updated_at), sea aprobación o rechazo. Como ya viene ordenado
+      // ascendente, la última del array es la más reciente.
+      const masReciente = incidenciasNuevas[incidenciasNuevas.length - 1];
+      if (masReciente?.estado === 'aprobada') await mostrarPopupSiHayInstrucciones(masReciente.motivo_id);
+      else if (masReciente?.estado === 'rechazada') await mostrarPopupRechazo(masReciente.motivo_id, masReciente.motivo_rechazo);
 
       localStorage.setItem(ultimoVistoKey, ahora);
       if (huboAlgo) router.refresh();
@@ -166,14 +174,17 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'incidencias', filter: `rider_id=eq.${riderId}` },
         (payload) => {
-          const nuevo = payload.new as { estado?: string; motivo_id?: number };
+          const nuevo = payload.new as { estado?: string; motivo_id?: number; motivo_rechazo?: string | null };
           const anterior = payload.old as { estado?: string };
           if (nuevo.estado === anterior.estado) return; // solo avisar si cambió el estado
           if (nuevo.estado === 'aprobada') {
             agregar('Tu incidencia fue aprobada');
             mostrarPopupSiHayInstrucciones(nuevo.motivo_id);
           }
-          if (nuevo.estado === 'rechazada') agregar('Tu incidencia fue rechazada');
+          if (nuevo.estado === 'rechazada') {
+            agregar('Tu incidencia fue rechazada');
+            mostrarPopupRechazo(nuevo.motivo_id, nuevo.motivo_rechazo);
+          }
           localStorage.setItem(ultimoVistoKey, new Date().toISOString());
           router.refresh();
         }
@@ -265,6 +276,30 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
             <button
               onClick={() => setPopupInstrucciones(null)}
               className="w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-white hover:opacity-90"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+
+      {popupRechazo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-card bg-surface p-6 shadow-lg">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-danger">
+                <AlertCircle size={16} />
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-danger">Incidencia rechazada</p>
+            </div>
+            <h3 className="mb-3 text-base font-semibold text-ink">{popupRechazo.motivo}</h3>
+            <div className="mb-5 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-ink">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-danger">Motivo del rechazo</p>
+              <p className="whitespace-pre-wrap text-ink-muted">{popupRechazo.razon}</p>
+            </div>
+            <button
+              onClick={() => setPopupRechazo(null)}
+              className="w-full rounded-full border border-border py-2.5 text-sm font-semibold text-ink hover:bg-bg"
             >
               Entendido
             </button>

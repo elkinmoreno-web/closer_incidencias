@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/Badge';
 import { estadoIncidenciaColor, estadoIncidenciaLabel, formatFecha } from '@/lib/utils';
+import { VerProtocoloLink } from '@/components/rider/VerProtocoloLink';
 
 interface IncidenciaResumen {
   id: string;
@@ -7,7 +8,7 @@ interface IncidenciaResumen {
   created_at: string;
   codigo_pedido: string | null;
   motivo_rechazo: string | null;
-  motivos: { nombre: string } | null;
+  motivos: { nombre: string; instrucciones_aprobacion: string | null } | null;
 }
 
 export function IncidenciasSemanaList({ incidencias }: { incidencias: IncidenciaResumen[] }) {
@@ -24,7 +25,12 @@ export function IncidenciasSemanaList({ incidencias }: { incidencias: Incidencia
               {i.motivos?.nombre ?? 'Sin motivo'}
               {i.codigo_pedido && <span className="ml-2 text-xs text-ink-muted">· Pedido {i.codigo_pedido}</span>}
             </div>
-            <Badge className={estadoIncidenciaColor(i.estado)}>{estadoIncidenciaLabel(i.estado)}</Badge>
+            <div className="flex items-center gap-2">
+              {i.estado === 'aprobada' && i.motivos?.instrucciones_aprobacion && (
+                <VerProtocoloLink motivo={i.motivos.nombre} instrucciones={i.motivos.instrucciones_aprobacion} />
+              )}
+              <Badge className={estadoIncidenciaColor(i.estado)}>{estadoIncidenciaLabel(i.estado)}</Badge>
+            </div>
           </div>
           <div className="text-xs text-ink-muted">{formatFecha(i.created_at)}</div>
           {i.estado === 'rechazada' && i.motivo_rechazo && (

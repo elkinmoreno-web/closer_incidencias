@@ -31,7 +31,7 @@ export default async function RiderDashboardPage() {
       supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
       supabase
         .from('incidencias')
-        .select('id, estado, created_at, codigo_pedido, motivo_rechazo, motivos(nombre)')
+        .select('id, estado, created_at, codigo_pedido, motivo_rechazo, motivos(nombre, instrucciones_aprobacion)')
         .eq('rider_id', rider.id)
         .gte('created_at', inicioSemana)
         .order('created_at', { ascending: false }),

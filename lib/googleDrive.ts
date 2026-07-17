@@ -35,11 +35,22 @@ import { createAdminClient } from '@/lib/supabase/server';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
 
-let tokenCache: { token: string; expira: number } | null = null;
+let tokenCache: { token: string; expira: number; actualizadoEn: string } | null = null;
 
-/** Lee el access_token vigente guardado por el GitHub Action. Cachea unos segundos en memoria del proceso para no golpear Supabase en cada operación de una misma request. */
-async function obtenerAccessToken(): Promise<string> {
-  if (tokenCache && tokenCache.expira > Date.now()) return tokenCache.token;
+/**
+ * Lee el access_token guardado por el GitHub Action, y lo entrega
+ * siempre para que se intente usar — NUNCA lo rechazamos aquí solo por
+ * cuánto tiempo lleva guardado. Los cron de GitHub Actions son "best
+ * effort" y pueden atrasarse varios minutos sin avisar, así que un
+ * límite de tiempo adivinado (ej. "más de 55 min, seguro caducó") puede
+ * rechazar un token que en realidad todavía es válido. La única forma
+ * confiable de saber si un token sirve es probarlo de verdad contra
+ * Google — si Google lo rechaza (401), ahí sí se informa con claridad.
+ * Cachea unos segundos en memoria del proceso para no golpear Supabase
+ * en cada operación de una misma request.
+ */
+async function obtenerAccessToken(): Promise<{ token: string; actualizadoEn: string }> {
+  if (tokenCache && tokenCache.expira > Date.now()) return { token: tokenCache.token, actualizadoEn: tokenCache.actualizadoEn };
 
   const admin = createAdminClient();
   const { data, error } = await admin.from('google_drive_token').select('access_token, actualizado_en').eq('id', true).single();
@@ -48,23 +59,19 @@ async function obtenerAccessToken(): Promise<string> {
     throw new Error('No hay token de Google Drive guardado todavía. Revisa que el GitHub Action de renovación haya corrido al menos una vez.');
   }
 
-  const minutosDesdeActualizacion = (Date.now() - new Date(data.actualizado_en).getTime()) / 60000;
-  if (minutosDesdeActualizacion > 55) {
-    throw new Error(
-      `El token de Google Drive tiene ${Math.round(minutosDesdeActualizacion)} minutos y probablemente ya caducó. Revisa que el GitHub Action "refrescar-drive-token" se esté ejecutando (cada ~45 min).`
-    );
-  }
-
-  tokenCache = { token: data.access_token, expira: Date.now() + 60 * 1000 };
-  return data.access_token;
+  tokenCache = { token: data.access_token, expira: Date.now() + 60 * 1000, actualizadoEn: data.actualizado_en };
+  return { token: data.access_token, actualizadoEn: data.actualizado_en };
 }
 
 async function driveFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const token = await obtenerAccessToken();
+  const { token, actualizadoEn } = await obtenerAccessToken();
   const resp = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
   if (resp.status === 401) {
     tokenCache = null; // el token pudo caducar justo ahora; no reintentamos aquí, el próximo intento leerá uno fresco si ya se renovó
-    throw new Error('Google Drive respondió 401 (token caducado o inválido). Revisa el GitHub Action de renovación.');
+    const minutos = Math.round((Date.now() - new Date(actualizadoEn).getTime()) / 60000);
+    throw new Error(
+      `Google Drive rechazó el token (401) — caducó de verdad. Se guardó hace ${minutos} minutos. Revisa que el GitHub Action "refrescar-drive-token" se esté ejecutando (cada ~45 min); si está corriendo bien pero sigue pasando, puede que GitHub esté atrasando el cron y convenga bajar el intervalo.`
+    );
   }
   return resp;
 }

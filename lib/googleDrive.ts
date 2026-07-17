@@ -158,19 +158,27 @@ export async function subirArchivoDrive(
  * Descarga el contenido de un archivo de Drive por su ID, para
  * mostrarlo/servirlo desde nuestro propio servidor (el archivo en Drive
  * permanece privado; nunca se comparte con un enlace público).
+ *
+ * Devuelve `null` SOLO cuando Drive confirma que el archivo
+ * genuinamente no existe (404 real) — cualquier otro fallo (token
+ * caducado, sin permiso, error de red) se deja propagar con su mensaje
+ * real, en vez de disfrazarlo todo como "no encontrado" como pasaba
+ * antes (lo que hacía imposible saber si el archivo de verdad no
+ * estaba, o si era otra cosa, como el mismo problema del token).
  */
 export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
-  try {
-    const [contenidoResp, metaResp] = await Promise.all([
-      driveFetch(`${DRIVE_API}/files/${fileId}?alt=media`),
-      driveFetch(`${DRIVE_API}/files/${fileId}?fields=mimeType`),
-    ]);
-    if (!contenidoResp.ok || !metaResp.ok) return null;
-    const [buffer, meta] = await Promise.all([contenidoResp.arrayBuffer(), metaResp.json()]);
-    return { buffer: Buffer.from(buffer), mimeType: meta.mimeType ?? 'application/octet-stream' };
-  } catch {
-    return null;
-  }
+  const [contenidoResp, metaResp] = await Promise.all([
+    driveFetch(`${DRIVE_API}/files/${fileId}?alt=media`),
+    driveFetch(`${DRIVE_API}/files/${fileId}?fields=mimeType`),
+  ]);
+
+  if (contenidoResp.status === 404 || metaResp.status === 404) return null;
+
+  if (!contenidoResp.ok) throw new Error(`Drive respondió ${contenidoResp.status} al pedir el contenido del archivo: ${await contenidoResp.text()}`);
+  if (!metaResp.ok) throw new Error(`Drive respondió ${metaResp.status} al pedir los metadatos del archivo: ${await metaResp.text()}`);
+
+  const [buffer, meta] = await Promise.all([contenidoResp.arrayBuffer(), metaResp.json()]);
+  return { buffer: Buffer.from(buffer), mimeType: meta.mimeType ?? 'application/octet-stream' };
 }
 
 /** Borra un archivo de Drive (por si se necesita en el futuro, ej. al eliminar un registro). */

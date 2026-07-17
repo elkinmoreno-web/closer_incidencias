@@ -309,6 +309,17 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
     return null;
   }
 
+  /** Crea un centro SIN ciudad asignada (para que un admin se la asigne después desde Configuración). */
+  async function crearCentroSinCiudad(nombreCentro: string): Promise<number | null> {
+    const claveCentro = normalizarNombreCentro(nombreCentro);
+    const { data: centroNuevo } = await admin.from('centros').insert({ nombre: nombreCentro, ciudad_id: null, activo: true }).select('id').single();
+    if (centroNuevo) {
+      centroMap.set(claveCentro, centroNuevo.id);
+      return centroNuevo.id;
+    }
+    return null;
+  }
+
   /**
    * Traduce el nombre del Excel al centro real de la BD.
    * - Si el nombre del Excel está en el mapeo y ese centro existe → su id.
@@ -318,11 +329,11 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
    *   no existe todavía, SÍ se crea: tanto el centro como una ciudad con
    *   el mismo nombre.
    * - Si la fila es de Alemania (Closer Go Germany GmbH) y el centro no
-   *   existe todavía, TAMBIÉN se crea (es otra operación aparte, sin
-   *   mapeo de zonas de España): se usa el nombre sin el prefijo "FD"
-   *   como ciudad (ej. "FD Berlin" → ciudad "BERLIN").
-   * - Para cualquier otro centro no reconocido → no se crea nada, se
-   *   importa sin centro y se avisa para revisión manual.
+   *   existe todavía, TAMBIÉN se crea, con la ciudad derivada del nombre.
+   * - Para cualquier OTRO centro no reconocido → también se crea, pero
+   *   SIN ciudad asignada (queda pendiente de asignar a mano desde
+   *   Configuración → Centros); así ningún rider se queda sin centro
+   *   solo porque el nombre no estaba en el mapeo.
    */
   async function resolverCentro(nombreExcel: string | null, nombreRider: string, empresaContratante: string | null): Promise<number | null> {
     if (!nombreExcel) return null;
@@ -350,7 +361,14 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
       if (id) return id;
     }
 
-    sinCentro.push(`${nombreRider}: centro "${nombreExcel}" no reconocido, se importa sin centro`);
+    // Cualquier otro centro no reconocido: se crea igual, sin ciudad.
+    const idSinCiudad = await crearCentroSinCiudad(nombreExcel.trim());
+    if (idSinCiudad) {
+      sinCentro.push(`${nombreRider}: centro "${nombreExcel}" no existía, se creó nuevo pero SIN ciudad asignada — asígnasela en Configuración`);
+      return idSinCiudad;
+    }
+
+    sinCentro.push(`${nombreRider}: centro "${nombreExcel}" no reconocido y no se pudo crear, se importa sin centro`);
     return null;
   }
 
@@ -507,4 +525,72 @@ export async function recalcularTodasLasPasswords(): Promise<{ ok: boolean; actu
   }
 
   return { ok: true, actualizados, errores };
+}
+
+/**
+ * Edita los datos de un rider ya existente — pensado para corregir
+ * errores al crearlo (centro equivocado, DNI mal tecleado, etc.), no
+ * para el uso diario. Solo super_admin puede hacerlo, dado el impacto
+ * (cambiar el email, por ejemplo, también cambia con qué inicia sesión).
+ */
+const editarRiderSchema = z.object({
+  nombre: z.string().trim().min(2, 'Nombre demasiado corto'),
+  dni: dniSchema,
+  email: z.string().trim().toLowerCase().email('Email no válido'),
+  centroId: z.number().int().positive().nullable(),
+  vehiculoId: z.number().int().positive().nullable(),
+});
+
+export async function editarRider(
+  riderId: string,
+  datos: { nombre: string; dni: string; email: string; centroId: number | null; vehiculoId: number | null }
+): Promise<{ ok: boolean; motivo?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, motivo: 'No autenticado' };
+
+  const { data: yo } = await supabase.from('admins').select('rol, activo').eq('auth_user_id', user.id).single();
+  if (!yo?.activo || yo.rol !== 'super_admin') return { ok: false, motivo: 'Solo un Super Admin puede editar riders' };
+
+  const parsed = editarRiderSchema.safeParse(datos);
+  if (!parsed.success) return { ok: false, motivo: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
+
+  const admin = createAdminClient();
+
+  const { data: actual } = await admin.from('riders').select('auth_user_id, email, dni').eq('id', riderId).maybeSingle();
+  if (!actual) return { ok: false, motivo: 'Rider no encontrado' };
+
+  // DNI/email únicos entre los DEMÁS riders (no chocar consigo mismo).
+  const { data: choque } = await admin
+    .from('riders')
+    .select('id')
+    .or(`dni.eq.${parsed.data.dni},email.eq.${parsed.data.email}`)
+    .neq('id', riderId)
+    .maybeSingle();
+  if (choque) return { ok: false, motivo: 'Ese DNI o email ya lo usa otro rider' };
+
+  // Si cambia el email, también hay que actualizarlo en Auth — el
+  // rider inicia sesión con su DNI, pero por dentro Supabase Auth usa
+  // el email; si no coinciden, se rompe el login.
+  if (actual.auth_user_id && parsed.data.email !== actual.email) {
+    const { error: authError } = await admin.auth.admin.updateUserById(actual.auth_user_id, { email: parsed.data.email });
+    if (authError) return { ok: false, motivo: `No se pudo actualizar el email de acceso: ${mensajeError(authError)}` };
+  }
+
+  const { error } = await admin
+    .from('riders')
+    .update({
+      nombre: parsed.data.nombre,
+      dni: parsed.data.dni,
+      email: parsed.data.email,
+      centro_id: parsed.data.centroId,
+      vehiculo_id: parsed.data.vehiculoId,
+    })
+    .eq('id', riderId);
+  if (error) return { ok: false, motivo: mensajeError(error) };
+
+  revalidatePath('/dashboard/riders');
+  return { ok: true };
 }

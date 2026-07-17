@@ -124,9 +124,10 @@ export function ImportRidersModal() {
                   <strong>Closer Logistics SL</strong> o <strong>Closer Go Germany GmbH</strong> con
                   estado Activo o Baja operativa, y puesto Rider. Si un rider ya existe (por DNI), se
                   actualiza en vez de duplicarse. Los centros se asocian a los que ya existen en el
-                  sistema; los centros <strong>MCD</strong> se crean automáticamente si no existen
-                  (con su propia ciudad). Si algún otro centro no se reconoce, el rider se importa
-                  igual pero sin centro y te lo indicamos al final.
+                  sistema; los centros <strong>MCD</strong> y los de <strong>Alemania</strong> se
+                  crean automáticamente con su propia ciudad. Cualquier <strong>otro</strong> centro
+                  que no se reconozca también se crea solo, pero <strong>sin ciudad asignada</strong> —
+                  se lista al final para que le asignes la ciudad a mano desde Configuración → Centros.
                 </p>
                 <input
                   type="file"
@@ -201,8 +202,9 @@ export function ImportRidersModal() {
                 {fase === 'terminado' && sinCentroImport.length > 0 && (
                   <div className="max-h-40 overflow-y-auto rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
                     <p className="mb-1 font-semibold">
-                      {sinCentroImport.length} rider(es) se importaron sin centro (su centro del Excel no está
-                      en el sistema). Revísalos y asígnales centro a mano:
+                      {sinCentroImport.length} rider(es) con algo por revisar (centro nuevo creado sin
+                      ciudad, o que no se pudo crear). Revisa el detalle y asigna la ciudad desde
+                      Configuración → Centros:
                     </p>
                     {sinCentroImport.map((s, idx) => (
                       <div key={idx}>{s}</div>

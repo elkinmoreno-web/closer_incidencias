@@ -11,7 +11,7 @@ name: Refrescar token de Google Drive
 
 on:
   schedule:
-    - cron: '*/45 * * * *'
+    - cron: '*/13 * * * *'
   workflow_dispatch:
 
 jobs:

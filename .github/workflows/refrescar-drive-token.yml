@@ -1,0 +1,69 @@
+name: Refrescar token de Google Drive
+
+# Deja que rclone (ya configurado y funcionando) renueve su sesión con
+# Google Drive cuando haga falta, y guarda el access_token vigente en
+# Supabase. La app (Vercel) solo LEE ese token — nunca lo renueva ella
+# misma, así que nunca necesita un Client ID/Secret propio de Google
+# Cloud (que en esta empresa no está disponible).
+#
+# El token dura ~60 minutos; este Action corre cada 45 para que
+# siempre haya uno vigente.
+
+on:
+  schedule:
+    - cron: '*/13 * * * *'
+  workflow_dispatch:
+
+jobs:
+  refrescar-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar Rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone jq
+
+      - name: Configurar archivo de Rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          cat << 'RCLONE_EOF' > ~/.config/rclone/rclone.conf
+          ${{ secrets.RCLONE_CONF }}
+          RCLONE_EOF
+
+      - name: Forzar renovación del token (si hace falta)
+        run: |
+          # Cualquier comando real contra la API dispara la renovación
+          # automática de rclone si el token ya venció o está por vencer.
+          rclone lsf "${{ secrets.RCLONE_REMOTE_NAME }}:" --max-depth 1 --drive-root-folder-id "${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}" > /dev/null
+
+      - name: Extraer el access_token vigente
+        id: token
+        run: |
+          TOKEN_JSON=$(rclone config show "${{ secrets.RCLONE_REMOTE_NAME }}" | grep '^token = ' | sed 's/^token = //')
+          ACCESS_TOKEN=$(echo "$TOKEN_JSON" | jq -r '.access_token')
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
+            echo "No se pudo extraer el access_token" >&2
+            exit 1
+          fi
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "access_token=$ACCESS_TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Guardar el token en Supabase
+        run: |
+          RESPUESTA=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/google_drive_token?on_conflict=id" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d '{"id": true, "access_token": "${{ steps.token.outputs.access_token }}", "actualizado_en": "'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'"}')
+
+          HTTP_CODE=$(echo "$RESPUESTA" | tail -n1)
+          BODY=$(echo "$RESPUESTA" | sed '$d')
+
+          echo "Código HTTP: $HTTP_CODE"
+          echo "Respuesta de Supabase: $BODY"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Supabase devolvió un error al guardar el token (ver 'Respuesta de Supabase' arriba)"
+            exit 1
+          fi

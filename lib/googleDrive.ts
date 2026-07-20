@@ -13,25 +13,28 @@ import { createAdminClient } from '@/lib/supabase/server';
  * en una sola llamada de menos de 1 segundo — no depende de ningún
  * proceso externo (GitHub Actions, rclone, etc.) para funcionar.
  *
- * Por qué se dejó de usar el client_id compartido de rclone: dos
- * problemas reales de fondo que un panel de uso constante no puede
- * tener: (1) la renovación dependía de un GitHub Action con
- * `schedule`, que GitHub documenta como "best effort" — a veces no
- * corre a tiempo; (2) la cuota de peticiones por minuto es COMPARTIDA
- * entre todos los usuarios de rclone en el mundo con ese client_id por
- * defecto, así que terceros ajenos podían tumbarnos la cuota. Con
- * credenciales propias, ambos problemas desaparecen: la cuota es
- * nuestra, y la renovación la hacemos nosotros mismos al instante.
+ *   1. En tu propio ordenador, rclone YA mantiene una sesión válida con
+ *      Google Drive (usando su propio client_id interno, de forma
+ *      legítima — es su uso normal).
+ *   2. Un GitHub Action programado (ver .github/workflows/refrescar-drive-token.yml)
+ *      corre cada ~15 min, deja que rclone renueve el token si hace
+ *      falta, y guarda ese access_token vigente en la tabla
+ *      `google_drive_token` de Supabase.
+ *   3. Esta app LEE ese token de la tabla y lo usa directo como Bearer
+ *      token contra la API REST de Drive.
  *
- * Variables de entorno necesarias:
- *   GOOGLE_DRIVE_CLIENT_ID
- *   GOOGLE_DRIVE_CLIENT_SECRET
- *   GOOGLE_DRIVE_REFRESH_TOKEN
- *   GOOGLE_DRIVE_FOLDER_ID (carpeta raíz "Closer CRM - Archivos")
+ * AUTOCORRECCIÓN: los cron de GitHub Actions son "best effort" y pueden
+ * atrasarse (documentado por GitHub) — si de todas formas el token ya
+ * caducó cuando lo necesitamos, en vez de solo fallar, esta app dispara
+ * el GitHub Action AL INSTANTE (vía su API, con un token de acceso
+ * personal de permisos mínimos) y espera unos segundos a que guarde un
+ * token fresco, para reintentar sola. Si eso también tarda demasiado,
+ * ahí sí se informa con un mensaje claro.
  *
- * IMPORTANTE: la carpeta raíz debe estar COMPARTIDA (permiso Editor)
- * con la cuenta de Google que autorizó este refresh_token — si no, las
- * llamadas fallarán con 403/404 aunque el token en sí sea válido.
+ * Variables de entorno:
+ *   GOOGLE_DRIVE_FOLDER_ID  (obligatoria)
+ *   GITHUB_PAT, GITHUB_REPO (opcionales — sin ellas, la autocorrección
+ *   simplemente no se activa y se informa el error normal)
  */
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -83,29 +86,90 @@ function esperar(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function driveFetch(url: string, init: RequestInit = {}, reintentos = 2): Promise<Response> {
-  const token = await obtenerAccessToken();
+/**
+ * Dispara el GitHub Action de renovación al instante, vía su API (en
+ * vez de esperar al próximo cron). Requiere GITHUB_PAT (un Personal
+ * Access Token con permiso "Actions: Read and write" limitado a este
+ * repo) y GITHUB_REPO (formato "usuario/repositorio"). Si no están
+ * configuradas, no hace nada — el llamador simplemente no obtiene
+ * autocorrección y ve el error normal.
+ */
+async function dispararRenovacionToken(): Promise<boolean> {
+  const pat = process.env.GITHUB_PAT;
+  const repo = process.env.GITHUB_REPO;
+  if (!pat || !repo) return false;
+
+  const archivo = process.env.GITHUB_WORKFLOW_FILE || 'refrescar-drive-token.yml';
+  const rama = process.env.GITHUB_BRANCH || 'main';
+
+  try {
+    const resp = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${archivo}/dispatches`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref: rama }),
+    });
+    return resp.status === 204;
+  } catch {
+    return false;
+  }
+}
+
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Espera a que aparezca en Supabase un token más nuevo que
+ * `desdeIso` — es decir, a que el Action que acabamos de disparar
+ * termine de guardar el suyo. Revisa cada 3 segundos, hasta ~24
+ * segundos en total (pensado para no acercarse a límites de tiempo de
+ * las funciones serverless). Devuelve el token nuevo, o null si se
+ * agotó el tiempo de espera.
+ */
+async function esperarTokenFresco(desdeIso: string): Promise<{ token: string; actualizadoEn: string } | null> {
+  const admin = createAdminClient();
+  for (let intento = 0; intento < 8; intento++) {
+    await esperar(3000);
+    const { data } = await admin.from('google_drive_token').select('access_token, actualizado_en').eq('id', true).single();
+    if (data && new Date(data.actualizado_en).getTime() > new Date(desdeIso).getTime()) {
+      return { token: data.access_token, actualizadoEn: data.actualizado_en };
+    }
+  }
+  return null;
+}
+
+async function driveFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const { token, actualizadoEn } = await obtenerAccessToken();
   const resp = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
 
-  // Límite de cuota transitorio (ahora es NUESTRA propia cuota, así que
-  // debería ser raro, pero no cuesta nada tener el reintento).
-  if (resp.status === 403 && reintentos > 0) {
-    const cuerpo = await resp.clone().text();
-    if (cuerpo.includes('rateLimitExceeded') || cuerpo.includes('userRateLimitExceeded') || cuerpo.includes('Quota exceeded')) {
-      await esperar(2000 * (3 - reintentos));
-      return driveFetch(url, init, reintentos - 1);
+  if (resp.status !== 401) return resp;
+
+  // El token que teníamos ya no sirve. Antes de rendirnos, intentamos
+  // autocorregir: disparamos el Action ahora mismo y esperamos a que
+  // guarde uno nuevo, en vez de depender solo de que el cron llegue a
+  // tiempo la próxima vez.
+  tokenCache = null;
+  const disparado = await dispararRenovacionToken();
+
+  if (disparado) {
+    const fresco = await esperarTokenFresco(actualizadoEn);
+    if (fresco) {
+      tokenCache = { token: fresco.token, expira: Date.now() + 60 * 1000, actualizadoEn: fresco.actualizadoEn };
+      return fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${fresco.token}` } });
     }
   }
 
-  // Con token propio esto no debería pasar casi nunca (renovamos antes
-  // de que caduque), pero por si el token se invalidó por otro motivo
-  // (ej. se revocó manualmente), reintentamos una vez con uno nuevo.
-  if (resp.status === 401 && reintentos > 0) {
-    tokenCache = null;
-    return driveFetch(url, init, reintentos - 1);
-  }
-
-  return resp;
+  const minutos = Math.round((Date.now() - new Date(actualizadoEn).getTime()) / 60000);
+  throw new Error(
+    disparado
+      ? `Google Drive rechazó el token (401). Se disparó la renovación automática, pero tardó más de lo esperado en guardar uno nuevo. Probablemente ya esté listo — intenta de nuevo en unos segundos.`
+      : `Google Drive rechazó el token (401) — caducó de verdad (se guardó hace ${minutos} minutos), y no se pudo disparar la renovación automática (revisa GITHUB_PAT/GITHUB_REPO). Revisa también que el GitHub Action "refrescar-drive-token" se esté ejecutando.`
+  );
 }
 
 /**

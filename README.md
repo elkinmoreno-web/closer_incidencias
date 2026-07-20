@@ -176,17 +176,54 @@ cualquier otro usuario de rclone en el mundo.
      distinto según el caso, pero es un texto largo).
 8. En Drive, abre la carpeta raíz y copia su ID de la URL
    (`https://drive.google.com/drive/folders/`**`ESTE_ID`**).
-9. Ejecuta `supabase/schema_drive_folder_cache.sql` y
-   `supabase/schema_drive_client_id_propio.sql` en el SQL Editor.
-10. En Vercel (Settings → Environment Variables) añade:
-    - `GOOGLE_DRIVE_CLIENT_ID`
-    - `GOOGLE_DRIVE_CLIENT_SECRET`
-    - `GOOGLE_DRIVE_REFRESH_TOKEN` (el del paso 7)
-    - `GOOGLE_DRIVE_FOLDER_ID` (el del paso 8)
-11. Si tenías configurado el GitHub Action
-    `refrescar-drive-token.yml` y sus secrets (`RCLONE_CONF`,
-    `RCLONE_REMOTE_NAME`, etc.) de la versión anterior, ya no hacen
-    falta — puedes borrar el archivo del workflow y esos secrets.
+
+3. En Vercel (Settings → Environment Variables) añade:
+   - `GOOGLE_DRIVE_FOLDER_ID` (el ID del paso anterior)
+   - `GITHUB_PAT` y `GITHUB_REPO` (ver "Autocorrección" más abajo — sin
+     estas dos, todo funciona igual, solo que sin ese respaldo)
+
+4. En el repositorio de GitHub de este proyecto, ve a Settings → Secrets
+   and variables → Actions, y añade estos secrets:
+   - `RCLONE_CONF` — el contenido completo de tu `~/.config/rclone/rclone.conf`
+     (el mismo que ya usas para el pipeline de métricas — puedes copiar
+     literalmente el mismo secret que ya tienes en el otro repositorio,
+     o crear uno nuevo aquí con el mismo contenido)
+   - `RCLONE_REMOTE_NAME` — el nombre del remoto dentro de ese archivo
+     (ej. `closer_drive_dashboard`, es lo que aparece entre corchetes
+     `[...]` en el rclone.conf)
+   - `GOOGLE_DRIVE_FOLDER_ID` — el mismo ID del paso 2
+   - `SUPABASE_URL` — la URL de tu proyecto de Supabase
+   - `SUPABASE_SERVICE_ROLE_KEY` — la service role key de Supabase
+
+5. Corre el Action manualmente una vez (Actions → "Refrescar token de
+   Google Drive" → Run workflow) para confirmar que guarda el token
+   correctamente, antes de esperar a que corra solo por el cron.
+
+#### Autocorrección (recomendado)
+
+Los cron de GitHub Actions son "best effort": GitHub mismo documenta
+que pueden atrasarse, sobre todo en cuentas gratuitas. Si el Action
+llega tarde y el token ya caducó, la app puede dispararlo ella misma al
+instante (en vez de solo fallar y esperar al próximo cron) y reintentar
+sola en unos segundos. Para activar esto:
+
+1. En GitHub, ve a tu foto de perfil → Settings → Developer settings →
+   Personal access tokens → **Fine-grained tokens** → Generate new token.
+2. Dale un nombre (ej. "closer-crm-drive-autocorreccion"), sin fecha de
+   caducidad muy corta (o la que prefieras, solo recuerda renovarlo).
+3. En "Repository access", elige **Only select repositories** y marca
+   únicamente este repositorio (no le des acceso a otros).
+4. En "Permissions" → "Repository permissions", busca **Actions** y
+   ponlo en **Read and write**. No hace falta ningún otro permiso.
+5. Generate token, y cópialo (empieza por `github_pat_...`).
+6. En Vercel (Settings → Environment Variables) añade:
+   - `GITHUB_PAT` — el token del paso anterior
+   - `GITHUB_REPO` — `usuario/nombre-del-repositorio` (tal cual aparece
+     en la URL de tu repositorio)
+
+Sin estas dos variables, todo sigue funcionando igual que antes — solo
+que si el token caduca, se ve el error de siempre en vez de
+autocorregirse sola.
 
 ## 4. Desarrollo local
 

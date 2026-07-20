@@ -6,10 +6,12 @@ import { createAdminClient } from '@/lib/supabase/server';
  * (capturas de incidencias, justificantes de ausencias, evidencias de
  * conexiones fuera de zona) en el Drive de la empresa.
  *
- * IMPORTANTE — por qué esto NO usa OAuth2Client con Client ID/Secret:
- * crear un Client ID propio en Google Cloud Console requiere permisos
- * de administrador de Google Workspace que en esta empresa no están
- * disponibles. En vez de eso:
+ * Usa un Client ID/Secret de OAuth propios (creados con una cuenta de
+ * Google DISTINTA a la del Workspace de la empresa — no requiere tocar
+ * nada en la cuenta corporativa) + un refresh_token de larga duración.
+ * Con esto, ESTA MISMA APP renueva su access_token cuando lo necesita,
+ * en una sola llamada de menos de 1 segundo — no depende de ningún
+ * proceso externo (GitHub Actions, rclone, etc.) para funcionar.
  *
  *   1. En tu propio ordenador, rclone YA mantiene una sesión válida con
  *      Google Drive (usando su propio client_id interno, de forma
@@ -37,33 +39,51 @@ import { createAdminClient } from '@/lib/supabase/server';
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3';
+const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
-let tokenCache: { token: string; expira: number; actualizadoEn: string } | null = null;
+let tokenCache: { token: string; expira: number } | null = null;
 
 /**
- * Lee el access_token guardado por el GitHub Action, y lo entrega
- * siempre para que se intente usar — NUNCA lo rechazamos aquí solo por
- * cuánto tiempo lleva guardado. Los cron de GitHub Actions son "best
- * effort" y pueden atrasarse varios minutos sin avisar, así que un
- * límite de tiempo adivinado (ej. "más de 55 min, seguro caducó") puede
- * rechazar un token que en realidad todavía es válido. La única forma
- * confiable de saber si un token sirve es probarlo de verdad contra
- * Google — si Google lo rechaza (401), ahí sí se informa con claridad.
- * Cachea unos segundos en memoria del proceso para no golpear Supabase
- * en cada operación de una misma request.
+ * Renueva (o reutiliza si sigue vigente) el access_token, directamente
+ * con Google — sin ningún intermediario externo. Cachea en memoria del
+ * proceso hasta ~5 min antes de que caduque de verdad, con margen.
  */
-async function obtenerAccessToken(): Promise<{ token: string; actualizadoEn: string }> {
-  if (tokenCache && tokenCache.expira > Date.now()) return { token: tokenCache.token, actualizadoEn: tokenCache.actualizadoEn };
+async function obtenerAccessToken(): Promise<string> {
+  if (tokenCache && tokenCache.expira > Date.now()) return tokenCache.token;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.from('google_drive_token').select('access_token, actualizado_en').eq('id', true).single();
-
-  if (error || !data) {
-    throw new Error('No hay token de Google Drive guardado todavía. Revisa que el GitHub Action de renovación haya corrido al menos una vez.');
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Faltan variables de entorno de Google Drive (GOOGLE_DRIVE_CLIENT_ID / GOOGLE_DRIVE_CLIENT_SECRET / GOOGLE_DRIVE_REFRESH_TOKEN)');
   }
 
-  tokenCache = { token: data.access_token, expira: Date.now() + 60 * 1000, actualizadoEn: data.actualizado_en };
-  return { token: data.access_token, actualizadoEn: data.actualizado_en };
+  const resp = await fetch(TOKEN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+
+  if (!resp.ok) {
+    const detalle = await resp.text();
+    throw new Error(`No se pudo renovar el token de Google Drive (HTTP ${resp.status}): ${detalle}`);
+  }
+
+  const data = await resp.json();
+  if (!data.access_token) throw new Error('Google no devolvió un access_token al renovar');
+
+  const expiraEnMs = (data.expires_in ?? 3600) * 1000;
+  tokenCache = { token: data.access_token, expira: Date.now() + expiraEnMs - 5 * 60 * 1000 }; // 5 min de margen
+  return data.access_token;
+}
+
+function esperar(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -152,15 +172,17 @@ async function driveFetch(url: string, init: RequestInit = {}): Promise<Response
   );
 }
 
-// Cache en memoria del proceso para no crear la misma carpeta dos veces
-// en la misma ejecución (p. ej. varias fotos de la misma incidencia).
-const carpetaCache = new Map<string, string>();
-
-/** Busca (o crea si no existe) una carpeta por nombre dentro de un padre. Devuelve el ID de la carpeta. */
+/**
+ * Caché PERSISTENTE (en Supabase, no en memoria) de las carpetas de
+ * Drive ya resueltas, para no repetir innecesariamente la misma
+ * búsqueda/creación de carpeta en cada subida.
+ */
 async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<string> {
   const clave = `${padreId}/${nombre}`;
-  const enCache = carpetaCache.get(clave);
-  if (enCache) return enCache;
+  const admin = createAdminClient();
+
+  const { data: enCache } = await admin.from('google_drive_folder_cache').select('folder_id').eq('clave', clave).maybeSingle();
+  if (enCache) return enCache.folder_id;
 
   const q = `name = '${nombre.replace(/'/g, "\\'")}' and '${padreId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
   const resp = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`);
@@ -168,7 +190,7 @@ async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<st
   const data = await resp.json();
 
   if (data.files && data.files.length > 0 && data.files[0].id) {
-    carpetaCache.set(clave, data.files[0].id);
+    await admin.from('google_drive_folder_cache').upsert({ clave, folder_id: data.files[0].id }, { onConflict: 'clave' });
     return data.files[0].id;
   }
 
@@ -180,7 +202,7 @@ async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<st
   if (!creada.ok) throw new Error(`No se pudo crear la carpeta "${nombre}" en Drive (HTTP ${creada.status})`);
   const creadaData = await creada.json();
   if (!creadaData.id) throw new Error('No se pudo crear la carpeta en Drive');
-  carpetaCache.set(clave, creadaData.id);
+  await admin.from('google_drive_folder_cache').upsert({ clave, folder_id: creadaData.id }, { onConflict: 'clave' });
   return creadaData.id;
 }
 
@@ -208,8 +230,6 @@ export async function subirArchivoDrive(
 ): Promise<string> {
   const carpetaId = await carpetaDelMes(categoria);
 
-  // Subida multipart: una parte con los metadatos (nombre, carpeta) y
-  // otra con el contenido del archivo, en una sola petición.
   const boundary = `closer_crm_${Date.now()}`;
   const metadata = JSON.stringify({ name: nombreArchivo, parents: [carpetaId] });
   const cuerpo = Buffer.concat([
@@ -236,11 +256,8 @@ export async function subirArchivoDrive(
  * permanece privado; nunca se comparte con un enlace público).
  *
  * Devuelve `null` SOLO cuando Drive confirma que el archivo
- * genuinamente no existe (404 real) — cualquier otro fallo (token
- * caducado, sin permiso, error de red) se deja propagar con su mensaje
- * real, en vez de disfrazarlo todo como "no encontrado" como pasaba
- * antes (lo que hacía imposible saber si el archivo de verdad no
- * estaba, o si era otra cosa, como el mismo problema del token).
+ * genuinamente no existe (404 real) — cualquier otro fallo se deja
+ * propagar con su mensaje real.
  */
 export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const [contenidoResp, metaResp] = await Promise.all([

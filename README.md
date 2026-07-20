@@ -79,10 +79,11 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
   en las Script Properties del proyecto de Apps Script. **En Vercel se
   configuran como variables de entorno del proyecto (Settings →
   Environment Variables), nunca en el código.**
-- `GOOGLE_DRIVE_FOLDER_ID` — la carpeta raíz donde se guardan los
-  archivos adjuntos en Google Drive. Ver más abajo por qué esta es la
-  ÚNICA variable de Drive que hace falta en Vercel (el resto de la
-  configuración vive en un GitHub Action, no aquí).
+- `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` /
+  `GOOGLE_DRIVE_REFRESH_TOKEN` / `GOOGLE_DRIVE_FOLDER_ID` — para guardar
+  los archivos adjuntos en Google Drive. Ver más abajo el paso a paso
+  completo para generarlas (usa una cuenta de Google distinta a la del
+  Workspace de la empresa, no requiere permisos de administrador).
 - `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` — el DNI y
   contraseña que **todos los gestores usan por igual** para entrar a
   Fleet Manager (es una credencial compartida a nivel de empresa, no la
@@ -91,53 +92,89 @@ Copia `.env.local.example` a `.env.local` y rellena los valores.
 ### Almacenamiento de archivos (Google Drive)
 Las fotos de incidencias, los justificantes de ausencias y las capturas
 de conexiones fuera de zona se guardan en el **Google Drive de la
-empresa** (Workspace), no en Supabase — así se ahorra el espacio/costo
-de Supabase y queda todo trazable en un Drive que el equipo ya usa.
-
-Se organizan en carpetas por categoría y mes, dentro de una carpeta raíz
-que tú creas una vez en el Drive (ej. "Closer CRM - Archivos"):
+empresa** (Workspace). Se organizan en carpetas por categoría y mes,
+dentro de una carpeta raíz que tú creas una vez en el Drive (ej. "Closer
+CRM - Archivos"):
 ```
 Closer CRM - Archivos/
 ├── Incidencias/2026-07/
 ├── Ausencias/2026-07/
 └── Conexiones/2026-07/
 ```
-Las subcarpetas de categoría y mes se crean solas la primera vez que
-hace falta. **Los archivos no se borran automáticamente**: se conservan
-indefinidamente.
+Las subcarpetas se crean solas la primera vez que hace falta, y su ID se
+guarda en una caché (`google_drive_folder_cache`) para no repetir la
+misma búsqueda en cada subida. **Los archivos no se borran
+automáticamente**: se conservan indefinidamente.
 
 **Privacidad:** ningún archivo se comparte con enlace público. El panel
-sirve cada archivo a través de una ruta propia (`/api/drive-file`) que
-exige sesión de admin válida antes de descargarlo de Drive y entregarlo.
+sirve cada archivo a través de `/api/drive-file`, que exige sesión de
+admin válida.
 
-#### Por qué esto NO usa un Client ID de Google Cloud
+#### Por qué el Client ID es de una cuenta DISTINTA a la del Workspace
 
-Crear un Client ID/Secret propio en Google Cloud Console requiere
-permisos de administrador de Workspace que no están disponibles en esta
-empresa. La alternativa que sí funciona sin esos permisos:
+Crear un Client ID en Google Cloud Console con la cuenta del Workspace
+de la empresa requiere permisos de administrador que no están
+disponibles aquí. La solución: el Client ID se crea con **cualquier
+otra cuenta de Google** (una personal, por ejemplo) — eso no requiere
+ningún permiso especial, cualquiera puede crear su propio proyecto de
+Google Cloud gratis. Los archivos SIGUEN viviendo en el Drive de la
+empresa; lo único que cambia es qué cuenta es "dueña" de la aplicación
+que pide permiso para acceder a esa carpeta — por eso hay que compartir
+la carpeta raíz con esa cuenta (ver paso 5 más abajo).
 
-1. En tu ordenador, **`rclone` ya mantiene una sesión válida con Google
-   Drive** (usando su propio client_id interno — es su uso normal y
-   legítimo, no requiere nada especial de tu parte).
-2. Un **GitHub Action programado** (`.github/workflows/refrescar-drive-token.yml`,
-   corre cada 45 min) deja que rclone renueve el token si hace falta, y
-   guarda ese `access_token` vigente en una tabla de Supabase
-   (`google_drive_token`).
-3. La app (en Vercel) **solo lee** ese token de Supabase y lo usa
-   directo contra la API de Drive — nunca intenta renovarlo por su
-   cuenta, así que nunca necesita Client ID ni Secret.
-
-El token dura ~60 minutos; al renovarse cada 45, siempre debería haber
-uno vigente. Si el Action deja de correr por más de ~55 min, las subidas
-fallan con un mensaje claro indicando justamente eso (revisar que el
-Action esté corriendo).
+Con esto, la propia app (en Vercel) renueva su token cuando lo necesita,
+en una sola llamada de menos de 1 segundo — sin depender de ningún
+proceso externo. Se descartó una versión anterior que usaba el
+client_id compartido por defecto de `rclone` + un GitHub Action para
+mantenerlo renovado: para un panel de uso constante no era aceptable,
+porque el `schedule` de GitHub Actions es "best effort" (puede
+atrasarse o saltarse ejecuciones) y esa cuota es compartida con
+cualquier otro usuario de rclone en el mundo.
 
 #### Cómo configurarlo
 
-1. Ejecutar `supabase/schema_drive_token.sql` en el SQL Editor.
-
-2. En Google Drive, crea la carpeta raíz (ej. "Closer CRM - Archivos"),
-   ábrela en el navegador y copia el ID de la carpeta desde la URL
+1. Ve a [console.cloud.google.com](https://console.cloud.google.com/)
+   e inicia sesión con la cuenta que vas a usar (NO la del Workspace de
+   la empresa — cualquier otra).
+2. Crea un proyecto nuevo (selector de proyecto, arriba a la izquierda →
+   "Proyecto nuevo"). Nombre: el que quieras, ej. "closer-crm-drive".
+3. Con el proyecto seleccionado, ve a **APIs y servicios → Biblioteca**,
+   busca **Google Drive API** y dale a **Habilitar**.
+4. Ve a **APIs y servicios → Pantalla de consentimiento OAuth**:
+   - Tipo de usuario: **Externo**
+   - Nombre de la app: lo que quieras (ej. "Closer CRM")
+   - Email de soporte: el tuyo
+   - Guarda y continúa en las demás pantallas (los scopes y usuarios de
+     prueba no hace falta tocarlos)
+   - En "Usuarios de prueba" (Test users), añade el email de la cuenta
+     que va a autorizar el acceso (si es la misma con la que creaste el
+     proyecto, ya cuenta)
+5. **Comparte la carpeta raíz de Drive** ("Closer CRM - Archivos", la
+   del Workspace de la empresa) con la cuenta que estás usando aquí:
+   clic derecho en la carpeta → Compartir → pega el email de esa cuenta
+   → permiso **Editor**.
+6. Ve a **APIs y servicios → Credenciales → Crear credenciales → ID de
+   cliente de OAuth**:
+   - Tipo de aplicación: **Aplicación web**
+   - Nombre: el que quieras
+   - En "URIs de redireccionamiento autorizados", añade:
+     `https://developers.google.com/oauthplayground`
+   - Crear — copia el **Client ID** y el **Client Secret** que te
+     muestra.
+7. Ve a [developers.google.com/oauthplayground](https://developers.google.com/oauthplayground/):
+   - Clic en el ícono de engranaje (arriba a la derecha) → marca **Use
+     your own OAuth credentials** → pega el Client ID y Client Secret
+     del paso anterior.
+   - En el panel izquierdo, busca **Drive API v3** y marca el scope
+     `https://www.googleapis.com/auth/drive`.
+   - Clic en **Authorize APIs** — te pedirá iniciar sesión con la
+     cuenta que compartiste en el paso 5, y aceptar permisos (puede
+     salir una advertencia de "app no verificada"; es normal para apps
+     propias — Advanced → Go to [nombre de tu app] (unsafe)).
+   - Ya autorizado, clic en **Exchange authorization code for
+     tokens** — te va a mostrar un `refresh_token`. Cópialo (empieza
+     distinto según el caso, pero es un texto largo).
+8. En Drive, abre la carpeta raíz y copia su ID de la URL
    (`https://drive.google.com/drive/folders/`**`ESTE_ID`**).
 
 3. En Vercel (Settings → Environment Variables) añade:

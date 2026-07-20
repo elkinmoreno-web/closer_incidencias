@@ -94,7 +94,7 @@ Las fotos de incidencias, los justificantes de ausencias y las capturas
 de conexiones fuera de zona se guardan en el **Google Drive de la
 empresa** (Workspace). Se organizan en carpetas por categoría y mes,
 dentro de una carpeta raíz que tú creas una vez en el Drive (ej. "Closer
-CRM - Archivos"):
+CRM - Archivos")a:
 ```
 Closer CRM - Archivos/
 ├── Incidencias/2026-07/

@@ -33,7 +33,7 @@ export default async function RidersPage({
 
   let query = supabase
     .from('riders')
-    .select('id, nombre, dni, email, activo, provincia, centros(nombre), vehiculos(nombre)', { count: 'exact' })
+    .select('id, nombre, dni, email, activo, provincia, centro_id, vehiculo_id, centros(nombre), vehiculos(nombre)', { count: 'exact' })
     .order('nombre')
     .range(from, to);
 
@@ -97,7 +97,7 @@ export default async function RidersPage({
         {!riders || riders.length === 0 ? (
           <EmptyState title="No hay riders con estos filtros" />
         ) : (
-          <RidersList riders={riders as any} />
+          <RidersList riders={riders as any} centros={centros ?? []} vehiculos={vehiculos ?? []} esSuperAdmin={esSuperAdmin} />
         )}
       </div>
 

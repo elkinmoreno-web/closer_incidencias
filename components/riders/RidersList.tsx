@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { KeyRound } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
 import { toggleRiderActivo, restablecerPasswordRider } from '@/app/dashboard/riders/actions';
+import { EditarRiderModal } from '@/components/riders/EditarRiderModal';
 
 interface RiderRow {
   id: string;
@@ -12,6 +13,8 @@ interface RiderRow {
   email: string;
   activo: boolean;
   provincia: string | null;
+  centro_id: number | null;
+  vehiculo_id: number | null;
   centros: { nombre: string } | null;
   vehiculos: { nombre: string } | null;
 }
@@ -41,9 +44,19 @@ function BotonResetPassword({ riderId }: { riderId: string }) {
   );
 }
 
-export function RidersList({ riders }: { riders: RiderRow[] }) {
+export function RidersList({
+  riders,
+  centros,
+  vehiculos,
+  esSuperAdmin,
+}: {
+  riders: RiderRow[];
+  centros: { id: number; nombre: string }[];
+  vehiculos: { id: number; nombre: string }[];
+  esSuperAdmin: boolean;
+}) {
   return (
-    <table className="w-full min-w-[850px] text-sm">
+    <table className="w-full min-w-[900px] text-sm">
       <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
         <tr>
           <th className="px-4 py-3">Rider</th>
@@ -52,6 +65,7 @@ export function RidersList({ riders }: { riders: RiderRow[] }) {
           <th className="px-4 py-3">Vehículo</th>
           <th className="px-4 py-3 text-right">Activo</th>
           <th className="px-4 py-3 text-right">Contraseña</th>
+          {esSuperAdmin && <th className="px-4 py-3 text-right">Editar</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -72,6 +86,13 @@ export function RidersList({ riders }: { riders: RiderRow[] }) {
             <td className="px-4 py-3 text-right">
               <BotonResetPassword riderId={r.id} />
             </td>
+            {esSuperAdmin && (
+              <td className="px-4 py-3 text-right">
+                <div className="flex justify-end">
+                  <EditarRiderModal rider={r} centros={centros} vehiculos={vehiculos} />
+                </div>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

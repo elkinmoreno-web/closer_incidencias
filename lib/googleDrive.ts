@@ -82,10 +82,6 @@ async function obtenerAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-function esperar(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Dispara el GitHub Action de renovación al instante, vía su API (en
  * vez de esperar al próximo cron). Requiere GITHUB_PAT (un Personal

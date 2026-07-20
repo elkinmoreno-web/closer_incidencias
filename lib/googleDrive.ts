@@ -79,42 +79,13 @@ async function obtenerAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-/**
- * Dispara el GitHub Action de renovación al instante, vía su API (en
- * vez de esperar al próximo cron). Requiere GITHUB_PAT (un Personal
- * Access Token con permiso "Actions: Read and write" limitado a este
- * repo) y GITHUB_REPO (formato "usuario/repositorio"). Si no están
- * configuradas, no hace nada — el llamador simplemente no obtiene
- * autocorrección y ve el error normal.
- */
-async function dispararRenovacionToken(): Promise<boolean> {
-  const pat = process.env.GITHUB_PAT;
-  const repo = process.env.GITHUB_REPO;
-  if (!pat || !repo) return false;
-
-  const archivo = process.env.GITHUB_WORKFLOW_FILE || 'refrescar-drive-token.yml';
-  const rama = process.env.GITHUB_BRANCH || 'main';
-
-  try {
-    const resp = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/${archivo}/dispatches`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${pat}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ref: rama }),
-    });
-    return resp.status === 204;
-  } catch {
-    return false;
-  }
-}
-
 function esperar(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+async function driveFetch(url: string, init: RequestInit = {}, reintentos = 2): Promise<Response> {
+  const token = await obtenerAccessToken();
+  const resp = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
 
   // Límite de cuota transitorio (ahora es NUESTRA propia cuota, así que
   // debería ser raro, pero no cuesta nada tener el reintento).

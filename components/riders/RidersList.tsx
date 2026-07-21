@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, Trash2 } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
-import { toggleRiderActivo, restablecerPasswordRider } from '@/app/dashboard/riders/actions';
+import { toggleRiderActivo, restablecerPasswordRider, eliminarRider } from '@/app/dashboard/riders/actions';
 import { EditarRiderModal } from '@/components/riders/EditarRiderModal';
 
 interface RiderRow {
@@ -44,6 +44,42 @@ function BotonResetPassword({ riderId }: { riderId: string }) {
   );
 }
 
+/**
+ * Elimina el rider por completo (fila + acceso de Auth), no solo lo
+ * desactiva. Es lo que faltaba para que borrar un rider nunca deje un
+ * usuario huérfano en Authentication — antes, la única forma de
+ * "borrar" era hacerlo a mano en Supabase, y eso se olvidaba de Auth.
+ */
+function BotonEliminar({ riderId, nombre }: { riderId: string; nombre: string }) {
+  const [pending, startTransition] = useTransition();
+  const [mensaje, setMensaje] = useState<string | null>(null);
+
+  function eliminar() {
+    if (!confirm(`¿Eliminar a ${nombre} por completo? Esto borra su acceso y no se puede deshacer.`)) return;
+    startTransition(async () => {
+      const res = await eliminarRider(riderId);
+      if (!res.ok) {
+        setMensaje(res.motivo ?? 'Error');
+        setTimeout(() => setMensaje(null), 8000);
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        title="Eliminar rider por completo (fila + acceso)"
+        disabled={pending}
+        onClick={eliminar}
+        className="rounded-full bg-red-50 p-2 text-danger transition hover:bg-red-100 disabled:opacity-60"
+      >
+        <Trash2 size={14} />
+      </button>
+      {mensaje && <span className="max-w-[140px] text-right text-[10px] text-danger">{mensaje}</span>}
+    </div>
+  );
+}
+
 export function RidersList({
   riders,
   centros,
@@ -56,7 +92,7 @@ export function RidersList({
   esSuperAdmin: boolean;
 }) {
   return (
-    <table className="w-full min-w-[900px] text-sm">
+    <table className="w-full min-w-[980px] text-sm">
       <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
         <tr>
           <th className="px-4 py-3">Rider</th>
@@ -66,6 +102,7 @@ export function RidersList({
           <th className="px-4 py-3 text-right">Activo</th>
           <th className="px-4 py-3 text-right">Contraseña</th>
           {esSuperAdmin && <th className="px-4 py-3 text-right">Editar</th>}
+          {esSuperAdmin && <th className="px-4 py-3 text-right">Eliminar</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-border">
@@ -90,6 +127,13 @@ export function RidersList({
               <td className="px-4 py-3 text-right">
                 <div className="flex justify-end">
                   <EditarRiderModal rider={r} centros={centros} vehiculos={vehiculos} />
+                </div>
+              </td>
+            )}
+            {esSuperAdmin && (
+              <td className="px-4 py-3 text-right">
+                <div className="flex justify-end">
+                  <BotonEliminar riderId={r.id} nombre={r.nombre} />
                 </div>
               </td>
             )}

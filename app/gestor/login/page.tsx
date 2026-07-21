@@ -10,7 +10,7 @@ export default async function LoginPage() {
     <div className="flex min-h-screen">
       {/* Panel de marca — solo visible en pantallas medianas o más grandes */}
       <div className="relative hidden w-1/2 flex-col justify-between bg-primary p-12 text-white md:flex">
-        <Image src="/logo-closer-transparente.png" alt="Closer Logistics" width={160} height={38} className="h-9 w-auto brightness-0 invert" priority />
+        <Image src="/logo-closer-transparente.png" alt="Closer Logistics" width={160} height={38} className="h-auto max-w-[200px] brightness-0 invert" priority />
         <div>
           <h1 className="text-3xl font-semibold leading-snug">{t('tituloMarca')}</h1>
           <p className="mt-4 max-w-sm text-white/85">{t('subtituloMarca')}</p>

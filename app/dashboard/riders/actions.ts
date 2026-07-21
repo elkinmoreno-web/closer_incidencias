@@ -73,15 +73,37 @@ async function crearUsuarioYFila(
     if (existente) return { ok: false as const, motivo: 'DNI o email ya registrado' };
   }
 
+  const nuevaPassword = generarPasswordRider(data.nombre);
   const { data: authUser, error: authError } = await admin.auth.admin.createUser({
     email: data.email,
-    password: generarPasswordRider(data.nombre),
+    password: nuevaPassword,
     email_confirm: true,
   });
-  if (authError || !authUser.user) return { ok: false as const, motivo: authError?.message ?? 'No se pudo crear el acceso' };
+
+  let authUserId = authUser?.user?.id;
+  let authUserCreadoAhora = !authError && !!authUserId;
+
+  if (authError || !authUserId) {
+    // Si el email ya existe en Auth pero no en `riders`, es un usuario
+    // huérfano (quedó de un borrado anterior que no limpió Auth) — lo
+    // reutilizamos en vez de fallar: le ponemos la contraseña nueva y
+    // enganchamos la fila de rider a ese mismo usuario.
+    const yaExiste = authError?.message?.toLowerCase().includes('already') || authError?.code === 'email_exists';
+    if (!yaExiste) return { ok: false as const, motivo: authError?.message ?? 'No se pudo crear el acceso' };
+
+    const { data: huerfanoId } = await admin.rpc('buscar_auth_user_id_por_email', { p_email: data.email });
+    if (!huerfanoId) return { ok: false as const, motivo: authError?.message ?? 'No se pudo crear el acceso' };
+
+    const { data: yaVinculado } = await admin.from('riders').select('id').eq('auth_user_id', huerfanoId).maybeSingle();
+    if (yaVinculado) return { ok: false as const, motivo: 'DNI o email ya registrado' };
+
+    const { error: updateError } = await admin.auth.admin.updateUserById(huerfanoId, { password: nuevaPassword, email_confirm: true });
+    if (updateError) return { ok: false as const, motivo: updateError.message };
+    authUserId = huerfanoId;
+  }
 
   const { error: insertError } = await admin.from('riders').insert({
-    auth_user_id: authUser.user.id,
+    auth_user_id: authUserId,
     nombre: data.nombre,
     dni: data.dni,
     email: data.email,
@@ -106,7 +128,10 @@ async function crearUsuarioYFila(
   });
 
   if (insertError) {
-    await admin.auth.admin.deleteUser(authUser.user.id);
+    // Solo borramos el usuario de Auth si lo creamos NOSOTROS en esta
+    // misma llamada — si era un huérfano reutilizado, ya existía antes
+    // y no nos corresponde borrarlo.
+    if (authUserCreadoAhora && authUserId) await admin.auth.admin.deleteUser(authUserId);
     return { ok: false as const, motivo: insertError.message };
   }
   return { ok: true as const };
@@ -581,6 +606,47 @@ export async function editarRider(
     })
     .eq('id', riderId);
   if (error) return { ok: false, motivo: mensajeError(error) };
+
+  revalidatePath('/dashboard/riders');
+  return { ok: true };
+}
+
+/**
+ * Elimina un rider por completo: la fila de `riders` Y su usuario de
+ * Authentication, en ese orden y atómico desde el punto de vista de la
+ * app — así nunca queda un usuario "huérfano" en Auth (el problema real
+ * que pasaba antes, cuando se borraba solo la fila de riders a mano o
+ * por SQL, sin tocar Auth, y luego reimportar ese mismo email fallaba
+ * con "ya existe"). Solo super_admin, con confirmación en la interfaz.
+ */
+export async function eliminarRider(riderId: string): Promise<{ ok: boolean; motivo?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, motivo: 'No autenticado' };
+
+  const { data: yo } = await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single();
+  if (yo?.rol !== 'super_admin') return { ok: false, motivo: 'Solo un Super Admin puede eliminar riders' };
+
+  const admin = createAdminClient();
+  const { data: rider } = await admin.from('riders').select('auth_user_id').eq('id', riderId).maybeSingle();
+  if (!rider) return { ok: false, motivo: 'Rider no encontrado' };
+
+  const { error: deleteRowError } = await admin.from('riders').delete().eq('id', riderId);
+  if (deleteRowError) return { ok: false, motivo: mensajeError(deleteRowError) };
+
+  if (rider.auth_user_id) {
+    const { error: deleteAuthError } = await admin.auth.admin.deleteUser(rider.auth_user_id);
+    // Si esto falla, la fila de riders YA se borró — avisamos igual del
+    // problema para poder limpiarlo a mano, pero no revertimos el
+    // borrado (dejarlo a medias sería peor: el rider seguiría viéndose
+    // en la lista con un auth_user_id que ya no aplica a nada).
+    if (deleteAuthError) {
+      revalidatePath('/dashboard/riders');
+      return { ok: false, motivo: `El rider se eliminó, pero no se pudo borrar su acceso de Auth: ${mensajeError(deleteAuthError)}` };
+    }
+  }
 
   revalidatePath('/dashboard/riders');
   return { ok: true };

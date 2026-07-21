@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { obtenerOvertimeCentro } from '@/lib/overtimeApi';
 
-import { mensajeError } from '@/lib/utils';
+import { registrarError } from '@/lib/utils';
 async function assertAdmin() {
   const supabase = createClient();
   const {
@@ -151,7 +151,7 @@ export async function actualizarYObtenerOvertime(
         .upsert(filasUpsert, { onConflict: 'centro_id,rider_usuario,fecha', ignoreDuplicates: false });
       if (error) errores.push(`${centro.nombre}: ${error.message}`);
     } catch (e) {
-      errores.push(`${centro.nombre}: ${mensajeError(e)}`);
+      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
     }
   });
 

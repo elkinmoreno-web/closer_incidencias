@@ -3,7 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { obtenerRendimientoSemanal, obtenerRendimientoDiario, semanaIsoDe, type DriverPerformance } from '@/lib/fleetManagerApi';
 
-import { mensajeError } from '@/lib/utils';
+import { registrarError } from '@/lib/utils';
 async function assertAdmin() {
   const supabase = createClient();
   const {
@@ -132,7 +132,7 @@ export async function obtenerMetricasAdminSemanal(
         .from('fleet_metrics_cache')
         .upsert({ centro_id: centro.id, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${mensajeError(e)}`);
+      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
     }
   });
 
@@ -184,7 +184,7 @@ export async function obtenerMetricasAdminDiario(
         .from('fleet_metrics_cache_diario')
         .upsert({ centro_id: centro.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${mensajeError(e)}`);
+      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
     }
   });
 

@@ -4,24 +4,11 @@ import { semanaIsoDe } from '@/lib/metricas';
 export { semanaIsoDe };
 
 /**
- * Cliente para la API de Fleet Manager
- * (fleet-manager.ondemand.closerlogistics.com), que sustituye por
- * completo al pipeline anterior de parquet + Apps Script + Edge
- * Function. Aquí se piden los datos EN VIVO cada vez, sin guardarlos en
- * nuestra base de datos (salvo una caché corta de 30 min, ver más abajo,
- * para no golpear la API en cada clic).
+ * Cliente para la API de Fleet Manager (fleet-manager.ondemand.closerlogistics.com).
+ * Login con DNI + contraseña (credencial compartida en variables de
+ * entorno) que devuelve una cookie de sesión, reutilizada ~30 min.
  *
- * Autenticación: login con DNI + contraseña (una cuenta de servicio
- * dedicada, guardada en variables de entorno) que devuelve una cookie
- * de sesión. Las peticiones siguientes son GET normales — no parece
- * necesitar el csrf_token para lectura (eso suele exigirse solo en
- * peticiones que modifican datos, que aquí no hacemos). Si esto
- * resultara no ser así al probarlo en real, el error HTTP lo dirá
- * claramente (401/403) y se ajusta.
- *
- * Variables de entorno necesarias:
- *   FLEET_MANAGER_USERNAME  (DNI de la cuenta de servicio)
- *   FLEET_MANAGER_PASSWORD
+ * Variables de entorno: FLEET_MANAGER_USERNAME, FLEET_MANAGER_PASSWORD.
  */
 
 const API_BASE_URL = 'https://fleet-manager.ondemand.closerlogistics.com/api';

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Pencil, Check, X } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
-import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia, asignarCiudadCentro, actualizarInstruccionesMotivo } from '@/app/dashboard/configuracion/actions';
+import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia, asignarCiudadCentro, actualizarInstruccionesMotivo, actualizarNombreEnMotivo, actualizarNombreEnMotivoAusencia } from '@/app/dashboard/configuracion/actions';
 import type { Centro, Vehiculo, Motivo, MotivoAusencia, Ciudad } from '@/lib/types';
 
 function CatalogRow({
@@ -140,6 +140,59 @@ function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; 
   );
 }
 
+function NombreEnEditor({ valorActual, onGuardar }: { valorActual: string | null | undefined; onGuardar: (valor: string) => Promise<void> }) {
+  const [editando, setEditando] = useState(false);
+  const [valor, setValor] = useState(valorActual ?? '');
+  const [pending, startTransition] = useTransition();
+
+  if (!editando) {
+    return (
+      <button
+        onClick={() => setEditando(true)}
+        className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-primary"
+        title="Nombre en inglés (opcional) — si se deja vacío, se muestra el nombre en español"
+      >
+        {valorActual ? <span className="max-w-[200px] truncate">EN: {valorActual}</span> : <span className="italic opacity-60">Sin traducir al inglés</span>}
+        <Pencil size={10} />
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      <input
+        autoFocus
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        placeholder="English name"
+        className="w-52 rounded border border-border bg-surface px-1.5 py-1 text-xs focus:border-primary focus:outline-none"
+      />
+      <button
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            await onGuardar(valor);
+            setEditando(false);
+          })
+        }
+        className="text-emerald-600 hover:text-emerald-700"
+      >
+        <Check size={14} />
+      </button>
+      <button
+        disabled={pending}
+        onClick={() => {
+          setValor(valorActual ?? '');
+          setEditando(false);
+        }}
+        className="text-ink-muted hover:text-ink"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 export function MotivosList({ motivos }: { motivos: Motivo[] }) {
   return (
     <div>
@@ -150,6 +203,7 @@ export function MotivosList({ motivos }: { motivos: Motivo[] }) {
             <ToggleSwitch activo={m.activo} onToggle={(v) => toggleMotivo(m.id, v)} />
           </div>
           <InstruccionesAprobacion motivoId={m.id} valorActual={m.instrucciones_aprobacion} />
+          <NombreEnEditor valorActual={m.nombre_en} onGuardar={(valor) => actualizarNombreEnMotivo(m.id, valor)} />
         </div>
       ))}
     </div>
@@ -160,7 +214,13 @@ export function MotivosAusenciaList({ motivos }: { motivos: MotivoAusencia[] }) 
   return (
     <div>
       {motivos.map((m) => (
-        <CatalogRow key={m.id} nombre={m.nombre} activo={m.activo} onToggle={(v) => toggleMotivoAusencia(m.id, v)} />
+        <div key={m.id} className="border-b border-border py-2.5 last:border-0">
+          <div className="flex items-center justify-between">
+            <div className={m.activo ? 'text-ink' : 'text-ink-muted line-through'}>{m.nombre}</div>
+            <ToggleSwitch activo={m.activo} onToggle={(v) => toggleMotivoAusencia(m.id, v)} />
+          </div>
+          <NombreEnEditor valorActual={m.nombre_en} onGuardar={(valor) => actualizarNombreEnMotivoAusencia(m.id, valor)} />
+        </div>
       ))}
     </div>
   );

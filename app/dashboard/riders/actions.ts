@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { dniSchema } from '@/lib/validations';
-import { generarPasswordRider, mensajeError } from '@/lib/utils';
+import { generarPasswordRider, mensajeError, registrarError } from '@/lib/utils';
 import { nombreCentroOficial, normalizarNombreCentro } from '@/lib/mapeoCentros';
 
 async function assertAdmin() {
@@ -170,22 +170,13 @@ export async function restablecerPasswordRider(riderId: string): Promise<{ ok: b
 }
 
 // ============================================================
-// IMPORTACIÓN DESDE EXCEL — versión rápida por lotes
+// IMPORTACIÓN DESDE EXCEL — por lotes
 //
-// La versión anterior hacía ~5 consultas por cada fila (comprobar
-// duplicado, buscar/crear centro, buscar/crear vehículo...), lo que con
-// ~4500 filas se traducía en decenas de miles de idas y vueltas a la
-// base de datos. Como el mismo Excel completo se sube a diario y la
-// inmensa mayoría de filas ya existen, el cambio clave es: en vez de
-// tratar cada fila una por una, resolvemos centros/vehículos en memoria
-// (una sola consulta por lote, no una por fila), separamos de una vez
-// quién ya existe (una sola consulta con "IN", no una por fila) y
-// actualizamos a todos los existentes con un único UPSERT. Solo los
-// riders genuinamente NUEVOS necesitan pasar por la creación de su
-// acceso (Auth), que es lo único que no se puede hacer en bloque — para
-// eso usamos varias creaciones en paralelo en vez de una por una.
+// Centros/vehículos se resuelven en memoria (una consulta por lote, no
+// por fila); existentes se detectan con un único IN y se actualizan con
+// un UPSERT en bloque. Solo los riders nuevos pasan por creación de
+// Auth (no se puede hacer en bloque), en paralelo.
 // ============================================================
-
 export interface FilaImportacion {
   nombre: string;
   dni: string;

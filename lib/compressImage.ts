@@ -1,4 +1,23 @@
 /**
+ * Valida tipo y tamaño de un archivo ANTES de intentar subirlo — al
+ * instante, en el propio teléfono, sin tocar la red. Sin esto, un
+ * archivo rechazado (ej. un video elegido por error) se subía entero al
+ * servidor antes de que la validación pudiera rechazarlo, y con datos
+ * móviles lentos eso podía tardar minutos sin ningún indicio visual de
+ * que algo se estaba moviendo — parecía que la app se había congelado.
+ */
+export function validarArchivoCliente(file: File, allowed: string[], maxBytes = 10 * 1024 * 1024): string | null {
+  if (!allowed.includes(file.type)) {
+    const tipos = allowed.includes('application/pdf') ? 'una imagen (JPG/PNG) o un PDF' : 'una imagen (JPG/PNG)';
+    return `Este archivo no se puede subir (${file.type || 'formato desconocido'}). Selecciona ${tipos}.`;
+  }
+  if (file.size > maxBytes) {
+    return `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB — el máximo permitido es ${(maxBytes / 1024 / 1024).toFixed(0)} MB.`;
+  }
+  return null;
+}
+
+/**
  * Redimensiona y comprime una imagen en el navegador antes de subirla.
  *
  * Objetivo: dejar el archivo lo más ligero posible SIN perder

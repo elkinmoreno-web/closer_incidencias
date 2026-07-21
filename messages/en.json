@@ -1,0 +1,133 @@
+{
+  "RiderLogin": {
+    "titulo": "Rider access",
+    "subtitulo": "Sign in with your ID number and the password you were given.",
+    "dni": "Your ID number",
+    "dniPlaceholder": "e.g. 12345678X",
+    "password": "Password",
+    "passwordPlaceholder": "e.g. Lg123456",
+    "entrando": "Signing in...",
+    "entrar": "Sign in"
+  },
+  "GestorLogin": {
+    "tituloMarca": "Internal fleet management panel",
+    "subtituloMarca": "Incidents, absences and rider tracking in one place, with controlled access and full traceability.",
+    "acceso": "Restricted access for authorized staff only.",
+    "tituloForm": "Sign in",
+    "correo": "Email",
+    "password": "Password",
+    "entrando": "Signing in...",
+    "entrar": "Sign in to the panel",
+    "usaCredenciales": "Use the credentials your administrator gave you."
+  },
+  "RiderHeader": {
+    "hola": "Hi, {nombre}",
+    "salir": "Sign out"
+  },
+  "RiderTabs": {
+    "incidencia": "Incident",
+    "ausencia": "Absence",
+    "metricas": "My stats"
+  },
+  "RiderDashboard": {
+    "incidenciasSemana": "Your incidents this week",
+    "ausenciasSemana": "Your absences this week"
+  },
+  "IncidenciaForm": {
+    "motivo": "Reason *",
+    "seleccionaMotivo": "Select a reason",
+    "codigoPedido": "Order code",
+    "codigoPedidoPlaceholder": "e.g. UB-123456",
+    "direccionRecogida": "Pickup address *",
+    "direccionEntrega": "Delivery address *",
+    "observaciones": "Notes",
+    "observacionesPlaceholder": "Add any details that could help with the review...",
+    "capturaPedido": "Screenshot of the order code *",
+    "evidenciaAdicional": "Additional evidence (optional)",
+    "optimizandoImagenes": "Optimizing images...",
+    "enviando": "Sending...",
+    "enviar": "Send incident",
+    "exito": "Incident sent. It will be pending review by the team.",
+    "enviarOtra": "Send another",
+    "siguiendoTrabajando": "Still working... ({segundos}s)"
+  },
+  "AusenciaForm": {
+    "motivo": "Reason *",
+    "seleccionaMotivo": "Select a reason",
+    "fechaInicio": "Start date *",
+    "fechaFin": "End date *",
+    "justificantes": "Supporting documents *",
+    "justificantesAyuda": "Images or PDF, max 10 MB each, up to 10 files.",
+    "comentario": "Comment (optional)",
+    "comentarioPlaceholder": "Add any detail you consider relevant...",
+    "optimizandoArchivos": "Optimizing files...",
+    "enviando": "Sending...",
+    "enviar": "Send request",
+    "exito": "Absence reported. It will be pending review.",
+    "enviarOtra": "Send another",
+    "siguiendoTrabajando": "Still working... ({segundos}s)"
+  },
+  "IncidenciasSemanaList": {
+    "vacio": "You haven't reported any incidents this week.",
+    "sinMotivo": "No reason",
+    "pedido": "Order {codigo}",
+    "motivoRechazo": "Rejection reason: {motivo}"
+  },
+  "AusenciasSemanaList": {
+    "vacio": "You haven't reported any absences this week.",
+    "sinMotivo": "No reason",
+    "motivoRechazo": "Rejection reason: {motivo}"
+  },
+  "VerProtocolo": {
+    "verProtocolo": "View protocol",
+    "incidenciaAprobada": "✓ Incident approved",
+    "entendido": "Got it"
+  },
+  "RiderNotificaciones": {
+    "titulo": "Notifications",
+    "sinNovedades": "Nothing new for now.",
+    "incidenciaAprobada": "Your incident was approved",
+    "incidenciaRechazada": "Your incident was rejected",
+    "ausenciaAprobada": "Your absence was approved",
+    "ausenciaRechazada": "Your absence was rejected",
+    "popupIncidenciaAprobada": "✓ Incident approved",
+    "popupIncidenciaRechazada": "Incident rejected",
+    "motivoDelRechazo": "Rejection reason",
+    "sinMotivoEspecifico": "No specific reason was given.",
+    "tuIncidencia": "Your incident",
+    "entendido": "Got it"
+  },
+  "MetricasPanel": {
+    "semanaAnterior": "Previous week",
+    "semanaSiguiente": "Next week",
+    "semanaDel": "Week of {desde} to {hasta}",
+    "estaSemana": "This week",
+    "semanaPasada": "Previous week",
+    "sinDatos": "No data for this week",
+    "pruebaSemanaAnterior": "Try the previous week.",
+    "dia": "Day",
+    "viajes": "Trips",
+    "horas": "Hours",
+    "tph": "TPH",
+    "aceptacion": "Acceptance",
+    "cancelacion": "Cancellation",
+    "resumenSemana": "Week summary",
+    "viajesRealizados": "Trips completed",
+    "horasOnline": "Hours online",
+    "viajesPorHora": "Trips / hour",
+    "sinDiasConDatos": "There aren't any days with recorded data yet this week."
+  },
+  "Comun": {
+    "cancelar": "Cancel",
+    "guardar": "Save",
+    "guardarCambios": "Save changes",
+    "guardando": "Saving..."
+  },
+  "Estados": {
+    "pendiente": "Pending",
+    "aprobada": "Approved",
+    "rechazada": "Rejected",
+    "papelera": "Trash",
+    "revisada": "Reviewed"
+  }
+}

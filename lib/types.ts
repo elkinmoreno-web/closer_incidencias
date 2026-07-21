@@ -33,6 +33,7 @@ export interface Vehiculo {
 export interface Motivo {
   id: number;
   nombre: string;
+  nombre_en?: string | null;
   requiere_captura: boolean;
   requiere_observaciones: boolean;
   requiere_direcciones: boolean;
@@ -43,6 +44,7 @@ export interface Motivo {
 export interface MotivoAusencia {
   id: number;
   nombre: string;
+  nombre_en?: string | null;
   activo: boolean;
 }
 

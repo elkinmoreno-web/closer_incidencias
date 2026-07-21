@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { descargarArchivoDrive } from '@/lib/googleDrive';
-import { mensajeError } from '@/lib/utils';
+import { registrarError } from '@/lib/utils';
 
 /**
  * Sirve un archivo guardado en Google Drive, verificando primero que
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
   try {
     archivo = await descargarArchivoDrive(fileId);
   } catch (e) {
-    return NextResponse.json({ error: `No se pudo obtener el archivo de Drive: ${mensajeError(e)}` }, { status: 502 });
+    return NextResponse.json({ error: registrarError('drive-file', e, 'No se pudo obtener el archivo.') }, { status: 502 });
   }
   if (!archivo) return NextResponse.json({ error: 'Archivo no encontrado' }, { status: 404 });
 

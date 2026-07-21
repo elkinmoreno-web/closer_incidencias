@@ -2,36 +2,16 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
 
 /**
- * Cliente de Google Drive para guardar los archivos adjuntos
- * (capturas de incidencias, justificantes de ausencias, evidencias de
- * conexiones fuera de zona) en el Drive de la empresa.
+ * Cliente de Google Drive para los archivos adjuntos (incidencias,
+ * ausencias, conexiones fuera de zona). Usa OAuth con Client ID/Secret
+ * propios + refresh_token; renueva el access_token directamente cuando
+ * hace falta, sin procesos externos.
  *
- * Usa un Client ID/Secret de OAuth propios (creados con una cuenta de
- * Google DISTINTA a la del Workspace de la empresa — no requiere tocar
- * nada en la cuenta corporativa) + un refresh_token de larga duración.
- * Con esto, ESTA MISMA APP renueva su access_token cuando lo necesita,
- * en una sola llamada de menos de 1 segundo — no depende de ningún
- * proceso externo (GitHub Actions, rclone, etc.) para funcionar.
+ * Variables de entorno: GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET,
+ * GOOGLE_DRIVE_REFRESH_TOKEN, GOOGLE_DRIVE_FOLDER_ID.
  *
- * Por qué se dejó de usar el client_id compartido de rclone: dos
- * problemas reales de fondo que un panel de uso constante no puede
- * tener: (1) la renovación dependía de un GitHub Action con
- * `schedule`, que GitHub documenta como "best effort" — a veces no
- * corre a tiempo; (2) la cuota de peticiones por minuto es COMPARTIDA
- * entre todos los usuarios de rclone en el mundo con ese client_id por
- * defecto, así que terceros ajenos podían tumbarnos la cuota. Con
- * credenciales propias, ambos problemas desaparecen: la cuota es
- * nuestra, y la renovación la hacemos nosotros mismos al instante.
- *
- * Variables de entorno necesarias:
- *   GOOGLE_DRIVE_CLIENT_ID
- *   GOOGLE_DRIVE_CLIENT_SECRET
- *   GOOGLE_DRIVE_REFRESH_TOKEN
- *   GOOGLE_DRIVE_FOLDER_ID (carpeta raíz "Closer CRM - Archivos")
- *
- * IMPORTANTE: la carpeta raíz debe estar COMPARTIDA (permiso Editor)
- * con la cuenta de Google que autorizó este refresh_token — si no, las
- * llamadas fallarán con 403/404 aunque el token en sí sea válido.
+ * La carpeta raíz debe estar compartida (Editor) con la cuenta que
+ * autorizó el refresh_token.
  */
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
@@ -40,11 +20,6 @@ const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
 let tokenCache: { token: string; expira: number } | null = null;
 
-/**
- * Renueva (o reutiliza si sigue vigente) el access_token, directamente
- * con Google — sin ningún intermediario externo. Cachea en memoria del
- * proceso hasta ~5 min antes de que caduque de verdad, con margen.
- */
 async function obtenerAccessToken(): Promise<string> {
   if (tokenCache && tokenCache.expira > Date.now()) return tokenCache.token;
 
@@ -58,24 +33,16 @@ async function obtenerAccessToken(): Promise<string> {
   const resp = await fetch(TOKEN_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
+    body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: 'refresh_token' }),
   });
 
-  if (!resp.ok) {
-    const detalle = await resp.text();
-    throw new Error(`No se pudo renovar el token de Google Drive (HTTP ${resp.status}): ${detalle}`);
-  }
+  if (!resp.ok) throw new Error(`No se pudo renovar el token de Google Drive (HTTP ${resp.status}): ${await resp.text()}`);
 
   const data = await resp.json();
   if (!data.access_token) throw new Error('Google no devolvió un access_token al renovar');
 
   const expiraEnMs = (data.expires_in ?? 3600) * 1000;
-  tokenCache = { token: data.access_token, expira: Date.now() + expiraEnMs - 5 * 60 * 1000 }; // 5 min de margen
+  tokenCache = { token: data.access_token, expira: Date.now() + expiraEnMs - 5 * 60 * 1000 };
   return data.access_token;
 }
 
@@ -97,9 +64,6 @@ async function driveFetch(url: string, init: RequestInit = {}, reintentos = 2): 
     }
   }
 
-  // Con token propio esto no debería pasar casi nunca (renovamos antes
-  // de que caduque), pero por si el token se invalidó por otro motivo
-  // (ej. se revocó manualmente), reintentamos una vez con uno nuevo.
   if (resp.status === 401 && reintentos > 0) {
     tokenCache = null;
     return driveFetch(url, init, reintentos - 1);
@@ -108,11 +72,7 @@ async function driveFetch(url: string, init: RequestInit = {}, reintentos = 2): 
   return resp;
 }
 
-/**
- * Caché PERSISTENTE (en Supabase, no en memoria) de las carpetas de
- * Drive ya resueltas, para no repetir innecesariamente la misma
- * búsqueda/creación de carpeta en cada subida.
- */
+/** Caché persistente (Supabase) de carpetas ya resueltas, para no repetir la búsqueda en cada subida. */
 async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<string> {
   const clave = `${padreId}/${nombre}`;
   const admin = createAdminClient();
@@ -142,7 +102,6 @@ async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<st
   return creadaData.id;
 }
 
-/** Carpeta del mes actual dentro de una categoría (Incidencias/Ausencias/Conexiones), creando lo que falte. */
 async function carpetaDelMes(categoria: 'Incidencias' | 'Ausencias' | 'Conexiones'): Promise<string> {
   const raizId = process.env.GOOGLE_DRIVE_FOLDER_ID;
   if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FOLDER_ID');
@@ -153,11 +112,7 @@ async function carpetaDelMes(categoria: 'Incidencias' | 'Ausencias' | 'Conexione
   return obtenerOCrearCarpeta(mesStr, categoriaId);
 }
 
-/**
- * Sube un archivo a Drive dentro de la carpeta del mes actual de la
- * categoría indicada. Devuelve el ID del archivo en Drive (esto es lo
- * que se guarda en la base de datos, no una ruta de carpeta).
- */
+/** Sube un archivo a la carpeta del mes actual de la categoría. Devuelve el ID del archivo en Drive. */
 export async function subirArchivoDrive(
   categoria: 'Incidencias' | 'Ausencias' | 'Conexiones',
   nombreArchivo: string,
@@ -186,15 +141,7 @@ export async function subirArchivoDrive(
   return data.id;
 }
 
-/**
- * Descarga el contenido de un archivo de Drive por su ID, para
- * mostrarlo/servirlo desde nuestro propio servidor (el archivo en Drive
- * permanece privado; nunca se comparte con un enlace público).
- *
- * Devuelve `null` SOLO cuando Drive confirma que el archivo
- * genuinamente no existe (404 real) — cualquier otro fallo se deja
- * propagar con su mensaje real.
- */
+/** Descarga un archivo por su ID. Devuelve null solo si Drive confirma un 404 real. */
 export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const [contenidoResp, metaResp] = await Promise.all([
     driveFetch(`${DRIVE_API}/files/${fileId}?alt=media`),
@@ -210,11 +157,10 @@ export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: B
   return { buffer: Buffer.from(buffer), mimeType: meta.mimeType ?? 'application/octet-stream' };
 }
 
-/** Borra un archivo de Drive (por si se necesita en el futuro, ej. al eliminar un registro). */
 export async function borrarArchivoDrive(fileId: string): Promise<void> {
   try {
     await driveFetch(`${DRIVE_API}/files/${fileId}`, { method: 'DELETE' });
   } catch {
-    // Si ya no existe o falla, no bloqueamos la operación principal.
+    // No bloquea la operación principal si falla el borrado.
   }
 }

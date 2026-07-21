@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
-import { mensajeError } from '@/lib/utils';
+import { mensajeError, registrarError } from '@/lib/utils';
 async function getCallerRol(): Promise<{ supabase: ReturnType<typeof createClient>; rol: string }> {
   const supabase = createClient();
   const {
@@ -75,6 +75,24 @@ export async function actualizarInstruccionesMotivo(id: number, instrucciones: s
   const supabase = await assertSuperAdmin();
   const valor = instrucciones.trim() || null;
   const { error } = await supabase.from('motivos').update({ instrucciones_aprobacion: valor }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
+/** Nombre en inglés opcional de un motivo de incidencia — vacío = se sigue mostrando el nombre en español. */
+export async function actualizarNombreEnMotivo(id: number, nombreEn: string) {
+  const supabase = await assertSuperAdmin();
+  const valor = nombreEn.trim() || null;
+  const { error } = await supabase.from('motivos').update({ nombre_en: valor }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
+/** Nombre en inglés opcional de un motivo de ausencia. */
+export async function actualizarNombreEnMotivoAusencia(id: number, nombreEn: string) {
+  const supabase = await assertSuperAdmin();
+  const valor = nombreEn.trim() || null;
+  const { error } = await supabase.from('motivos_ausencia').update({ nombre_en: valor }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
 }

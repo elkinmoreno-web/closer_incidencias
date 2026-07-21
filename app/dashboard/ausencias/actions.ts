@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_DOC_MIME, MAX_FILE_BYTES } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
-import { mensajeError } from '@/lib/utils';
+import { registrarError } from '@/lib/utils';
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
     data: { user },
@@ -111,7 +111,7 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
       const fileId = await subirArchivoDrive('Ausencias', nombre, buffer, validos[i].type);
       archivoIds.push(fileId);
     } catch (e) {
-      return { error: `No se pudo subir uno de los justificantes: ${mensajeError(e)}` };
+      return { error: registrarError('crearAusenciaAdmin:justificante', e, 'No se pudo subir uno de los justificantes. Inténtalo de nuevo en unos minutos.') };
     }
   }
 

@@ -1,0 +1,133 @@
+{
+  "RiderLogin": {
+    "titulo": "Acceso de riders",
+    "subtitulo": "Entra con tu DNI y la contraseña que te han facilitado.",
+    "dni": "Tu DNI/NIE",
+    "dniPlaceholder": "Ej: 12345678X",
+    "password": "Contraseña",
+    "passwordPlaceholder": "Ej: Lg123456",
+    "entrando": "Entrando...",
+    "entrar": "Entrar"
+  },
+  "GestorLogin": {
+    "tituloMarca": "Panel interno de gestión de flota",
+    "subtituloMarca": "Incidencias, ausencias y seguimiento de riders en un solo lugar, con acceso controlado y trazabilidad completa.",
+    "acceso": "Acceso restringido a personal autorizado.",
+    "tituloForm": "Iniciar sesión",
+    "correo": "Correo",
+    "password": "Contraseña",
+    "entrando": "Entrando...",
+    "entrar": "Entrar al panel",
+    "usaCredenciales": "Usa las credenciales que te ha dado tu administrador."
+  },
+  "RiderHeader": {
+    "hola": "Hola, {nombre}",
+    "salir": "Salir"
+  },
+  "RiderTabs": {
+    "incidencia": "Incidencia",
+    "ausencia": "Ausencia",
+    "metricas": "Mis métricas"
+  },
+  "RiderDashboard": {
+    "incidenciasSemana": "Tus incidencias de esta semana",
+    "ausenciasSemana": "Tus ausencias de esta semana"
+  },
+  "IncidenciaForm": {
+    "motivo": "Motivo *",
+    "seleccionaMotivo": "Selecciona un motivo",
+    "codigoPedido": "Código del pedido",
+    "codigoPedidoPlaceholder": "Ej: UB-123456",
+    "direccionRecogida": "Dirección de recogida *",
+    "direccionEntrega": "Dirección de entrega *",
+    "observaciones": "Observaciones",
+    "observacionesPlaceholder": "Añade detalles que ayuden a la revisión...",
+    "capturaPedido": "Captura del código del pedido *",
+    "evidenciaAdicional": "Evidencia adicional (opcional)",
+    "optimizandoImagenes": "Optimizando imágenes...",
+    "enviando": "Enviando...",
+    "enviar": "Enviar incidencia",
+    "exito": "Incidencia enviada. Quedará pendiente de revisión por el equipo.",
+    "enviarOtra": "Enviar otra",
+    "siguiendoTrabajando": "Sigue trabajando... ({segundos}s)"
+  },
+  "AusenciaForm": {
+    "motivo": "Motivo *",
+    "seleccionaMotivo": "Selecciona un motivo",
+    "fechaInicio": "Fecha de inicio *",
+    "fechaFin": "Fecha de fin *",
+    "justificantes": "Justificantes *",
+    "justificantesAyuda": "Imágenes o PDF, máx. 10 MB cada uno y 10 archivos.",
+    "comentario": "Comentario (opcional)",
+    "comentarioPlaceholder": "Añade cualquier detalle que consideres relevante...",
+    "optimizandoArchivos": "Optimizando archivos...",
+    "enviando": "Enviando...",
+    "enviar": "Enviar comunicación",
+    "exito": "Ausencia comunicada. Quedará pendiente de revisión.",
+    "enviarOtra": "Enviar otra",
+    "siguiendoTrabajando": "Sigue trabajando... ({segundos}s)"
+  },
+  "IncidenciasSemanaList": {
+    "vacio": "No has reportado incidencias esta semana.",
+    "sinMotivo": "Sin motivo",
+    "pedido": "Pedido {codigo}",
+    "motivoRechazo": "Motivo del rechazo: {motivo}"
+  },
+  "AusenciasSemanaList": {
+    "vacio": "No has comunicado ausencias esta semana.",
+    "sinMotivo": "Sin motivo",
+    "motivoRechazo": "Motivo del rechazo: {motivo}"
+  },
+  "VerProtocolo": {
+    "verProtocolo": "Ver protocolo",
+    "incidenciaAprobada": "✓ Incidencia aprobada",
+    "entendido": "Entendido"
+  },
+  "RiderNotificaciones": {
+    "titulo": "Notificaciones",
+    "sinNovedades": "Sin novedades por ahora.",
+    "incidenciaAprobada": "Tu incidencia fue aprobada",
+    "incidenciaRechazada": "Tu incidencia fue rechazada",
+    "ausenciaAprobada": "Tu ausencia fue aprobada",
+    "ausenciaRechazada": "Tu ausencia fue rechazada",
+    "popupIncidenciaAprobada": "✓ Incidencia aprobada",
+    "popupIncidenciaRechazada": "Incidencia rechazada",
+    "motivoDelRechazo": "Motivo del rechazo",
+    "sinMotivoEspecifico": "No se indicó un motivo específico.",
+    "tuIncidencia": "Tu incidencia",
+    "entendido": "Entendido"
+  },
+  "MetricasPanel": {
+    "semanaAnterior": "Semana anterior",
+    "semanaSiguiente": "Semana siguiente",
+    "semanaDel": "Semana del {desde} al {hasta}",
+    "estaSemana": "Esta semana",
+    "semanaPasada": "Semana anterior",
+    "sinDatos": "Sin datos para esta semana",
+    "pruebaSemanaAnterior": "Prueba con la semana anterior.",
+    "dia": "Día",
+    "viajes": "Viajes",
+    "horas": "Horas",
+    "tph": "TPH",
+    "aceptacion": "Aceptación",
+    "cancelacion": "Cancelación",
+    "resumenSemana": "Resumen de la semana",
+    "viajesRealizados": "Viajes realizados",
+    "horasOnline": "Horas online",
+    "viajesPorHora": "Viajes / hora",
+    "sinDiasConDatos": "Todavía no hay días con datos registrados esta semana."
+  },
+  "Comun": {
+    "cancelar": "Cancelar",
+    "guardar": "Guardar",
+    "guardarCambios": "Guardar cambios",
+    "guardando": "Guardando..."
+  },
+  "Estados": {
+    "pendiente": "Pendiente",
+    "aprobada": "Aprobada",
+    "rechazada": "Rechazada",
+    "papelera": "En papelera",
+    "revisada": "Revisada"
+  }
+}

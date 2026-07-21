@@ -1,29 +1,32 @@
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { login, type LoginState } from '@/app/gestor/login/actions';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
+  const t = useTranslations('GestorLogin');
   return (
     <button
       type="submit"
       disabled={pending}
       className="w-full rounded-full bg-primary py-3 font-semibold text-white transition hover:bg-primary-dark disabled:opacity-60"
     >
-      {pending ? 'Entrando...' : 'Entrar al panel'}
+      {pending ? t('entrando') : t('entrar')}
     </button>
   );
 }
 
 export function LoginForm() {
   const [state, formAction] = useFormState<LoginState, FormData>(login, undefined);
+  const t = useTranslations('GestorLogin');
 
   return (
     <form action={formAction} className="flex flex-col gap-5" noValidate>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="email" className="text-sm font-semibold text-ink-muted">
-          Correo
+          {t('correo')}
         </label>
         <input
           id="email"
@@ -38,7 +41,7 @@ export function LoginForm() {
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor="password" className="text-sm font-semibold text-ink-muted">
-          Contraseña
+          {t('password')}
         </label>
         <input
           id="password"

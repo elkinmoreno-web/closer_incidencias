@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, AlertCircle } from 'lucide-react';
+import { useTranslations, useLocale } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
+import { nombreLocalizado } from '@/lib/utils';
 
 const STORAGE_KEY_PREFIX = 'notificacionesRider_';
 const ULTIMO_VISTO_PREFIX = 'ultimoVistoRider_';
@@ -38,10 +40,6 @@ function playBeep() {
   }
 }
 
-function formatHora(iso: string) {
-  return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
-}
-
 /**
  * Avisa al rider cuando le aprueban o rechazan una incidencia o
  * ausencia. Tiene DOS mecanismos, no solo uno:
@@ -49,18 +47,14 @@ function formatHora(iso: string) {
  * 1. En vivo (Realtime): si la pestaña está abierta justo cuando se
  *    aprueba/rechaza, se entera al instante.
  * 2. Al abrir la app (respaldo): revisa qué cambió desde la última vez
- *    que el rider miró — esto es lo que faltaba antes. Sin esto, si el
- *    rider tenía la app cerrada en el momento exacto de la aprobación
- *    (el caso más común: manda la incidencia y cierra), nunca se
- *    enteraba de nada al volver a entrar.
+ *    que el rider miró.
  *
- * Además, cualquier cambio detectado (por cualquiera de las dos vías)
- * refresca la página entera (router.refresh()), para que las listas de
- * incidencias/ausencias en pantalla también muestren el estado nuevo
- * sin que el rider tenga que recargar a mano.
+ * Cualquier cambio detectado refresca la página entera (router.refresh()).
  */
 export function RiderNotificationBell({ riderId }: { riderId: string }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = useTranslations('RiderNotificaciones');
   const [notis, setNotis] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
   const [popupInstrucciones, setPopupInstrucciones] = useState<{ motivo: string; texto: string } | null>(null);
@@ -68,6 +62,10 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
   const contenedorRef = useRef<HTMLDivElement>(null);
   const storageKey = `${STORAGE_KEY_PREFIX}${riderId}`;
   const ultimoVistoKey = `${ULTIMO_VISTO_PREFIX}${riderId}`;
+
+  function formatHora(iso: string) {
+    return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+  }
 
   useEffect(() => {
     const guardadas = localStorage.getItem(storageKey);
@@ -106,18 +104,18 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
 
     async function mostrarPopupSiHayInstrucciones(motivoId: number | null | undefined) {
       if (!motivoId) return;
-      const { data } = await supabase.from('motivos').select('nombre, instrucciones_aprobacion').eq('id', motivoId).maybeSingle();
+      const { data } = await supabase.from('motivos').select('nombre, nombre_en, instrucciones_aprobacion').eq('id', motivoId).maybeSingle();
       if (data?.instrucciones_aprobacion) {
-        setPopupInstrucciones({ motivo: data.nombre, texto: data.instrucciones_aprobacion });
+        setPopupInstrucciones({ motivo: nombreLocalizado(data.nombre, data.nombre_en, locale), texto: data.instrucciones_aprobacion });
       }
     }
 
     async function mostrarPopupRechazo(motivoId: number | null | undefined, motivoRechazo: string | null | undefined) {
-      const { data } = motivoId ? await supabase.from('motivos').select('nombre').eq('id', motivoId).maybeSingle() : { data: null };
-      setPopupRechazo({ motivo: data?.nombre ?? 'Tu incidencia', razon: motivoRechazo?.trim() || 'No se indicó un motivo específico.' });
+      const { data } = motivoId ? await supabase.from('motivos').select('nombre, nombre_en').eq('id', motivoId).maybeSingle() : { data: null };
+      setPopupRechazo({ motivo: data ? nombreLocalizado(data.nombre, data.nombre_en, locale) : t('tuIncidencia'), razon: motivoRechazo?.trim() || t('sinMotivoEspecifico') });
     }
 
-    /** Revisa qué cambió desde la última vez que el rider abrió la app — el respaldo para cuando no estaba mirando en el momento exacto. */
+    /** Revisa qué cambió desde la última vez que el rider abrió la app. */
     async function revisarCambiosPerdidos() {
       const ultimoVisto = localStorage.getItem(ultimoVistoKey) ?? new Date(Date.now() - DIAS_HACIA_ATRAS_PRIMERA_VEZ * 86400000).toISOString();
       const ahora = new Date().toISOString();
@@ -147,17 +145,15 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
 
       for (const inc of incidenciasNuevas) {
         huboAlgo = true;
-        agregar(inc.estado === 'aprobada' ? 'Tu incidencia fue aprobada' : 'Tu incidencia fue rechazada');
+        agregar(inc.estado === 'aprobada' ? t('incidenciaAprobada') : t('incidenciaRechazada'));
       }
       for (const aus of ausenciasNuevas) {
         huboAlgo = true;
-        agregar(aus.estado === 'aprobada' ? 'Tu ausencia fue aprobada' : 'Tu ausencia fue rechazada');
+        agregar(aus.estado === 'aprobada' ? t('ausenciaAprobada') : t('ausenciaRechazada'));
       }
 
-      // Si hubo varias incidencias que cambiaron mientras no estaba, solo
-      // mostramos UN popup — el de la más reciente de todas (por
-      // updated_at), sea aprobación o rechazo. Como ya viene ordenado
-      // ascendente, la última del array es la más reciente.
+      // Si hubo varias incidencias mientras no estaba, solo mostramos UN
+      // popup — el de la más reciente de todas, sea aprobación o rechazo.
       const masReciente = incidenciasNuevas[incidenciasNuevas.length - 1];
       if (masReciente?.estado === 'aprobada') await mostrarPopupSiHayInstrucciones(masReciente.motivo_id);
       else if (masReciente?.estado === 'rechazada') await mostrarPopupRechazo(masReciente.motivo_id, masReciente.motivo_rechazo);
@@ -178,11 +174,11 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
           const anterior = payload.old as { estado?: string };
           if (nuevo.estado === anterior.estado) return; // solo avisar si cambió el estado
           if (nuevo.estado === 'aprobada') {
-            agregar('Tu incidencia fue aprobada');
+            agregar(t('incidenciaAprobada'));
             mostrarPopupSiHayInstrucciones(nuevo.motivo_id);
           }
           if (nuevo.estado === 'rechazada') {
-            agregar('Tu incidencia fue rechazada');
+            agregar(t('incidenciaRechazada'));
             mostrarPopupRechazo(nuevo.motivo_id, nuevo.motivo_rechazo);
           }
           localStorage.setItem(ultimoVistoKey, new Date().toISOString());
@@ -196,17 +192,14 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
           const nuevo = payload.new as { estado?: string };
           const anterior = payload.old as { estado?: string };
           if (nuevo.estado === anterior.estado) return;
-          if (nuevo.estado === 'aprobada') agregar('Tu ausencia fue aprobada');
-          if (nuevo.estado === 'rechazada') agregar('Tu ausencia fue rechazada');
+          if (nuevo.estado === 'aprobada') agregar(t('ausenciaAprobada'));
+          if (nuevo.estado === 'rechazada') agregar(t('ausenciaRechazada'));
           localStorage.setItem(ultimoVistoKey, new Date().toISOString());
           router.refresh();
         }
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // No podemos hacer mucho más desde aquí, pero al menos queda
-          // registrado — el respaldo de "revisarCambiosPerdidos" seguirá
-          // funcionando la próxima vez que se abra la app de todas formas.
           console.error('Canal de notificaciones del rider no se pudo conectar:', status);
         }
       });
@@ -215,7 +208,7 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       cancelado = true;
       supabase.removeChannel(channel);
     };
-  }, [riderId, storageKey, ultimoVistoKey, router]);
+  }, [riderId, storageKey, ultimoVistoKey, router, t, locale]);
 
   function alAbrir() {
     setAbierto((v) => {
@@ -239,7 +232,7 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
         type="button"
         onClick={alAbrir}
         className="relative rounded-full border border-border p-2.5 text-ink-muted transition hover:bg-bg"
-        title="Notificaciones"
+        title={t('titulo')}
       >
         <Bell size={16} />
         {noLeidas > 0 && (
@@ -251,10 +244,10 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
 
       {abierto && (
         <div className="absolute right-0 top-12 z-[60] w-72 max-w-[90vw] rounded-card border border-border bg-surface shadow-lg">
-          <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">Notificaciones</div>
+          <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">{t('titulo')}</div>
           <div className="max-h-72 overflow-y-auto">
             {notis.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-ink-muted">Sin novedades por ahora.</p>
+              <p className="px-4 py-6 text-center text-xs text-ink-muted">{t('sinNovedades')}</p>
             ) : (
               notis.map((n) => (
                 <div key={n.id} className="border-b border-border px-4 py-2.5 text-xs last:border-0">
@@ -270,14 +263,14 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       {popupInstrucciones && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-card bg-surface p-6 shadow-lg">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">✓ Incidencia aprobada</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">{t('popupIncidenciaAprobada')}</p>
             <h3 className="mb-3 text-base font-semibold text-ink">{popupInstrucciones.motivo}</h3>
             <p className="mb-5 whitespace-pre-wrap text-sm text-ink-muted">{popupInstrucciones.texto}</p>
             <button
               onClick={() => setPopupInstrucciones(null)}
               className="w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-white hover:opacity-90"
             >
-              Entendido
+              {t('entendido')}
             </button>
           </div>
         </div>
@@ -290,18 +283,18 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-danger">
                 <AlertCircle size={16} />
               </div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-danger">Incidencia rechazada</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-danger">{t('popupIncidenciaRechazada')}</p>
             </div>
             <h3 className="mb-3 text-base font-semibold text-ink">{popupRechazo.motivo}</h3>
             <div className="mb-5 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-ink">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-danger">Motivo del rechazo</p>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-danger">{t('motivoDelRechazo')}</p>
               <p className="whitespace-pre-wrap text-ink-muted">{popupRechazo.razon}</p>
             </div>
             <button
               onClick={() => setPopupRechazo(null)}
               className="w-full rounded-full border border-border py-2.5 text-sm font-semibold text-ink hover:bg-bg"
             >
-              Entendido
+              {t('entendido')}
             </button>
           </div>
         </div>

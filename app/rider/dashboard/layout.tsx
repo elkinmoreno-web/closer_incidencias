@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation';
 import Image from 'next/image';
 import { LogOut } from 'lucide-react';
+import { getTranslations } from 'next-intl/server';
 import { createClient } from '@/lib/supabase/server';
 import { riderSignOut } from '@/app/rider/dashboard/actions';
 import { AnnouncementBanner } from '@/components/shared/AnnouncementBanner';
 import { RiderNotificationBell } from '@/components/rider/RiderNotificationBell';
+import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 
 export default async function RiderDashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -21,28 +23,31 @@ export default async function RiderDashboardLayout({ children }: { children: Rea
 
   if (!rider || !rider.activo) redirect('/rider/login?error=sin_acceso');
 
+  const t = await getTranslations('RiderHeader');
+
   return (
     <div className="min-h-screen bg-bg">
-      <header className="flex items-center justify-between border-b border-border bg-surface px-6 py-4">
-        <div>
-          <Image src="/logo-closer.png" alt="Closer Logistics" width={150} height={36} className="h-8 w-auto" priority />
-          <div className="mt-1 text-xs text-ink-muted">Hola, {rider.nombre}</div>
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3 sm:px-6 sm:py-4">
+        <div className="min-w-0">
+          <Image src="/logo-closer.png" alt="Closer Logistics" width={150} height={36} className="h-7 w-auto sm:h-8" priority />
+          <div className="mt-1 truncate text-xs text-ink-muted">{t('hola', { nombre: rider.nombre })}</div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <LanguageSwitcher />
           <RiderNotificationBell riderId={rider.id} />
           <form action={riderSignOut}>
             <button
               type="submit"
-              className="flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted transition hover:border-danger hover:text-danger"
+              className="flex items-center gap-1.5 rounded-full border border-border px-3 py-2 text-xs font-medium text-ink-muted transition hover:border-danger hover:text-danger sm:gap-2 sm:px-4 sm:text-sm"
             >
               <LogOut size={16} />
-              Salir
+              <span className="hidden sm:inline">{t('salir')}</span>
             </button>
           </form>
         </div>
       </header>
       <AnnouncementBanner />
-      <main className="mx-auto max-w-2xl p-6">{children}</main>
+      <main className="mx-auto max-w-2xl p-4 sm:p-6">{children}</main>
     </div>
   );
 }

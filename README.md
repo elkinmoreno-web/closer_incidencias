@@ -470,6 +470,47 @@ normal, sin popup. Requiere `schema_instrucciones_aprobacion.sql`.
   semanal, con el centro y la búsqueda que tengas activos), sin volver a
   consultar la API ni pedir un rango aparte.
 
+## 7.6. Idiomas (Español / Inglés)
+
+Usa [`next-intl`](https://next-intl.dev), con el idioma guardado en una
+cookie (`idioma`) — **no cambia ninguna URL** (`/dashboard`, `/rider/dashboard`,
+etc. siguen igual), así que no se tocó ningún enlace ni redirección
+existente.
+
+- **Detección automática**: la primera vez, se usa el idioma del
+  navegador (cabecera `Accept-Language`) si es español o inglés;
+  si no, cae a español.
+- **Selector manual**: botón ES/EN (`components/shared/LanguageSwitcher.tsx`)
+  en el login de rider, login de gestor, y encabezado del panel de rider.
+  Guarda la elección en la cookie para futuras visitas.
+- **Diccionarios**: `messages/es.json` y `messages/en.json`, organizados
+  por componente (`IncidenciaForm`, `RiderNotificaciones`, etc.).
+
+### Qué está migrado y qué no
+
+**Migrado por completo**: todo el lado del rider (login, dashboard,
+pestañas, formularios de incidencia/ausencia, listas, notificaciones,
+métricas) y el login de gestor — es la parte que se priorizó, ya que es
+donde están los riders de Alemania.
+
+**Sin migrar todavía**: el resto del panel de administración/gestor
+(`/dashboard/*` — riders, incidencias, ausencias, configuración,
+métricas admin, etc.). Sigue en español fijo. El patrón para migrar
+cada pantalla es siempre el mismo:
+1. Añadir las claves de texto al namespace correspondiente en
+   `messages/es.json` y `messages/en.json`.
+2. En componentes cliente: `const t = useTranslations('Namespace')`.
+3. En páginas/componentes de servidor: `const t = await getTranslations('Namespace')`.
+4. Reemplazar cada texto fijo por `{t('clave')}`.
+
+**Importante — lo que NO se traduce**: el nombre de motivos de
+incidencia/ausencia (`motivos.nombre`, `motivos_ausencia.nombre`) viene
+de la base de datos, configurado por un admin — no es texto de interfaz,
+así que sigue mostrándose en el idioma en que se escribió originalmente
+(normalmente español). Traducir eso requeriría guardar una versión en
+cada idioma en la propia tabla, que es un cambio de datos, no solo de
+interfaz.
+
 ## 8. Qué incluye esta versión
 
 - Panel admin completo: resumen en vivo, incidencias con filtros,

@@ -1,3 +1,5 @@
+import createNextIntlPlugin from 'next-intl/plugin';
+
 /** @type {import('next').NextConfig} */
 const securityHeaders = [
   // Evita que el panel se cargue dentro de un <iframe> de otro sitio (clickjacking)
@@ -24,4 +26,5 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+export default withNextIntl(nextConfig);

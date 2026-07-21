@@ -173,3 +173,19 @@ export function mensajeError(e: unknown): string {
   }
   return 'Error desconocido';
 }
+
+/**
+ * Registra el error técnico real en consola (logs del servidor) y
+ * devuelve un mensaje genérico para mostrar al usuario. El detalle real
+ * (variables de entorno, respuestas de APIs externas, stack traces)
+ * nunca debe llegar al navegador.
+ */
+export function registrarError(contexto: string, e: unknown, mensajeUsuario = 'Ocurrió un error. Inténtalo de nuevo en unos minutos.'): string {
+  console.error(`[${contexto}]`, mensajeError(e));
+  return mensajeUsuario;
+}
+
+/** Nombre de un motivo en el idioma activo, con el español como respaldo si no hay traducción cargada. */
+export function nombreLocalizado(nombreEs: string, nombreEn: string | null | undefined, locale: string): string {
+  return locale === 'en' && nombreEn ? nombreEn : nombreEs;
+}

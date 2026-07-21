@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Loader2, RefreshCw, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Download } from 'lucide-react';
 import { centrosConsultablesOvertime, actualizarYObtenerOvertime, auditarOvertime, type FilaOvertime, type CentroConId } from '@/app/dashboard/overtime/actions';
 import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
 
@@ -146,6 +146,31 @@ export function OvertimePanel() {
     { total: 0, uber: 0, onDemand: 0, pendientes: 0 }
   );
 
+  /** Exporta exactamente lo que se ve en pantalla (con los filtros/orden activos), sin volver a consultar el servidor. */
+  async function exportar() {
+    const XLSX = await import('xlsx');
+    const hoja = XLSX.utils.json_to_sheet(
+      filasOrdenadas.map((f) => ({
+        Centro: f.centro,
+        Rider: f.rider,
+        Usuario: f.usuario,
+        Día: f.dia,
+        Fecha: fmtDMY(f.fecha),
+        Zona: f.zona,
+        Horario: f.horario,
+        'Horas Uber': f.horasUber,
+        'Horas On Demand': f.horasOnDemand,
+        'Horas Total': f.horasTotal,
+        Estado: f.estado,
+        'Auditado por': f.auditadoPor ?? '',
+        'Auditado en': f.auditadoEn ?? '',
+      }))
+    );
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'Horas extra');
+    XLSX.writeFile(libro, `horas_extra_${fecha}.xlsx`);
+  }
+
   function auditar(id: number, estado: 'Pendiente' | 'Confirmado' | 'Rechazado') {
     setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, estado } : f)));
     startAuditoria(async () => {
@@ -251,6 +276,14 @@ export function OvertimePanel() {
                   ))}
                 </select>
                 <span className="text-xs text-ink-muted">{filasFiltradas.length} registro(s)</span>
+                <button
+                  onClick={exportar}
+                  disabled={filasOrdenadas.length === 0}
+                  className="ml-auto flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar a Excel
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Loader2, RefreshCw, Search, RotateCw } from 'lucide-react';
+import { Loader2, RefreshCw, Search, RotateCw, Download } from 'lucide-react';
 import { centrosConsultablesChVsWh, obtenerChVsWh, refrescarCalculaHorario, type FilaChVsWh, type CentroConId } from '@/app/dashboard/ch-vs-wh/actions';
 import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
 
@@ -127,6 +127,28 @@ export function ChVsWhPanel() {
     });
   }, [filas, ordenCampo, ordenDir]);
 
+  /** Exporta exactamente lo que se ve en pantalla (con el orden activo), sin volver a consultar el servidor. */
+  async function exportar() {
+    const XLSX = await import('xlsx');
+    const hoja = XLSX.utils.json_to_sheet(
+      filasOrdenadas.map((f) => ({
+        Centro: f.centro,
+        Rider: f.rider,
+        Usuario: f.usuario,
+        CH: f.ch,
+        WH: f.wh,
+        Balance: f.balance,
+        'Horas extra': f.horasExtra,
+        'Calcula horario': f.calculaHorario,
+        Eventos: f.eventos,
+        'Días con incidencia': f.diasIncidencia,
+      }))
+    );
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, 'CH vs WH');
+    XLSX.writeFile(libro, 'ch_vs_wh.xlsx');
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-[280px_1fr]">
       {/* Panel de filtros */}
@@ -208,15 +230,25 @@ export function ChVsWhPanel() {
           <>
             <div className="flex items-center justify-between">
               <p className="text-xs text-ink-muted">{filas.length} rider(es)</p>
-              <button
-                onClick={refrescarTodosVisibles}
-                disabled={refrescandoTodos || filas.length === 0}
-                className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
-                title="Volver a preguntar a la API si 'calcula horario' cambió, para todos los riders visibles"
-              >
-                {refrescandoTodos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
-                Refrescar &quot;calcula horario&quot;
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={exportar}
+                  disabled={filasOrdenadas.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar a Excel
+                </button>
+                <button
+                  onClick={refrescarTodosVisibles}
+                  disabled={refrescandoTodos || filas.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                  title="Volver a preguntar a la API si 'calcula horario' cambió, para todos los riders visibles"
+                >
+                  {refrescandoTodos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+                  Refrescar &quot;calcula horario&quot;
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto rounded-xl border border-border">
               <table className="w-full text-xs">

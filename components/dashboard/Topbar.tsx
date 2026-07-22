@@ -1,7 +1,6 @@
 import { LogOut } from 'lucide-react';
 import { ConnectedAdmins } from '@/components/dashboard/ConnectedAdmins';
 import { NotificationCenter } from '@/components/dashboard/NotificationCenter';
-import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { signOut } from '@/app/dashboard/actions';
 
 export function Topbar({
@@ -32,7 +31,6 @@ export function Topbar({
         <ConnectedAdmins adminId={adminId} usuario={usuario} />
       </div>
       <div className="flex items-center gap-2 md:gap-3">
-        <LanguageSwitcher />
         <NotificationCenter />
         <form action={signOut}>
           <button

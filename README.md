@@ -99,15 +99,7 @@ npm run dev
 2. Configura las variables de entorno (sección 3).
 3. Deploy. Cada push a la rama principal despliega automáticamente.
 
-## 6. Idiomas (Español / Inglés)
-
-Usa [`next-intl`](https://next-intl.dev), con el idioma guardado en una cookie (no cambia ninguna URL). Detecta el idioma del navegador en la primera visita, y permite cambiarlo manualmente con el selector ES/EN visible en el login y en el panel.
-
-**Estado actual**: la app del rider (login, formularios, notificaciones, métricas) y el login de gestor están completamente traducidos. El resto del panel de administración está en español fijo. Los diccionarios están en `messages/es.json` y `messages/en.json`.
-
-Los nombres de motivos de incidencia/ausencia (configurables desde el panel) tienen un campo opcional de traducción al inglés (`nombre_en`); si no se rellena, se muestra el nombre en español.
-
-## 7. Estructura del proyecto
+## 6. Estructura del proyecto
 
 ```
 app/
@@ -130,12 +122,9 @@ lib/
 
 supabase/
 └── schema.sql        → esquema completo de la base de datos
-
-messages/
-├── es.json / en.json → diccionarios de traducción
 ```
 
-## 8. Funcionalidades principales
+## 7. Funcionalidades principales
 
 - **Incidencias y ausencias**: los riders reportan desde su móvil (con fotos/justificantes guardados en Google Drive); los administradores aprueban o rechazan, con notificaciones en tiempo real al rider.
 - **Métricas operativas**: conexión, aceptación, cancelación y viajes por rider, obtenidos en vivo de la API de Fleet Manager, con vista diaria y semanal.

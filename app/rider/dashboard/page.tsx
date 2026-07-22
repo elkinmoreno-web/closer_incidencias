@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { getTranslations } from 'next-intl/server';
 import { createClient, getRiderActual } from '@/lib/supabase/server';
 import { Tabs } from '@/components/rider/Tabs';
 import { IncidenciaForm } from '@/components/rider/IncidenciaForm';
@@ -14,8 +13,6 @@ export default async function RiderDashboardPage() {
   if (!rider) redirect('/rider/login');
 
   const supabase = createClient();
-
-  const t = await getTranslations('RiderDashboard');
   const inicioSemana = inicioSemanaActualISO();
 
   const [{ data: motivos }, { data: motivosAusencia }, { data: incidenciasSemana }, { data: ausenciasSemana }] =
@@ -24,13 +21,13 @@ export default async function RiderDashboardPage() {
       supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
       supabase
         .from('incidencias')
-        .select('id, estado, created_at, codigo_pedido, motivo_rechazo, motivos(nombre, nombre_en, instrucciones_aprobacion)')
+        .select('id, estado, created_at, codigo_pedido, motivo_rechazo, motivos(nombre, instrucciones_aprobacion)')
         .eq('rider_id', rider.id)
         .gte('created_at', inicioSemana)
         .order('created_at', { ascending: false }),
       supabase
         .from('ausencias')
-        .select('id, estado, fecha_inicio, fecha_fin, motivo_rechazo, motivos_ausencia(nombre, nombre_en)')
+        .select('id, estado, fecha_inicio, fecha_fin, motivo_rechazo, motivos_ausencia(nombre)')
         .eq('rider_id', rider.id)
         .gte('created_at', inicioSemana)
         .order('created_at', { ascending: false }),
@@ -43,7 +40,7 @@ export default async function RiderDashboardPage() {
           <div className="flex flex-col gap-6">
             <IncidenciaForm dni={rider.dni} motivos={motivos ?? []} />
             <div className="border-t border-border pt-4">
-              <h2 className="mb-2 text-sm font-semibold text-ink">{t('incidenciasSemana')}</h2>
+              <h2 className="mb-2 text-sm font-semibold text-ink">Tus incidencias de esta semana</h2>
               <IncidenciasSemanaList incidencias={(incidenciasSemana ?? []) as any} />
             </div>
           </div>
@@ -52,7 +49,7 @@ export default async function RiderDashboardPage() {
           <div className="flex flex-col gap-6">
             <AusenciaForm dni={rider.dni} motivos={motivosAusencia ?? []} />
             <div className="border-t border-border pt-4">
-              <h2 className="mb-2 text-sm font-semibold text-ink">{t('ausenciasSemana')}</h2>
+              <h2 className="mb-2 text-sm font-semibold text-ink">Tus ausencias de esta semana</h2>
               <AusenciasSemanaList ausencias={(ausenciasSemana ?? []) as any} />
             </div>
           </div>

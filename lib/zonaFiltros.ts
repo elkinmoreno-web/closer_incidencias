@@ -1,5 +1,5 @@
 import 'server-only';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getAdminActual } from '@/lib/supabase/server';
 import type { Centro, Ciudad } from '@/lib/types';
 
 /**
@@ -18,13 +18,10 @@ export async function ciudadesYCentrosDeMiZona(): Promise<{
   centros: Centro[];
 }> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { esSuperAdmin: false, ciudades: [], centros: [] };
+  const yo = await getAdminActual();
+  if (!yo) return { esSuperAdmin: false, ciudades: [], centros: [] };
 
-  const { data: yo } = await supabase.from('admins').select('id, rol').eq('auth_user_id', user.id).single();
-  const esSuperAdmin = yo?.rol === 'super_admin';
+  const esSuperAdmin = yo.rol === 'super_admin';
 
   if (esSuperAdmin) {
     const [{ data: ciudades }, { data: centros }] = await Promise.all([

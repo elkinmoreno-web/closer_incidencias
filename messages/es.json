@@ -49,7 +49,12 @@
     "enviar": "Enviar incidencia",
     "exito": "Incidencia enviada. Quedará pendiente de revisión por el equipo.",
     "enviarOtra": "Enviar otra",
-    "siguiendoTrabajando": "Sigue trabajando... ({segundos}s)"
+    "siguiendoTrabajando": "Sigue trabajando... ({segundos}s)",
+    "posibleDuplicadoTitulo": "¿Ya reportaste esto?",
+    "posibleDuplicadoTexto": "Reportaste una incidencia con el mismo motivo hace {minutos} minuto(s). ¿Seguro que quieres crear otra?",
+    "posibleDuplicadoTextoConPedido": "Reportaste una incidencia con el mismo motivo hace {minutos} minuto(s) (pedido {codigoPedido}). ¿Seguro que quieres crear otra?",
+    "posibleDuplicadoConfirmar": "Sí, crear otra",
+    "posibleDuplicadoCancelar": "Cancelar"
   },
   "AusenciaForm": {
     "motivo": "Motivo *",

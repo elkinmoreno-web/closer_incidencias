@@ -24,7 +24,7 @@ const NAV = [
   { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings, roles: ['super_admin', 'administrador'] },
 ] as const;
 
-export function Sidebar({ rol, pendientesCount }: { rol: RolAdmin; pendientesCount: number }) {
+export function Sidebar({ rol, pendientesCount, ausenciasPendientesCount }: { rol: RolAdmin; pendientesCount: number; ausenciasPendientesCount: number }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
 
@@ -53,7 +53,8 @@ export function Sidebar({ rol, pendientesCount }: { rol: RolAdmin; pendientesCou
           >
             <Icon size={18} />
             {item.label}
-            {item.href === '/dashboard/incidencias' && <PendingBadge initialCount={pendientesCount} />}
+            {item.href === '/dashboard/incidencias' && <PendingBadge tabla="incidencias" initialCount={pendientesCount} />}
+            {item.href === '/dashboard/ausencias' && <PendingBadge tabla="ausencias" initialCount={ausenciasPendientesCount} />}
           </Link>
         );
       })}

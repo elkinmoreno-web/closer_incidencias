@@ -21,10 +21,39 @@ interface Notificacion {
   leida: boolean;
 }
 
-function playBeep() {
+// Un solo AudioContext para toda la sesión — crear uno nuevo por cada
+// notificación (como se hacía antes) nace "suspendido" en la mayoría de
+// navegadores, porque no hay una interacción real del usuario detrás
+// (la notificación llega por Realtime, no por un clic), así que nunca
+// llegaba a sonar. Con un contexto reutilizado y desbloqueado una vez
+// con la primera interacción real de la página, sí puede sonar después
+// aunque el aviso posterior llegue solo.
+let audioCtxCompartido: AudioContext | null = null;
+let desbloqueado = false;
+
+function obtenerAudioCtx(): AudioContext | null {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioCtx();
+    if (!audioCtxCompartido) {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      audioCtxCompartido = new AudioCtx();
+    }
+    return audioCtxCompartido;
+  } catch {
+    return null;
+  }
+}
+
+function desbloquearAudioConPrimeraInteraccion() {
+  if (desbloqueado) return;
+  const ctx = obtenerAudioCtx();
+  if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+  desbloqueado = true;
+}
+
+function playBeep() {
+  const ctx = obtenerAudioCtx();
+  if (!ctx || ctx.state !== 'running') return; // sigue bloqueado: no hubo interacción todavía, no forzamos nada
+  try {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
@@ -36,7 +65,7 @@ function playBeep() {
     osc.start();
     osc.stop(ctx.currentTime + 0.35);
   } catch {
-    // Navegadores que bloquean audio sin interacción previa: no pasa nada.
+    // No es crítico: si falla, simplemente no suena esta vez.
   }
 }
 
@@ -77,6 +106,14 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       }
     }
   }, [storageKey]);
+
+  useEffect(() => {
+    // Cualquier primer toque/clic/tecla en la página cuenta como la
+    // interacción real que los navegadores exigen para permitir audio.
+    const eventos: (keyof DocumentEventMap)[] = ['pointerdown', 'keydown'];
+    eventos.forEach((ev) => document.addEventListener(ev, desbloquearAudioConPrimeraInteraccion, { once: true }));
+    return () => eventos.forEach((ev) => document.removeEventListener(ev, desbloquearAudioConPrimeraInteraccion));
+  }, []);
 
   useEffect(() => {
     function onClickFuera(e: MouseEvent) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { ALLOWED_DOC_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { registrarError } from '@/lib/utils';
@@ -47,13 +47,6 @@ export async function rechazarAusencia(id: string, motivoRechazo: string) {
   if (error) throw new Error(error.message);
   await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Rechazar ausencia', detalles: `Rechazó la ausencia ${id}: ${motivoRechazo}`, centro_id: fila?.centro_id ?? null });
   revalidatePath('/dashboard/ausencias');
-}
-
-function validarArchivo(file: File | null, allowed: string[]): string | null {
-  if (!file || file.size === 0) return null;
-  if (!allowed.includes(file.type)) return 'Formato de archivo no permitido';
-  if (file.size > MAX_FILE_BYTES) return 'El archivo supera los 10 MB';
-  return null;
 }
 
 function extFromMime(mime: string): string {

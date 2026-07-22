@@ -2,25 +2,14 @@ import { redirect } from 'next/navigation';
 import Image from 'next/image';
 import { LogOut } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
-import { createClient } from '@/lib/supabase/server';
+import { getRiderActual } from '@/lib/supabase/server';
 import { riderSignOut } from '@/app/rider/dashboard/actions';
 import { AnnouncementBanner } from '@/components/shared/AnnouncementBanner';
 import { RiderNotificationBell } from '@/components/rider/RiderNotificationBell';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 
 export default async function RiderDashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/rider/login');
-
-  const { data: rider } = await supabase
-    .from('riders')
-    .select('id, nombre, activo')
-    .eq('auth_user_id', user.id)
-    .maybeSingle();
-
+  const rider = await getRiderActual();
   if (!rider || !rider.activo) redirect('/rider/login?error=sin_acceso');
 
   const t = await getTranslations('RiderHeader');

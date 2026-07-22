@@ -66,15 +66,6 @@ export function estadoAusenciaColor(estado: EstadoAusencia): string {
   return ESTADO_AUSENCIA_COLOR[estado];
 }
 
-/** Normaliza un nombre a "Primera Letra Mayúscula" por palabra, como en el sistema original. */
-export function normalizeName(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .trim()
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (letter) => letter.toUpperCase());
-}
-
 /** Inicio del día de hoy en horario de Madrid, en formato ISO (para filtrar consultas). */
 export function startOfTodayMadridISO(): string {
   const ymd = new Intl.DateTimeFormat('en-CA', {

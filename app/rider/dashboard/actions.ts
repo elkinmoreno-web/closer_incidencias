@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { mensajeError, registrarError } from '@/lib/utils';
@@ -30,13 +30,6 @@ async function getCurrentRider() {
   return { supabase, user, rider };
 }
 
-function validarArchivo(file: File | null, allowed: string[]): string | null {
-  if (!file || file.size === 0) return null;
-  if (!allowed.includes(file.type)) return 'Formato de archivo no permitido';
-  if (file.size > MAX_FILE_BYTES) return 'El archivo supera los 10 MB';
-  return null;
-}
-
 function extFromMime(mime: string): string {
   switch (mime) {
     case 'image/jpeg': return 'jpg';
@@ -47,7 +40,9 @@ function extFromMime(mime: string): string {
   }
 }
 
-export type FormActionState = { error?: string; success?: boolean } | undefined;
+export type FormActionState =
+  | { error?: string; success?: boolean; posibleDuplicado?: { minutos: number; codigoPedido: string | null } }
+  | undefined;
 
 export async function enviarIncidencia(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   try {
@@ -64,6 +59,30 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
 
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
     if (parsed.data.dni !== rider.dni) return { error: 'El DNI no coincide con tu cuenta' };
+
+    // Aviso de posible duplicado: si el mismo rider reportó el MISMO
+    // motivo hace menos de 5 minutos, se le pregunta antes de crear otra
+    // — puede ser el mismo caso reenviado sin querer, o algo genuinamente
+    // distinto (se puede confirmar y seguir igual).
+    const forzar = formData.get('forzarDuplicado') === 'true';
+    if (!forzar) {
+      const haceCincoMin = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: reciente } = await supabase
+        .from('incidencias')
+        .select('created_at, codigo_pedido')
+        .eq('rider_id', rider.id)
+        .eq('motivo_id', parsed.data.motivoId)
+        .neq('estado', 'papelera')
+        .gte('created_at', haceCincoMin)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (reciente) {
+        const minutos = Math.max(1, Math.round((Date.now() - new Date(reciente.created_at).getTime()) / 60000));
+        return { posibleDuplicado: { minutos, codigoPedido: reciente.codigo_pedido } };
+      }
+    }
 
     const { data: motivo } = await supabase.from('motivos').select('*').eq('id', parsed.data.motivoId).single();
     if (!motivo) return { error: 'Motivo no válido' };

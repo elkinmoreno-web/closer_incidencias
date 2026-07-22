@@ -43,3 +43,11 @@ export const loginSchema = z.object({
 export const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 export const ALLOWED_DOC_MIME = [...ALLOWED_IMAGE_MIME, 'application/pdf'];
 export const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/** Valida tipo y tamaño de un archivo del lado del servidor (ver también validarArchivoCliente en lib/compressImage.ts para la validación instantánea del lado del navegador). */
+export function validarArchivo(file: File | null, allowed: string[]): string | null {
+  if (!file || file.size === 0) return null;
+  if (!allowed.includes(file.type)) return 'Formato de archivo no permitido';
+  if (file.size > MAX_FILE_BYTES) return 'El archivo supera los 10 MB';
+  return null;
+}

@@ -2,17 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES } from '@/lib/validations';
+import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { registrarError } from '@/lib/utils';
-function validarArchivo(file: File | null, allowed: string[]): string | null {
-  if (!file || file.size === 0) return null;
-  if (!allowed.includes(file.type)) return 'Formato de archivo no permitido';
-  if (file.size > MAX_FILE_BYTES) return 'El archivo supera los 10 MB';
-  return null;
-}
-
 function extFromMime(mime: string): string {
   switch (mime) {
     case 'image/jpeg': return 'jpg';

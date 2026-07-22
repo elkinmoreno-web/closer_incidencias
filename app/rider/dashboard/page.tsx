@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getRiderActual } from '@/lib/supabase/server';
 import { Tabs } from '@/components/rider/Tabs';
 import { IncidenciaForm } from '@/components/rider/IncidenciaForm';
 import { AusenciaForm } from '@/components/rider/AusenciaForm';
@@ -10,19 +10,10 @@ import { MetricasPanel } from '@/components/rider/MetricasPanel';
 import { inicioSemanaActualISO } from '@/lib/utils';
 
 export default async function RiderDashboardPage() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect('/rider/login');
-
-  const { data: rider } = await supabase
-    .from('riders')
-    .select('id, dni')
-    .eq('auth_user_id', user.id)
-    .single();
-
+  const rider = await getRiderActual();
   if (!rider) redirect('/rider/login');
+
+  const supabase = createClient();
 
   const t = await getTranslations('RiderDashboard');
   const inicioSemana = inicioSemanaActualISO();

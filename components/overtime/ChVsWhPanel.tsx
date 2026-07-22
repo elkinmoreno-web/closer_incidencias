@@ -4,24 +4,9 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Loader2, RefreshCw, Search, RotateCw, Download } from 'lucide-react';
 import { centrosConsultablesChVsWh, obtenerChVsWh, refrescarCalculaHorario, type FilaChVsWh, type CentroConId } from '@/app/dashboard/ch-vs-wh/actions';
 import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
+import { lunesDe, domingoDe, fmtDMY } from '@/lib/metricas';
 
 type CampoOrdenChVsWh = 'centro' | 'rider' | 'ch' | 'wh' | 'balance' | 'horasExtra' | 'calculaHorario' | 'eventos';
-
-function lunesDe(fechaIso: string): string {
-  const d = new Date(fechaIso + 'T12:00:00Z');
-  const off = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - off);
-  return d.toISOString().split('T')[0];
-}
-function fmtDMY(iso: string) {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
-function domingoDe(lunes: string) {
-  const d = new Date(lunes + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + 6);
-  return d.toISOString().split('T')[0];
-}
 
 export function ChVsWhPanel() {
   const [centros, setCentros] = useState<CentroConId[]>([]);

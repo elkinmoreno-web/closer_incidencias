@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getUsuarioAutenticado } from '@/lib/supabase/server';
 
 interface Anuncio {
   id: number;
@@ -17,9 +17,7 @@ interface Anuncio {
  */
 export async function AnnouncementBanner() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getUsuarioAutenticado();
   if (!user) return null;
 
   const anuncios = await resolverAnunciosVisibles(supabase, user.id);

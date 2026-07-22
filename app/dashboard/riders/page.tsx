@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getAdminActual } from '@/lib/supabase/server';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrearRiderForm } from '@/components/riders/CrearRiderForm';
@@ -21,10 +21,7 @@ export default async function RidersPage({
   searchParams: { [key: string]: string | undefined };
 }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: yo } = user ? await supabase.from('admins').select('rol').eq('auth_user_id', user.id).single() : { data: null };
+  const yo = await getAdminActual();
   const esSuperAdmin = yo?.rol === 'super_admin';
 
   const page = Math.max(1, Number(searchParams.page) || 1);

@@ -53,6 +53,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
   const [comprimiendo, setComprimiendo] = useState(false);
   const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
   const [errorEvidencia, setErrorEvidencia] = useState<string | null>(null);
+  const ultimoFormData = useRef<FormData | null>(null);
   const t = useTranslations('IncidenciaForm');
   const locale = useLocale();
 
@@ -82,6 +83,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
   }
 
   async function handleSubmit(formData: FormData) {
+    ultimoFormData.current = formData;
     setComprimiendo(true);
     try {
       const screenshot = formData.get('screenshot') as File | null;
@@ -96,6 +98,36 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
       setComprimiendo(false);
     }
     await formAction(formData);
+  }
+
+  /** El rider confirma que sí quiere crear otra pese al aviso de posible duplicado: reenvía lo mismo, marcado para saltar la comprobación. */
+  async function confirmarDuplicado() {
+    if (!ultimoFormData.current) return;
+    ultimoFormData.current.set('forzarDuplicado', 'true');
+    await formAction(ultimoFormData.current);
+  }
+
+  if (state?.posibleDuplicado) {
+    const { minutos, codigoPedido } = state.posibleDuplicado;
+    return (
+      <div className="rounded-xl bg-amber-50 px-4 py-4 text-sm text-amber-900">
+        <p className="font-semibold">{t('posibleDuplicadoTitulo')}</p>
+        <p className="mt-1 text-amber-800">
+          {t(codigoPedido ? 'posibleDuplicadoTextoConPedido' : 'posibleDuplicadoTexto', { minutos, codigoPedido: codigoPedido ?? '' })}
+        </p>
+        <div className="mt-3 flex gap-2">
+          <button
+            onClick={confirmarDuplicado}
+            className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary-dark"
+          >
+            {t('posibleDuplicadoConfirmar')}
+          </button>
+          <button onClick={() => window.location.reload()} className="rounded-full border border-border px-4 py-2 text-xs font-semibold text-ink-muted hover:bg-bg">
+            {t('posibleDuplicadoCancelar')}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (state?.success) {

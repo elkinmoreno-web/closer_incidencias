@@ -4,28 +4,13 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { Loader2, RefreshCw, Search, Download } from 'lucide-react';
 import { centrosConsultablesOvertime, actualizarYObtenerOvertime, auditarOvertime, type FilaOvertime, type CentroConId } from '@/app/dashboard/overtime/actions';
 import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
+import { lunesDe, domingoDe, fmtDMY } from '@/lib/metricas';
 
 const ORDEN_DIA: Record<string, number> = { Lunes: 1, Martes: 2, Miércoles: 3, Jueves: 4, Viernes: 5, Sábado: 6, Domingo: 7 };
 const ORDEN_ESTADO: Record<string, number> = { Pendiente: 0, Confirmado: 1, Rechazado: 2 };
 type CampoOrdenOvertime = 'centro' | 'rider' | 'fecha' | 'zona' | 'horasUber' | 'horasOnDemand' | 'estado';
 
 /** Lunes (ISO yyyy-mm-dd) de la semana de una fecha dada. */
-function lunesDe(fechaIso: string): string {
-  const d = new Date(fechaIso + 'T12:00:00Z');
-  const off = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - off);
-  return d.toISOString().split('T')[0];
-}
-function fmtDMY(iso: string) {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
-function domingoDe(lunes: string) {
-  const d = new Date(lunes + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + 6);
-  return d.toISOString().split('T')[0];
-}
-
 const DIAS = ['Todos', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 export function OvertimePanel() {

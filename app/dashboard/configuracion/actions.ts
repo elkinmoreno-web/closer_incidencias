@@ -79,24 +79,6 @@ export async function actualizarInstruccionesMotivo(id: number, instrucciones: s
   revalidatePath('/dashboard/configuracion');
 }
 
-/** Nombre en inglés opcional de un motivo de incidencia — vacío = se sigue mostrando el nombre en español. */
-export async function actualizarNombreEnMotivo(id: number, nombreEn: string) {
-  const supabase = await assertSuperAdmin();
-  const valor = nombreEn.trim() || null;
-  const { error } = await supabase.from('motivos').update({ nombre_en: valor }).eq('id', id);
-  if (error) throw new Error(error.message);
-  revalidatePath('/dashboard/configuracion');
-}
-
-/** Nombre en inglés opcional de un motivo de ausencia. */
-export async function actualizarNombreEnMotivoAusencia(id: number, nombreEn: string) {
-  const supabase = await assertSuperAdmin();
-  const valor = nombreEn.trim() || null;
-  const { error } = await supabase.from('motivos_ausencia').update({ nombre_en: valor }).eq('id', id);
-  if (error) throw new Error(error.message);
-  revalidatePath('/dashboard/configuracion');
-}
-
 export async function toggleMotivoAusencia(id: number, activo: boolean) {
   const supabase = await assertSuperAdmin();
   const { error } = await supabase.from('motivos_ausencia').update({ activo }).eq('id', id);

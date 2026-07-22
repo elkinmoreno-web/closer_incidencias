@@ -2,9 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clock, Gauge, TrendingUp, Ban, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { useTranslations, useLocale } from 'next-intl';
 import { obtenerMiResumenSemanal, obtenerMisDiasSemana, type MisMetricasResumen, type MisMetricasDia } from '@/app/rider/dashboard/actions';
 import { semanaIsoDe } from '@/lib/metricas';
+
+const fmtInt = (n: number) => Math.round(n).toLocaleString('es-ES');
+const fmtFloat = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
+const fmtPct = (n: number) => (Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : '—');
+const fmtDMY = (iso: string) => {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
 
 function rangoSemanaIso(year: number, week: number): { lunes: string; domingo: string } {
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
@@ -33,21 +40,11 @@ function Tile({ icon: Icon, label, value, tono }: { icon: typeof Clock; label: s
 }
 
 export function MetricasPanel() {
-  const t = useTranslations('MetricasPanel');
-  const locale = useLocale();
   const [semana, setSemana] = useState(() => semanaIsoDe(new Date()));
   const [resumen, setResumen] = useState<MisMetricasResumen | null>(null);
   const [dias, setDias] = useState<MisMetricasDia[]>([]);
   const [cargando, setCargando] = useState(true);
   const turnoRef = useRef(0);
-
-  const fmtInt = (n: number) => Math.round(n).toLocaleString(locale);
-  const fmtFloat = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
-  const fmtPct = (n: number) => (Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : '—');
-  const fmtDMY = (iso: string) => {
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
-  };
 
   useEffect(() => {
     const miTurno = ++turnoRef.current;
@@ -77,18 +74,20 @@ export function MetricasPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-center gap-3">
-        <button onClick={() => cambiarSemana(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink" aria-label={t('semanaAnterior')}>
+        <button onClick={() => cambiarSemana(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink" aria-label="Semana anterior">
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-center">
-          <p className="text-sm font-semibold text-ink">{t('semanaDel', { desde: fmtDMY(rango.lunes), hasta: fmtDMY(rango.domingo) })}</p>
-          <p className="text-xs text-brand-text">{esSemanaActual ? t('estaSemana') : t('semanaPasada')}</p>
+          <p className="text-sm font-semibold text-ink">
+            Semana del {fmtDMY(rango.lunes)} al {fmtDMY(rango.domingo)}
+          </p>
+          <p className="text-xs text-brand-text">{esSemanaActual ? 'Esta semana' : 'Semana anterior'}</p>
         </div>
         <button
           onClick={() => cambiarSemana(1)}
           disabled={esSemanaActual}
           className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:opacity-30"
-          aria-label={t('semanaSiguiente')}
+          aria-label="Semana siguiente"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -100,21 +99,22 @@ export function MetricasPanel() {
         </div>
       ) : !resumen || !resumen.hayDatos ? (
         <div className="flex flex-col items-center gap-1 py-10 text-center text-ink-muted">
-          <p className="text-sm font-medium">{t('sinDatos')}</p>
-          <p className="text-xs">{t('pruebaSemanaAnterior')}</p>
+          <p className="text-sm font-medium">Sin datos para esta semana</p>
+          <p className="text-xs">Prueba con la semana anterior.</p>
         </div>
       ) : (
         <>
+          {/* Día a día: solo los días que ya pasaron de esta semana */}
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                  <th className="px-3 py-2">{t('dia')}</th>
-                  <th className="px-3 py-2 text-center">{t('viajes')}</th>
-                  <th className="px-3 py-2 text-center">{t('horas')}</th>
-                  <th className="px-3 py-2 text-center">{t('tph')}</th>
-                  <th className="px-3 py-2 text-center">{t('aceptacion')}</th>
-                  <th className="px-3 py-2 text-center">{t('cancelacion')}</th>
+                  <th className="px-3 py-2">Día</th>
+                  <th className="px-3 py-2 text-center">Viajes</th>
+                  <th className="px-3 py-2 text-center">Horas</th>
+                  <th className="px-3 py-2 text-center">TPH</th>
+                  <th className="px-3 py-2 text-center">Aceptación</th>
+                  <th className="px-3 py-2 text-center">Cancelación</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,7 +134,7 @@ export function MetricasPanel() {
                 {dias.filter((d) => d.hayDatos).length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-3 py-6 text-center text-ink-muted">
-                      {t('sinDiasConDatos')}
+                      Todavía no hay días con datos registrados esta semana.
                     </td>
                   </tr>
                 )}
@@ -142,17 +142,18 @@ export function MetricasPanel() {
             </table>
           </div>
 
+          {/* Resumen de toda la semana */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">{t('resumenSemana')}</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Resumen de la semana</p>
             <div className="grid grid-cols-2 gap-3">
-              <Tile icon={CheckCircle2} label={t('viajesRealizados')} value={fmtInt(resumen.num_of_trips)} />
-              <Tile icon={Clock} label={t('horasOnline')} value={fmtFloat(resumen.online_hours)} />
-              <Tile icon={Gauge} label={t('viajesPorHora')} value={fmtFloat(resumen.tph)} />
-              <Tile icon={TrendingUp} label={t('aceptacion')} value={fmtPct(resumen.acceptance_rate)} tono={resumen.acceptance_rate >= 0.95 ? 'green' : undefined} />
+              <Tile icon={CheckCircle2} label="Viajes realizados" value={fmtInt(resumen.num_of_trips)} />
+              <Tile icon={Clock} label="Horas online" value={fmtFloat(resumen.online_hours)} />
+              <Tile icon={Gauge} label="Viajes / hora" value={fmtFloat(resumen.tph)} />
+              <Tile icon={TrendingUp} label="Aceptación" value={fmtPct(resumen.acceptance_rate)} tono={resumen.acceptance_rate >= 0.95 ? 'green' : undefined} />
               <div className="col-span-2">
                 <Tile
                   icon={Ban}
-                  label={t('cancelacion')}
+                  label="Cancelación"
                   value={fmtPct(resumen.cancelation_rate)}
                   tono={resumen.cancelation_rate === 0 ? 'green' : resumen.cancelation_rate >= 0.1 ? 'red' : undefined}
                 />

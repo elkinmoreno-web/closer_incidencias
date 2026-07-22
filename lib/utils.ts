@@ -175,8 +175,3 @@ export function registrarError(contexto: string, e: unknown, mensajeUsuario = 'O
   console.error(`[${contexto}]`, mensajeError(e));
   return mensajeUsuario;
 }
-
-/** Nombre de un motivo en el idioma activo, con el español como respaldo si no hay traducción cargada. */
-export function nombreLocalizado(nombreEs: string, nombreEn: string | null | undefined, locale: string): string {
-  return locale === 'en' && nombreEn ? nombreEn : nombreEs;
-}

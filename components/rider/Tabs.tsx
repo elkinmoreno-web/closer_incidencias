@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
 
 export function Tabs({
   incidenciaPanel,
@@ -13,7 +12,6 @@ export function Tabs({
   metricasPanel: React.ReactNode;
 }) {
   const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'metricas'>('incidencia');
-  const t = useTranslations('RiderTabs');
 
   return (
     <div>
@@ -24,7 +22,7 @@ export function Tabs({
             tab === 'incidencia' ? 'bg-primary text-white' : 'text-ink-muted'
           }`}
         >
-          {t('incidencia')}
+          Incidencia
         </button>
         <button
           onClick={() => setTab('ausencia')}
@@ -32,7 +30,7 @@ export function Tabs({
             tab === 'ausencia' ? 'bg-primary text-white' : 'text-ink-muted'
           }`}
         >
-          {t('ausencia')}
+          Ausencia
         </button>
         <button
           onClick={() => setTab('metricas')}
@@ -40,7 +38,7 @@ export function Tabs({
             tab === 'metricas' ? 'bg-primary text-white' : 'text-ink-muted'
           }`}
         >
-          {t('metricas')}
+          Mis métricas
         </button>
       </div>
       {tab === 'incidencia' && incidenciaPanel}

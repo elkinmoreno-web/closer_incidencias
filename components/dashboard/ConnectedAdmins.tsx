@@ -25,7 +25,7 @@ export function ConnectedAdmins({
   adminId,
   usuario,
   rol,
-  misCiudades,
+  misCiudades = [],
 }: {
   adminId: string;
   usuario: string;
@@ -43,8 +43,15 @@ export function ConnectedAdmins({
 
     channel
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<Presencia>();
-        const todas = Object.values(state).flat();
+        const state = channel.presenceState<Partial<Presencia>>();
+        const todas = Object.values(state)
+          .flat()
+          .filter((p) => !!p?.usuario)
+          .map((p) => ({
+            usuario: p.usuario as string,
+            rol: p.rol ?? 'moderador',
+            ciudades: Array.isArray(p.ciudades) ? p.ciudades : [],
+          }));
         // Por si el mismo admin tiene dos pestañas abiertas: no lo dupliques.
         const unicas = Array.from(new Map(todas.map((p) => [p.usuario, p])).values());
         setPresencias(unicas);

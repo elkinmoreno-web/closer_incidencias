@@ -90,10 +90,10 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     const screenshot = formData.get('screenshot') as File | null;
     const evidencia = formData.get('evidencia') as File | null;
 
-    /*if (motivo.requiere_captura) {
+    if (motivo.requiere_captura) {
       const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
       if (err || !screenshot || screenshot.size === 0) return { error: err ?? 'Este motivo requiere una captura' };
-    }*/
+    }
     if (motivo.requiere_observaciones && !parsed.data.observaciones) {
       return { error: 'Este motivo requiere que añadas observaciones' };
     }

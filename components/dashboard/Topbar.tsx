@@ -7,10 +7,12 @@ export function Topbar({
   adminId,
   usuario,
   rol,
+  misCiudades,
 }: {
   adminId: string;
   usuario: string;
   rol: string;
+  misCiudades: string[];
 }) {
   return (
     <header className="flex items-center justify-between gap-2 border-b border-border bg-surface px-4 py-4 pl-16 md:px-6 md:pl-6">
@@ -28,7 +30,7 @@ export function Topbar({
               : 'Moderador'}
           </span>
         </div>
-        <ConnectedAdmins adminId={adminId} usuario={usuario} />
+        <ConnectedAdmins adminId={adminId} usuario={usuario} rol={rol} misCiudades={misCiudades} />
       </div>
       <div className="flex items-center gap-2 md:gap-3">
         <NotificationCenter />

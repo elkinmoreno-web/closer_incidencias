@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { KeyRound, Loader2 } from 'lucide-react';
-import { cambiarRolAdmin, toggleAdminActivo, cambiarPasswordAdmin } from '@/app/dashboard/configuracion/actions';
+import { cambiarRolAdmin, toggleAdminActivo, cambiarPasswordAdmin, actualizarZonasAdmin } from '@/app/dashboard/configuracion/actions';
 
 import { mensajeError } from '@/lib/utils';
 function etiquetaRol(rol: string) {
@@ -39,8 +39,19 @@ export function AdminRow({
   const [ciudadesSeleccionadas, setCiudadesSeleccionadas] = useState<Set<number>>(new Set(ciudadIdsActuales));
   const [errorRol, setErrorRol] = useState<string | null>(null);
 
+  // Editar SOLO las ciudades, sin tocar el rol — para cuando el admin
+  // ya tiene el rol correcto y solo hace falta añadir/quitar centros.
+  const [editandoZonas, setEditandoZonas] = useState(false);
+
   const muestraZonas = admin.rol === 'moderador' || admin.rol === 'administrador' || admin.rol === 'admin_zona';
   const necesitaCiudades = rolPendiente === 'administrador' || rolPendiente === 'moderador';
+  const mostrarSelectorCiudades = necesitaCiudades || editandoZonas;
+
+  function iniciarEdicionZonas() {
+    setCiudadesSeleccionadas(new Set(ciudadIdsActuales));
+    setErrorRol(null);
+    setEditandoZonas(true);
+  }
 
   function onCambiarSelectRol(nuevoRol: string) {
     setErrorRol(null);
@@ -75,7 +86,6 @@ export function AdminRow({
   }
 
   function aplicarCambioRol() {
-    if (!rolPendiente) return;
     if (ciudadesSeleccionadas.size === 0) {
       setErrorRol('Selecciona al menos una ciudad antes de aplicar');
       return;
@@ -83,8 +93,13 @@ export function AdminRow({
     setErrorRol(null);
     startTransition(async () => {
       try {
-        await cambiarRolAdmin(admin.id, rolPendiente as 'administrador' | 'moderador', Array.from(ciudadesSeleccionadas));
-        setRolPendiente(null);
+        if (editandoZonas) {
+          await actualizarZonasAdmin(admin.id, Array.from(ciudadesSeleccionadas));
+          setEditandoZonas(false);
+        } else if (rolPendiente) {
+          await cambiarRolAdmin(admin.id, rolPendiente as 'administrador' | 'moderador', Array.from(ciudadesSeleccionadas));
+          setRolPendiente(null);
+        }
       } catch (e) {
         setErrorRol(mensajeError(e));
       }
@@ -127,7 +142,7 @@ export function AdminRow({
             {esYoMismo && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">tú</span>}
             {!admin.activo && <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-danger">Inactivo</span>}
           </div>
-          {muestraZonas && !necesitaCiudades && <div className="mt-0.5 text-xs text-ink-muted">{zonas.join(', ') || 'Sin ciudades asignadas'}</div>}
+          {muestraZonas && !mostrarSelectorCiudades && <div className="mt-0.5 text-xs text-ink-muted">{zonas.join(', ') || 'Sin ciudades asignadas'}</div>}
         </div>
 
         <div className="flex items-center gap-2">
@@ -135,7 +150,7 @@ export function AdminRow({
           {esSuperAdmin && !esYoMismo ? (
             <select
               value={rolPendiente ?? (admin.rol === 'admin_zona' ? 'moderador' : admin.rol)}
-              disabled={pending}
+              disabled={pending || editandoZonas}
               onChange={(e) => onCambiarSelectRol(e.target.value)}
               className="rounded-lg border border-border bg-surface px-2 py-1 text-xs text-ink focus:border-primary focus:outline-none"
             >
@@ -145,6 +160,16 @@ export function AdminRow({
             </select>
           ) : (
             <span className="text-xs text-ink-muted">{etiquetaRol(admin.rol)}</span>
+          )}
+
+          {esSuperAdmin && !esYoMismo && muestraZonas && !mostrarSelectorCiudades && (
+            <button
+              onClick={iniciarEdicionZonas}
+              disabled={pending}
+              className="rounded-lg border border-border px-2 py-1 text-xs text-ink-muted hover:border-primary hover:text-primary"
+            >
+              Editar zonas
+            </button>
           )}
 
           {esSuperAdmin && !esYoMismo && (
@@ -174,10 +199,12 @@ export function AdminRow({
       {/* Selector de ciudades inline: aparece SOLO mientras se está
           eligiendo un rol de zona, y el cambio no se aplica hasta pulsar
           "Aplicar" — así nunca queda un rol de zona sin ciudades. */}
-      {necesitaCiudades && (
+      {mostrarSelectorCiudades && (
         <div className="mt-2 rounded-lg bg-bg p-3">
           <p className="mb-2 text-xs font-medium text-ink">
-            Elige las ciudades para el rol &quot;{rolPendiente === 'administrador' ? 'Administrador' : 'Moderador'}&quot;:
+            {editandoZonas
+              ? 'Elige las ciudades para este admin:'
+              : `Elige las ciudades para el rol "${rolPendiente === 'administrador' ? 'Administrador' : 'Moderador'}":`}
           </p>
           <div className="mb-2 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
             {ciudadesDisponibles.map((c) => (
@@ -199,11 +226,12 @@ export function AdminRow({
               className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
             >
               {pending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Aplicar cambio de rol
+              {editandoZonas ? 'Guardar zonas' : 'Aplicar cambio de rol'}
             </button>
             <button
               onClick={() => {
                 setRolPendiente(null);
+                setEditandoZonas(false);
                 setErrorRol(null);
               }}
               disabled={pending}

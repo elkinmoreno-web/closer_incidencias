@@ -206,11 +206,12 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
 
       {motivoSeleccionado?.requiere_captura && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-semibold text-ink-muted">Captura del código del pedido </label>
+          <label className="text-sm font-semibold text-ink-muted">Captura del código del pedido *</label>
           <input
             type="file"
             name="screenshot"
             accept="image/jpeg,image/png,image/webp"
+            required
             onChange={(e) => alElegirArchivo(e, setErrorScreenshot)}
             className="text-sm"
           />

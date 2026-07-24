@@ -7,6 +7,7 @@ import { NuevaAusenciaModal } from '@/components/dashboard/NuevaAusenciaModal';
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
+import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { estadoAusenciaColor, estadoAusenciaLabel, formatFecha, formatFechaCorta } from '@/lib/utils';
 import { urlArchivoDrive } from '@/lib/driveUrl';
 
@@ -126,7 +127,10 @@ export default async function AusenciasPage({
                   <td className="px-4 py-3 text-xs">
                     {(a.motivos_ausencia as unknown as { nombre: string } | null)?.nombre ?? '—'}
                     {a.estado === 'rechazada' && a.motivo_rechazo && (
-                      <div className="mt-1 rounded bg-red-50 px-2 py-1 text-danger">Rechazo: {a.motivo_rechazo}</div>
+                      <div className="mt-1 flex items-start gap-1 rounded bg-red-50 px-2 py-1">
+                        <div className="line-clamp-2 text-danger">Rechazo: {a.motivo_rechazo}</div>
+                        {a.motivo_rechazo.length > 80 && <VerTextoCompleto titulo="Motivo del rechazo" texto={a.motivo_rechazo} />}
+                      </div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs">

@@ -17,6 +17,42 @@ function extFromMime(mime: string): string {
 
 export type FormActionState = { error?: string; success?: boolean } | undefined;
 
+export interface RiderBusqueda {
+  id: string;
+  nombre: string;
+  dni: string;
+  centro: string | null;
+}
+
+/**
+ * Busca riders EN EL SERVIDOR (con RLS, así que respeta la zona del
+ * admin) — antes se traían TODOS los riders al navegador para filtrar
+ * ahí, pero Supabase (PostgREST) limita a 1000 filas por defecto si no
+ * se pide un `.limit()` explícito. Con ~4600 riders, eso cortaba en
+ * seco después de los primeros 1000 (por orden alfabético), sin avisar
+ * de que faltaban — parecía que ciertos riders "no existían".
+ */
+export async function buscarRidersConexion(texto: string): Promise<RiderBusqueda[]> {
+  const supabase = createClient();
+  const q = texto.trim().replace(/[%,]/g, '');
+  if (q.length < 2) return [];
+
+  const { data } = await supabase
+    .from('riders')
+    .select('id, nombre, dni, centros(nombre)')
+    .eq('activo', true)
+    .or(`dni.ilike.%${q}%,nombre.ilike.%${q}%`)
+    .order('nombre')
+    .limit(15);
+
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    nombre: r.nombre,
+    dni: r.dni,
+    centro: (r.centros as unknown as { nombre: string } | null)?.nombre ?? null,
+  }));
+}
+
 export async function crearConexionFueraZona(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const supabase = createClient();
   const {

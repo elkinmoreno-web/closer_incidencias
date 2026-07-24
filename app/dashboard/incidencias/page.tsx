@@ -8,6 +8,7 @@ import { NuevaIncidenciaModal } from '@/components/dashboard/NuevaIncidenciaModa
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { estadoIncidenciaColor, estadoIncidenciaLabel, formatFecha } from '@/lib/utils';
 import { urlArchivoDrive } from '@/lib/driveUrl';
 import type { Incidencia } from '@/lib/types';
@@ -135,11 +136,15 @@ export default async function IncidenciasPage({
                   <td className="max-w-xs px-4 py-3">
                     <div>{i.motivos?.nombre ?? '—'}</div>
                     {i.observaciones && (
-                      <div className="mt-0.5 line-clamp-2 text-xs text-ink-muted">{i.observaciones}</div>
+                      <div className="mt-0.5 flex items-start gap-1">
+                        <div className="line-clamp-2 text-xs text-ink-muted">{i.observaciones}</div>
+                        {i.observaciones.length > 90 && <VerTextoCompleto titulo="Observaciones" texto={i.observaciones} />}
+                      </div>
                     )}
                     {i.estado === 'rechazada' && i.motivo_rechazo && (
-                      <div className="mt-1 line-clamp-2 rounded bg-red-50 px-2 py-1 text-xs text-danger">
-                        Rechazo: {i.motivo_rechazo}
+                      <div className="mt-1 flex items-start gap-1 rounded bg-red-50 px-2 py-1">
+                        <div className="line-clamp-2 text-xs text-danger">Rechazo: {i.motivo_rechazo}</div>
+                        {i.motivo_rechazo.length > 80 && <VerTextoCompleto titulo="Motivo del rechazo" texto={i.motivo_rechazo} />}
                       </div>
                     )}
                   </td>

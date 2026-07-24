@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Pencil, Check, X, Eye } from 'lucide-react';
+import { Pencil, Check, X } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
+import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia, asignarCiudadCentro, actualizarInstruccionesMotivo } from '@/app/dashboard/configuracion/actions';
 import type { Centro, Vehiculo, Motivo, MotivoAusencia, Ciudad } from '@/lib/types';
 
@@ -81,40 +82,6 @@ export function VehiculosList({ vehiculos }: { vehiculos: Vehiculo[] }) {
 }
 
 /** Icono de ojo que muestra el texto completo en un popup centrado, sin entrar a modo edición ni desbordarse de su fila. */
-function VerTextoCompleto({ titulo, texto }: { titulo: string; texto: string }) {
-  const [abierto, setAbierto] = useState(false);
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setAbierto(true);
-        }}
-        className="shrink-0 rounded-full bg-primary/10 p-1 text-primary hover:bg-primary/20"
-        title="Ver texto completo"
-      >
-        <Eye size={13} />
-      </button>
-      {abierto && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setAbierto(false)}>
-          <div className="w-full max-w-sm rounded-card bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-2 text-sm font-semibold text-ink">{titulo}</h3>
-            <p className="whitespace-pre-wrap text-sm text-ink-muted">{texto}</p>
-            <button
-              onClick={() => setAbierto(false)}
-              className="mt-4 w-full rounded-full bg-primary py-2 text-sm font-semibold text-white hover:bg-primary-dark"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
 function InstruccionesAprobacion({ nombreMotivo, motivoId, valorActual }: { nombreMotivo: string; motivoId: number; valorActual: string | null | undefined }) {
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState(valorActual ?? '');

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Pencil, Check, X } from 'lucide-react';
+import { Pencil, Check, X, Eye } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
 import { toggleCentro, toggleVehiculo, toggleMotivo, toggleMotivoAusencia, asignarCiudadCentro, actualizarInstruccionesMotivo } from '@/app/dashboard/configuracion/actions';
 import type { Centro, Vehiculo, Motivo, MotivoAusencia, Ciudad } from '@/lib/types';
@@ -80,6 +80,36 @@ export function VehiculosList({ vehiculos }: { vehiculos: Vehiculo[] }) {
   );
 }
 
+/** Icono de ojo que muestra el texto completo en un popover pequeño, sin entrar a modo edición. */
+function VerTextoCompleto({ texto }: { texto: string }) {
+  const [abierto, setAbierto] = useState(false);
+
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setAbierto((v) => !v);
+        }}
+        className="text-ink-muted hover:text-primary"
+        title="Ver texto completo"
+      >
+        <Eye size={11} />
+      </button>
+      {abierto && (
+        <>
+          {/* Capa invisible para poder cerrar el popover al hacer clic fuera */}
+          <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
+          <div className="absolute left-0 top-5 z-50 w-64 max-w-[80vw] rounded-card border border-border bg-surface p-3 text-xs normal-case text-ink shadow-lg">
+            <p className="whitespace-pre-wrap">{texto}</p>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
 function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; valorActual: string | null | undefined }) {
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState(valorActual ?? '');
@@ -87,18 +117,21 @@ function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; 
 
   if (!editando) {
     return (
-      <button
-        onClick={() => setEditando(true)}
-        className="mt-0.5 flex items-center gap-1 text-[11px] text-ink-muted hover:text-primary"
-        title="Instrucciones que verá el rider cuando se apruebe una incidencia de este motivo"
-      >
-        {valorActual ? (
-          <span className="max-w-[220px] truncate italic">&quot;{valorActual}&quot;</span>
-        ) : (
-          <span className="italic opacity-60">Sin instrucciones al aprobar</span>
-        )}
-        <Pencil size={10} />
-      </button>
+      <div className="mt-0.5 flex items-center gap-1.5">
+        <button
+          onClick={() => setEditando(true)}
+          className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-primary"
+          title="Instrucciones que verá el rider cuando se apruebe una incidencia de este motivo"
+        >
+          {valorActual ? (
+            <span className="max-w-[220px] truncate italic">&quot;{valorActual}&quot;</span>
+          ) : (
+            <span className="italic opacity-60">Sin instrucciones al aprobar</span>
+          )}
+          <Pencil size={10} />
+        </button>
+        {valorActual && <VerTextoCompleto texto={valorActual} />}
+      </div>
     );
   }
 

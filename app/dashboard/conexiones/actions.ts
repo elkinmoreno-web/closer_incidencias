@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
@@ -27,17 +27,16 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
   const { data: admin } = await supabase.from('admins').select('id').eq('auth_user_id', user.id).maybeSingle();
   if (!admin) return { error: 'Sin acceso' };
 
-  const riderDni = String(formData.get('riderDni') || '').trim().toUpperCase();
-  if (!riderDni) return { error: 'Selecciona un rider' };
+  const riderId = String(formData.get('riderId') || '').trim();
+  if (!riderId) return { error: 'Selecciona un rider de la lista (escribe su nombre o DNI y elige la sugerencia)' };
 
-  // Esta búsqueda usa el cliente de servicio (sin RLS) a propósito: el
-  // sentido entero de "fuera de zona" es encontrar a un rider que
-  // probablemente esté en una zona distinta a la del admin — con el
-  // cliente normal, RLS oculta justo a los riders fuera de tu zona, que
-  // son los únicos que tiene sentido buscar aquí.
-  const admClient = createAdminClient();
-  const { data: rider } = await admClient.from('riders').select('id, nombre, dni, centro_id').eq('dni', riderDni).maybeSingle();
-  if (!rider) return { error: 'No se encontró un rider con ese DNI' };
+  // Se usa el id que el propio admin ya seleccionó de SU lista (la que
+  // se le mostró, ya filtrada por su zona) — no se vuelve a buscar por
+  // texto. El cliente normal (con RLS) sigue aplicando: si por lo que
+  // sea el id no perteneciera a un rider visible para este admin,
+  // simplemente no lo encuentra, sin exponer nada de otras zonas.
+  const { data: rider } = await supabase.from('riders').select('id, nombre, dni, centro_id').eq('id', riderId).maybeSingle();
+  if (!rider) return { error: 'No se encontró ese rider en tu zona' };
   if (!rider.centro_id) return { error: 'Este rider no tiene centro asignado; asígnaselo primero en Riders' };
 
   const fecha = String(formData.get('fecha') || '');

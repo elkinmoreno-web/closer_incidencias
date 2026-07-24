@@ -40,7 +40,7 @@ export default async function ConexionesPage({
 
   const [{ data: conexiones, count }, { data: riders }, zona] = await Promise.all([
     query,
-    supabase.from('riders').select('nombre, dni, centros(nombre)').eq('activo', true).order('nombre'),
+    supabase.from('riders').select('id, nombre, dni, centros(nombre)').eq('activo', true).order('nombre'),
     ciudadesYCentrosDeMiZona(),
   ]);
   const centros = zona.centros;
@@ -54,6 +54,7 @@ export default async function ConexionesPage({
   }));
 
   const ridersParaModal = (riders ?? []).map((r) => ({
+    id: r.id,
     nombre: r.nombre,
     dni: r.dni,
     centro: (r.centros as unknown as { nombre: string } | null)?.nombre ?? null,

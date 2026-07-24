@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
@@ -30,7 +30,13 @@ export async function crearConexionFueraZona(_prev: FormActionState, formData: F
   const riderDni = String(formData.get('riderDni') || '').trim().toUpperCase();
   if (!riderDni) return { error: 'Selecciona un rider' };
 
-  const { data: rider } = await supabase.from('riders').select('id, nombre, dni, centro_id').eq('dni', riderDni).maybeSingle();
+  // Esta búsqueda usa el cliente de servicio (sin RLS) a propósito: el
+  // sentido entero de "fuera de zona" es encontrar a un rider que
+  // probablemente esté en una zona distinta a la del admin — con el
+  // cliente normal, RLS oculta justo a los riders fuera de tu zona, que
+  // son los únicos que tiene sentido buscar aquí.
+  const admClient = createAdminClient();
+  const { data: rider } = await admClient.from('riders').select('id, nombre, dni, centro_id').eq('dni', riderDni).maybeSingle();
   if (!rider) return { error: 'No se encontró un rider con ese DNI' };
   if (!rider.centro_id) return { error: 'Este rider no tiene centro asignado; asígnaselo primero en Riders' };
 

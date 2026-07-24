@@ -7,7 +7,7 @@ import { NuevaAusenciaModal } from '@/components/dashboard/NuevaAusenciaModal';
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
-import { estadoAusenciaColor, estadoAusenciaLabel, formatFechaCorta } from '@/lib/utils';
+import { estadoAusenciaColor, estadoAusenciaLabel, formatFecha, formatFechaCorta } from '@/lib/utils';
 import { urlArchivoDrive } from '@/lib/driveUrl';
 
 const PAGE_SIZE = 10;
@@ -101,13 +101,14 @@ export default async function AusenciasPage({
         {filas.length === 0 ? (
           <EmptyState title="No hay ausencias con estos filtros" />
         ) : (
-          <table className="w-full min-w-[950px] text-sm">
+          <table className="w-full min-w-[1050px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
                 <th className="px-4 py-3">Rider</th>
                 <th className="px-4 py-3">Centro</th>
                 <th className="px-4 py-3">Motivo</th>
                 <th className="px-4 py-3">Rango</th>
+                <th className="px-4 py-3">Creado</th>
                 <th className="px-4 py-3">Justificantes</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Gestionado por</th>
@@ -131,6 +132,7 @@ export default async function AusenciasPage({
                   <td className="px-4 py-3 text-xs">
                     {formatFechaCorta(a.fecha_inicio)} → {formatFechaCorta(a.fecha_fin)}
                   </td>
+                  <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(a.created_at)}</td>
                   <td className="px-4 py-3 text-xs">
                     {a.archivos.length === 0 ? (
                       '—'

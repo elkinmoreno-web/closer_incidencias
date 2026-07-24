@@ -80,37 +80,42 @@ export function VehiculosList({ vehiculos }: { vehiculos: Vehiculo[] }) {
   );
 }
 
-/** Icono de ojo que muestra el texto completo en un popover pequeño, sin entrar a modo edición. */
-function VerTextoCompleto({ texto }: { texto: string }) {
+/** Icono de ojo que muestra el texto completo en un popup centrado, sin entrar a modo edición ni desbordarse de su fila. */
+function VerTextoCompleto({ titulo, texto }: { titulo: string; texto: string }) {
   const [abierto, setAbierto] = useState(false);
 
   return (
-    <span className="relative inline-flex">
+    <>
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          setAbierto((v) => !v);
+          setAbierto(true);
         }}
-        className="text-ink-muted hover:text-primary"
+        className="shrink-0 rounded-full bg-primary/10 p-1 text-primary hover:bg-primary/20"
         title="Ver texto completo"
       >
-        <Eye size={11} />
+        <Eye size={13} />
       </button>
       {abierto && (
-        <>
-          {/* Capa invisible para poder cerrar el popover al hacer clic fuera */}
-          <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
-          <div className="absolute left-0 top-5 z-50 w-64 max-w-[80vw] rounded-card border border-border bg-surface p-3 text-xs normal-case text-ink shadow-lg">
-            <p className="whitespace-pre-wrap">{texto}</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={() => setAbierto(false)}>
+          <div className="w-full max-w-sm rounded-card bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-2 text-sm font-semibold text-ink">{titulo}</h3>
+            <p className="whitespace-pre-wrap text-sm text-ink-muted">{texto}</p>
+            <button
+              onClick={() => setAbierto(false)}
+              className="mt-4 w-full rounded-full bg-primary py-2 text-sm font-semibold text-white hover:bg-primary-dark"
+            >
+              Cerrar
+            </button>
           </div>
-        </>
+        </div>
       )}
-    </span>
+    </>
   );
 }
 
-function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; valorActual: string | null | undefined }) {
+function InstruccionesAprobacion({ nombreMotivo, motivoId, valorActual }: { nombreMotivo: string; motivoId: number; valorActual: string | null | undefined }) {
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState(valorActual ?? '');
   const [pending, startTransition] = useTransition();
@@ -130,7 +135,7 @@ function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; 
           )}
           <Pencil size={10} />
         </button>
-        {valorActual && <VerTextoCompleto texto={valorActual} />}
+        {valorActual && <VerTextoCompleto titulo={`Instrucciones — ${nombreMotivo}`} texto={valorActual} />}
       </div>
     );
   }
@@ -173,16 +178,30 @@ function InstruccionesAprobacion({ motivoId, valorActual }: { motivoId: number; 
   );
 }
 
+// Umbral a partir del cual un nombre de motivo se considera "largo" y
+// muestra el ojo — por debajo de esto, el truncado con "..." casi nunca
+// llega a activarse de verdad, así que no hace falta el botón.
+const NOMBRE_LARGO = 38;
+
+function NombreMotivo({ nombre, activo }: { nombre: string; activo: boolean }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <div className={`truncate ${activo ? 'text-ink' : 'text-ink-muted line-through'}`}>{nombre}</div>
+      {nombre.length > NOMBRE_LARGO && <VerTextoCompleto titulo="Motivo" texto={nombre} />}
+    </div>
+  );
+}
+
 export function MotivosList({ motivos }: { motivos: Motivo[] }) {
   return (
     <div>
       {motivos.map((m) => (
         <div key={m.id} className="border-b border-border py-2.5 last:border-0">
-          <div className="flex items-center justify-between">
-            <div className={m.activo ? 'text-ink' : 'text-ink-muted line-through'}>{m.nombre}</div>
+          <div className="flex items-center justify-between gap-2">
+            <NombreMotivo nombre={m.nombre} activo={m.activo} />
             <ToggleSwitch activo={m.activo} onToggle={(v) => toggleMotivo(m.id, v)} />
           </div>
-          <InstruccionesAprobacion motivoId={m.id} valorActual={m.instrucciones_aprobacion} />
+          <InstruccionesAprobacion nombreMotivo={m.nombre} motivoId={m.id} valorActual={m.instrucciones_aprobacion} />
         </div>
       ))}
     </div>
@@ -193,7 +212,10 @@ export function MotivosAusenciaList({ motivos }: { motivos: MotivoAusencia[] }) 
   return (
     <div>
       {motivos.map((m) => (
-        <CatalogRow key={m.id} nombre={m.nombre} activo={m.activo} onToggle={(v) => toggleMotivoAusencia(m.id, v)} />
+        <div key={m.id} className="flex items-center justify-between gap-2 border-b border-border py-2.5 last:border-0">
+          <NombreMotivo nombre={m.nombre} activo={m.activo} />
+          <ToggleSwitch activo={m.activo} onToggle={(v) => toggleMotivoAusencia(m.id, v)} />
+        </div>
       ))}
     </div>
   );

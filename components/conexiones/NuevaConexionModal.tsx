@@ -1,34 +1,113 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Search } from 'lucide-react';
 import { crearConexionFueraZona, type FormActionState } from '@/app/dashboard/conexiones/actions';
 
 interface RiderOpcion {
+  id: string;
   nombre: string;
   dni: string;
   centro: string | null;
 }
 
-function SubmitButton() {
+const MAX_SUGERENCIAS = 15;
+
+function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" disabled={pending} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
+    <button type="submit" disabled={pending || disabled} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
       {pending ? 'Guardando...' : 'Registrar conexión'}
     </button>
+  );
+}
+
+/**
+ * Buscador propio en vez de <datalist> nativo: con más de mil riders,
+ * el datalist del navegador se vuelve inconsistente entre navegadores
+ * (algunos limitan cuántas sugerencias muestran) — por eso podían
+ * "faltar" riders que sí existían. Aquí el filtrado es nuestro: se
+ * hace en el propio navegador (la lista ya viene acotada a la zona del
+ * admin desde el servidor), mostrando como máximo 15 coincidencias a
+ * la vez para que la lista nunca se vuelva pesada de renderizar.
+ */
+function BuscadorRider({ riders, onSeleccionar }: { riders: RiderOpcion[]; onSeleccionar: (r: RiderOpcion) => void }) {
+  const [texto, setTexto] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const [seleccionado, setSeleccionado] = useState<RiderOpcion | null>(null);
+  const contenedorRef = useRef<HTMLDivElement>(null);
+
+  const coincidencias = useMemo(() => {
+    const q = texto.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return riders.filter((r) => r.nombre.toLowerCase().includes(q) || r.dni.toLowerCase().includes(q)).slice(0, MAX_SUGERENCIAS);
+  }, [texto, riders]);
+
+  function elegir(r: RiderOpcion) {
+    setSeleccionado(r);
+    setTexto(`${r.nombre} — ${r.dni}`);
+    setAbierto(false);
+    onSeleccionar(r);
+  }
+
+  function alCambiarTexto(v: string) {
+    setTexto(v);
+    setAbierto(true);
+    if (seleccionado) {
+      setSeleccionado(null);
+      onSeleccionar(null as unknown as RiderOpcion);
+    }
+  }
+
+  return (
+    <div ref={contenedorRef} className="relative">
+      <div className="relative">
+        <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" />
+        <input
+          value={texto}
+          onChange={(e) => alCambiarTexto(e.target.value)}
+          onFocus={() => setAbierto(true)}
+          placeholder="Escribe al menos 2 letras del nombre o DNI..."
+          className="w-full rounded-lg border border-border py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
+        />
+      </div>
+
+      {abierto && texto.trim().length >= 2 && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
+            {coincidencias.length === 0 ? (
+              <p className="px-3 py-2.5 text-xs text-ink-muted">Sin coincidencias en tu zona.</p>
+            ) : (
+              coincidencias.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => elegir(r)}
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-bg"
+                >
+                  <div className="text-ink">{r.nombre}</div>
+                  <div className="text-xs text-ink-muted">
+                    {r.dni} {r.centro ? `· ${r.centro}` : ''}
+                  </div>
+                </button>
+              ))
+            )}
+            {coincidencias.length === MAX_SUGERENCIAS && (
+              <p className="border-t border-border px-3 py-1.5 text-[11px] text-ink-muted">Sigue escribiendo para acotar más.</p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
 export function NuevaConexionModal({ riders }: { riders: RiderOpcion[] }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useFormState<FormActionState, FormData>(crearConexionFueraZona, undefined);
-  const [dniBuscado, setDniBuscado] = useState('');
-
-  const riderEncontrado = useMemo(
-    () => riders.find((r) => r.dni.toLowerCase() === dniBuscado.trim().toLowerCase()),
-    [dniBuscado, riders]
-  );
+  const [riderEncontrado, setRiderEncontrado] = useState<RiderOpcion | null>(null);
 
   if (state?.success && open) {
     setTimeout(() => setOpen(false), 800);
@@ -52,30 +131,18 @@ export function NuevaConexionModal({ riders }: { riders: RiderOpcion[] }) {
             </div>
 
             <form action={formAction} className="flex flex-col gap-3" encType="multipart/form-data">
+              <input type="hidden" name="riderId" value={riderEncontrado?.id ?? ''} />
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-muted">Rider (nombre o DNI)</label>
-                <input
-                  name="riderDni"
-                  list="ridersDatalistConexion"
-                  required
-                  value={dniBuscado}
-                  onChange={(e) => setDniBuscado(e.target.value)}
-                  placeholder="Escribe para buscar..."
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                />
-                <datalist id="ridersDatalistConexion">
-                  {riders.map((r) => (
-                    <option key={r.dni} value={r.dni}>{`${r.nombre} — ${r.dni}`}</option>
-                  ))}
-                </datalist>
+                <BuscadorRider riders={riders} onSeleccionar={setRiderEncontrado} />
               </div>
 
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-muted">Zona / Centro del rider</label>
                 <input
                   disabled
-                  value={riderEncontrado?.centro ?? (dniBuscado ? 'Rider no encontrado' : '')}
-                  placeholder="Se rellena solo al seleccionar el rider"
+                  value={riderEncontrado?.centro ?? ''}
+                  placeholder="Se rellena solo al elegir el rider"
                   className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink-muted"
                 />
               </div>
@@ -102,7 +169,7 @@ export function NuevaConexionModal({ riders }: { riders: RiderOpcion[] }) {
                 <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted">
                   Cancelar
                 </button>
-                <SubmitButton />
+                <SubmitButton disabled={!riderEncontrado} />
               </div>
             </form>
           </div>

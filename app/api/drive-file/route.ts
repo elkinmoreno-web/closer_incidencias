@@ -43,7 +43,13 @@ export async function GET(request: NextRequest) {
   return new NextResponse(new Uint8Array(archivo.buffer), {
     headers: {
       'Content-Type': archivo.mimeType,
-      'Cache-Control': 'private, max-age=300',
+      // El archivo, una vez subido, nunca cambia — así que el mismo
+      // navegador puede reutilizar su copia mucho más tiempo sin volver
+      // a pedirla. Sigue siendo "private" (solo el navegador de quien
+      // ya pasó la comprobación de admin de arriba, nunca un caché
+      // compartido/CDN) — la seguridad no cambia, solo cuánto tiempo
+      // ese mismo navegador puede reutilizar lo que ya descargó.
+      'Cache-Control': 'private, max-age=604800, immutable',
     },
   });
 }

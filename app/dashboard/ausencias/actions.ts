@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
-import { registrarError } from '@/lib/utils';
+import { registrarError, formatFecha, formatFechaCorta, estadoAusenciaLabel } from '@/lib/utils';
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
     data: { user },
@@ -132,4 +132,75 @@ export async function crearAusenciaAdmin(_prev: FormActionState, formData: FormD
 
   revalidatePath('/dashboard/ausencias');
   return { success: true };
+}
+
+export interface FilaExportAusencia {
+  creado: string;
+  rango: string;
+  rider: string;
+  dni: string;
+  centro: string;
+  motivo: string;
+  comentario: string | null;
+  estado: string;
+  motivoRechazo: string | null;
+  revisadoPor: string | null;
+}
+
+/** Exporta TODAS las ausencias que coinciden con los filtros activos (no solo la página visible). */
+export async function exportarAusencias(filtros: {
+  estado?: string;
+  centro?: string;
+  motivo?: string;
+  ciudad?: string;
+  gestor?: string;
+  desde?: string;
+  hasta?: string;
+  q?: string;
+}): Promise<FilaExportAusencia[]> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  let query = supabase
+    .from('ausencias')
+    .select('created_at, fecha_inicio, fecha_fin, nombre_rider, dni, comentario, estado, motivo_rechazo, centros(nombre), motivos_ausencia(nombre), admins:revisado_por_id(usuario)')
+    .order('created_at', { ascending: false });
+
+  if (filtros.estado) query = query.eq('estado', filtros.estado);
+  if (filtros.centro) query = query.eq('centro_id', Number(filtros.centro));
+  if (filtros.motivo) query = query.eq('motivo_id', Number(filtros.motivo));
+  if (filtros.desde) query = query.gte('fecha_inicio', filtros.desde);
+  if (filtros.hasta) query = query.lte('fecha_inicio', filtros.hasta);
+  if (filtros.q) {
+    const q = filtros.q.replace(/[%,]/g, '');
+    query = query.or(`nombre_rider.ilike.%${q}%,dni.ilike.%${q}%`);
+  }
+  if (filtros.ciudad) {
+    const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(filtros.ciudad));
+    query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
+  }
+  if (filtros.gestor) {
+    const { data: ciudadesDelGestor } = await supabase.from('gestor_ciudades').select('ciudad_id').eq('gestor_id', Number(filtros.gestor));
+    const idsCiudad = (ciudadesDelGestor ?? []).map((c) => c.ciudad_id);
+    const { data: centrosDelGestor } = await supabase.from('centros').select('id').in('ciudad_id', idsCiudad);
+    query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
+  }
+
+  const { data } = await query.limit(5000);
+
+  return (data ?? []).map((a) => ({
+    creado: formatFecha(a.created_at),
+    rango: `${formatFechaCorta(a.fecha_inicio)} → ${formatFechaCorta(a.fecha_fin)}`,
+    rider: a.nombre_rider,
+    dni: a.dni,
+    centro: (a.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
+    motivo: (a.motivos_ausencia as unknown as { nombre: string } | null)?.nombre ?? '—',
+    comentario: a.comentario,
+    estado: estadoAusenciaLabel(a.estado),
+    motivoRechazo: a.motivo_rechazo,
+    revisadoPor: (a.admins as unknown as { usuario: string } | null)?.usuario ?? null,
+  }));
 }

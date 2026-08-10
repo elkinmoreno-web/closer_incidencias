@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
-import { registrarError } from '@/lib/utils';
+import { registrarError, formatFecha, estadoIncidenciaLabel } from '@/lib/utils';
 function extFromMime(mime: string): string {
   switch (mime) {
     case 'image/jpeg':
@@ -96,4 +96,81 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
   revalidatePath('/dashboard/incidencias');
   revalidatePath('/dashboard');
   return { success: true };
+}
+
+export interface FilaExportIncidencia {
+  fecha: string;
+  rider: string;
+  dni: string;
+  centro: string;
+  motivo: string;
+  codigoPedido: string | null;
+  observaciones: string | null;
+  estado: string;
+  motivoRechazo: string | null;
+  gestor: string | null;
+}
+
+/**
+ * Exporta TODAS las incidencias que coinciden con los filtros activos
+ * (no solo la página visible) — mismo patrón que exportarConexiones.
+ * Respeta RLS/zona: usa el cliente normal, así que un admin solo exporta
+ * lo que ya podría ver en la lista.
+ */
+export async function exportarIncidencias(filtros: {
+  estado?: string;
+  centro?: string;
+  motivo?: string;
+  ciudad?: string;
+  gestor?: string;
+  desde?: string;
+  hasta?: string;
+  q?: string;
+}): Promise<FilaExportIncidencia[]> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  let query = supabase
+    .from('incidencias')
+    .select('created_at, nombre_rider, dni, codigo_pedido, observaciones, estado, motivo_rechazo, centros(nombre), motivos(nombre), admins:gestor_id(usuario)')
+    .neq('estado', 'papelera')
+    .order('created_at', { ascending: false });
+
+  if (filtros.estado) query = query.eq('estado', filtros.estado);
+  if (filtros.centro) query = query.eq('centro_id', Number(filtros.centro));
+  if (filtros.motivo) query = query.eq('motivo_id', Number(filtros.motivo));
+  if (filtros.desde) query = query.gte('created_at', `${filtros.desde}T00:00:00`);
+  if (filtros.hasta) query = query.lte('created_at', `${filtros.hasta}T23:59:59`);
+  if (filtros.q) {
+    const q = filtros.q.replace(/[%,]/g, '');
+    query = query.or(`nombre_rider.ilike.%${q}%,codigo_pedido.ilike.%${q}%,dni.ilike.%${q}%,observaciones.ilike.%${q}%`);
+  }
+  if (filtros.ciudad) {
+    const { data: centrosDeCiudad } = await supabase.from('centros').select('id').eq('ciudad_id', Number(filtros.ciudad));
+    query = query.in('centro_id', (centrosDeCiudad ?? []).map((c) => c.id));
+  }
+  if (filtros.gestor) {
+    const { data: ciudadesDelGestor } = await supabase.from('gestor_ciudades').select('ciudad_id').eq('gestor_id', Number(filtros.gestor));
+    const idsCiudad = (ciudadesDelGestor ?? []).map((c) => c.ciudad_id);
+    const { data: centrosDelGestor } = await supabase.from('centros').select('id').in('ciudad_id', idsCiudad);
+    query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
+  }
+
+  const { data } = await query.limit(5000);
+
+  return (data ?? []).map((i) => ({
+    fecha: formatFecha(i.created_at),
+    rider: i.nombre_rider,
+    dni: i.dni,
+    centro: (i.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
+    motivo: (i.motivos as unknown as { nombre: string } | null)?.nombre ?? '—',
+    codigoPedido: i.codigo_pedido,
+    observaciones: i.observaciones,
+    estado: estadoIncidenciaLabel(i.estado),
+    motivoRechazo: i.motivo_rechazo,
+    gestor: (i.admins as unknown as { usuario: string } | null)?.usuario ?? null,
+  }));
 }

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { AusenciaActions } from '@/components/dashboard/AusenciaActions';
 import { Pagination } from '@/components/dashboard/Pagination';
 import { NuevaAusenciaModal } from '@/components/dashboard/NuevaAusenciaModal';
+import { ExportarAusenciasButton } from '@/components/dashboard/ExportarAusenciasButton';
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
@@ -84,7 +85,10 @@ export default async function AusenciasPage({
           <h1 className="text-2xl font-semibold text-ink">Ausencias</h1>
           <p className="text-sm text-ink-muted">{count ?? 0} resultado(s)</p>
         </div>
-        <NuevaAusenciaModal riders={riders ?? []} motivos={motivosAusencia ?? []} />
+        <div className="flex items-center gap-2">
+          <ExportarAusenciasButton />
+          <NuevaAusenciaModal riders={riders ?? []} motivos={motivosAusencia ?? []} />
+        </div>
       </div>
 
       <TableFilters

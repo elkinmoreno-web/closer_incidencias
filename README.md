@@ -66,9 +66,14 @@ Copia `.env.local.example` a `.env.local` y rellena:
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio (secreta, solo servidor) |
 | `NEXT_PUBLIC_SITE_URL` | URL pública del sitio desplegado |
 | `OVERTIME_API_USERNAME` / `OVERTIME_API_PASSWORD` | Credenciales de la API externa de horas extra / CH vs WH |
-| `FLEET_MANAGER_USERNAME` / `FLEET_MANAGER_PASSWORD` | Credenciales de la API de métricas operativas (Fleet Manager) |
 | `GOOGLE_DRIVE_CLIENT_ID` / `GOOGLE_DRIVE_CLIENT_SECRET` / `GOOGLE_DRIVE_REFRESH_TOKEN` | Credenciales OAuth para guardar archivos adjuntos en Google Drive |
 | `GOOGLE_DRIVE_FOLDER_ID` | ID de la carpeta raíz de Drive donde se guardan los archivos |
+
+**Métricas de riders**: se leen de la tabla `driver_daily_stats`, en esta
+misma base de Supabase (un pipeline propio en Python la deja actualizada
+periódicamente) — no requiere ninguna variable de entorno aparte, usa las
+credenciales de Supabase de arriba. Reemplaza a la antigua API de Fleet
+Manager.
 
 **Nunca** pongas estos valores directamente en el código: en Vercel se configuran en Settings → Environment Variables.
 

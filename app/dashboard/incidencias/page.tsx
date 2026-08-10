@@ -5,6 +5,7 @@ import { Pagination } from '@/components/dashboard/Pagination';
 import { IncidenciaActions } from '@/components/dashboard/IncidenciaActions';
 import { EditIncidenciaModal } from '@/components/dashboard/EditIncidenciaModal';
 import { NuevaIncidenciaModal } from '@/components/dashboard/NuevaIncidenciaModal';
+import { ExportarIncidenciasButton } from '@/components/dashboard/ExportarIncidenciasButton';
 import { LiveRefresh } from '@/components/dashboard/LiveRefresh';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -95,7 +96,10 @@ export default async function IncidenciasPage({
           <h1 className="text-2xl font-semibold text-ink">Incidencias</h1>
           <p className="text-sm text-ink-muted">{count ?? 0} resultado(s)</p>
         </div>
-        <NuevaIncidenciaModal riders={riders ?? []} motivos={motivos ?? []} />
+        <div className="flex items-center gap-2">
+          <ExportarIncidenciasButton />
+          <NuevaIncidenciaModal riders={riders ?? []} motivos={motivos ?? []} />
+        </div>
       </div>
 
       <TableFilters

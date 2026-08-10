@@ -1,7 +1,8 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { obtenerRendimientoSemanal, obtenerRendimientoDiario, semanaIsoDe, type DriverPerformance } from '@/lib/fleetManagerApi';
+import { obtenerRendimientoSemanal, obtenerRendimientoDiario, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
+import { semanaIsoDe } from '@/lib/metricas';
 
 import { registrarError } from '@/lib/utils';
 async function assertAdmin() {
@@ -21,12 +22,12 @@ export interface CentroConId {
   nombre: string;
 }
 
-/** Centros consultables del admin actual (mismo patrón de zona que el resto del CRM), solo los que tienen api_centro_id. */
+/** Centros consultables del admin actual (mismo patrón de zona que el resto del CRM). */
 export async function centrosConsultablesMetricas(): Promise<{ centros: CentroConId[]; esSuperAdmin: boolean }> {
   const { supabase, admin } = await assertAdmin();
 
   if (admin.rol === 'super_admin') {
-    const { data } = await supabase.from('centros').select('id, nombre').not('api_centro_id', 'is', null).eq('activo', true).order('nombre');
+    const { data } = await supabase.from('centros').select('id, nombre').eq('activo', true).order('nombre');
     return { centros: (data ?? []).map((c) => ({ id: c.id, nombre: c.nombre })), esSuperAdmin: true };
   }
 
@@ -37,7 +38,6 @@ export async function centrosConsultablesMetricas(): Promise<{ centros: CentroCo
   const { data } = await supabase
     .from('centros')
     .select('id, nombre')
-    .not('api_centro_id', 'is', null)
     .in('ciudad_id', ciudadIds)
     .eq('activo', true)
     .order('nombre');
@@ -72,10 +72,14 @@ export interface FilaMetricaAdmin {
   tph: number;
 }
 
-function mapearFila(centroId: number, nombreCentro: string, d: DriverPerformance): FilaMetricaAdmin {
+function mapearFila(nombreCentro: string, d: DriverPerformance): FilaMetricaAdmin {
   return {
     centro: nombreCentro,
-    dni: d.document_number,
+    // Si el email de la fila de métricas no coincide con ningún rider de
+    // Closer CRM (el JOIN en get_center_data no encontró nada), se marca
+    // explícitamente en vez de mostrar un DNI vacío sin explicación — es
+    // la señal de que hay que revisar ese email a mano.
+    dni: d.dni ?? `⚠ sin cruzar (${d.email})`,
     nombre: d.driver_name,
     telefono: d.driver_number,
     online_hours: d.online_hours,
@@ -101,8 +105,8 @@ export async function obtenerMetricasAdminSemanal(
   const { supabase } = await assertAdmin();
   const errores: string[] = [];
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre, api_centro_id').in('id', centroIds);
-  const centrosValidos = (centros ?? []).filter((c) => c.api_centro_id);
+  const { data: centros } = await supabase.from('centros').select('id, nombre').in('id', centroIds);
+  const centrosValidos = centros ?? [];
   if (centrosValidos.length === 0) return { filas: [], errores: [], consultados: 0 };
 
   const admClient = createAdminClient();
@@ -126,7 +130,7 @@ export async function obtenerMetricasAdminSemanal(
 
   await conConcurrencia(centrosAConsultar, 5, async (centro) => {
     try {
-      const drivers = await obtenerRendimientoSemanal(centro.api_centro_id!, year, week);
+      const drivers = await obtenerRendimientoSemanal(centro.nombre, year, week);
       resultadosPorCentro.set(centro.id, drivers);
       await admClient
         .from('fleet_metrics_cache')
@@ -137,9 +141,10 @@ export async function obtenerMetricasAdminSemanal(
   });
 
   const nombrePorId = new Map(centrosValidos.map((c) => [c.id, c.nombre]));
+
   const filas: FilaMetricaAdmin[] = [];
   resultadosPorCentro.forEach((drivers, centroId) => {
-    drivers.forEach((d) => filas.push(mapearFila(centroId, nombrePorId.get(centroId) ?? d.center_name, d)));
+    drivers.forEach((d) => filas.push(mapearFila(nombrePorId.get(centroId) ?? d.center_name, d)));
   });
 
   return { filas, errores, consultados: centrosAConsultar.length };
@@ -154,8 +159,8 @@ export async function obtenerMetricasAdminDiario(
   const { supabase } = await assertAdmin();
   const errores: string[] = [];
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre, api_centro_id').in('id', centroIds);
-  const centrosValidos = (centros ?? []).filter((c) => c.api_centro_id);
+  const { data: centros } = await supabase.from('centros').select('id, nombre').in('id', centroIds);
+  const centrosValidos = centros ?? [];
   if (centrosValidos.length === 0) return { filas: [], errores: [], consultados: 0 };
 
   const admClient = createAdminClient();
@@ -178,7 +183,7 @@ export async function obtenerMetricasAdminDiario(
 
   await conConcurrencia(centrosAConsultar, 5, async (centro) => {
     try {
-      const drivers = await obtenerRendimientoDiario(centro.api_centro_id!, fecha);
+      const drivers = await obtenerRendimientoDiario(centro.nombre, fecha);
       resultadosPorCentro.set(centro.id, drivers);
       await admClient
         .from('fleet_metrics_cache_diario')
@@ -189,9 +194,10 @@ export async function obtenerMetricasAdminDiario(
   });
 
   const nombrePorId = new Map(centrosValidos.map((c) => [c.id, c.nombre]));
+
   const filas: FilaMetricaAdmin[] = [];
   resultadosPorCentro.forEach((drivers, centroId) => {
-    drivers.forEach((d) => filas.push(mapearFila(centroId, nombrePorId.get(centroId) ?? d.center_name, d)));
+    drivers.forEach((d) => filas.push(mapearFila(nombrePorId.get(centroId) ?? d.center_name, d)));
   });
 
   return { filas, errores, consultados: centrosAConsultar.length };

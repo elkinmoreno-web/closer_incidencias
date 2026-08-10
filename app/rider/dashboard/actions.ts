@@ -250,9 +250,9 @@ const CACHE_TTL_MINUTOS_RIDER = 30;
 async function centroDelRider() {
   const { supabase, rider } = await getCurrentRider();
   if (!rider.centro_id) return null;
-  const { data: centro } = await supabase.from('centros').select('nombre, api_centro_id').eq('id', rider.centro_id).maybeSingle();
-  if (!centro?.api_centro_id) return null;
-  return { rider, centroNombre: centro.nombre, apiCentroId: centro.api_centro_id as number };
+  const { data: centro } = await supabase.from('centros').select('nombre').eq('id', rider.centro_id).maybeSingle();
+  if (!centro) return null;
+  return { rider, centroNombre: centro.nombre };
 }
 
 /** Resumen semanal (agregado), igual que ve el admin, pero solo la fila propia del rider. */
@@ -263,7 +263,7 @@ export async function obtenerMiResumenSemanal(year: number, week: number, forzar
 
   try {
     const { createAdminClient } = await import('@/lib/supabase/server');
-    const { obtenerRendimientoSemanal } = await import('@/lib/fleetManagerApi');
+    const { obtenerRendimientoSemanal } = await import('@/lib/fleetMetricsSupabase');
     const admClient = createAdminClient();
 
     let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoSemanal>> | null;
@@ -284,7 +284,7 @@ export async function obtenerMiResumenSemanal(year: number, week: number, forzar
     }
 
     if (!drivers) {
-      drivers = await obtenerRendimientoSemanal(info.apiCentroId, year, week);
+      drivers = await obtenerRendimientoSemanal(info.centroNombre, year, week);
       const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
       if (centroFila) {
         await admClient
@@ -293,7 +293,11 @@ export async function obtenerMiResumenSemanal(year: number, week: number, forzar
       }
     }
 
-    const mio = drivers.find((d) => d.document_number.toUpperCase() === info.rider.dni.toUpperCase());
+    // Antes se cruzaba por DNI (document_number) contra Fleet Manager —
+    // la nueva fuente (pipeline propio) no tiene DNI, así que se cruza
+    // por email; insensible a mayúsculas/espacios por seguridad.
+    const miEmail = info.rider.email.trim().toLowerCase();
+    const mio = drivers.find((d) => d.email.trim().toLowerCase() === miEmail);
     if (!mio) return { ...vacio, centro: info.centroNombre };
 
     return {
@@ -339,9 +343,10 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
   if (dias.length === 0) return [];
 
   const { createAdminClient } = await import('@/lib/supabase/server');
-  const { obtenerRendimientoDiario } = await import('@/lib/fleetManagerApi');
+  const { obtenerRendimientoDiario } = await import('@/lib/fleetMetricsSupabase');
   const admClient = createAdminClient();
   const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
+  const miEmail = info.rider.email.trim().toLowerCase();
 
   const resultado = await Promise.all(
     dias.map(async ({ dia, fecha }): Promise<MisMetricasDia> => {
@@ -359,14 +364,14 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
           if (cacheRow) drivers = cacheRow.datos as typeof drivers;
         }
         if (!drivers) {
-          drivers = await obtenerRendimientoDiario(info.apiCentroId, fecha);
+          drivers = await obtenerRendimientoDiario(info.centroNombre, fecha);
           if (centroFila) {
             await admClient
               .from('fleet_metrics_cache_diario')
               .upsert({ centro_id: centroFila.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
           }
         }
-        const mio = drivers.find((d) => d.document_number.toUpperCase() === info.rider.dni.toUpperCase());
+        const mio = drivers.find((d) => d.email.trim().toLowerCase() === miEmail);
         return {
           dia,
           fecha,

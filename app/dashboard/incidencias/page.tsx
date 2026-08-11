@@ -84,7 +84,10 @@ export default async function IncidenciasPage({
   })[]).map((i) => ({
     ...i,
     screenshotSignedUrl: urlArchivoDrive(i.screenshot_url),
-    evidenciaSignedUrl: urlArchivoDrive(i.evidencia_url),
+    evidencias: (i.evidencia_ids ?? []).map((fileId: string, idx: number) => ({
+      name: `Evidencia ${idx + 1}`,
+      url: urlArchivoDrive(fileId),
+    })),
   }));
 
   return (
@@ -160,12 +163,14 @@ export default async function IncidenciasPage({
                           Ver captura
                         </a>
                       )}
-                      {i.evidenciaSignedUrl && (
-                        <a href={i.evidenciaSignedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                          Ver evidencia
-                        </a>
+                      {i.evidencias.map((f) =>
+                        f.url ? (
+                          <a key={f.name} href={f.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            Ver {f.name.toLowerCase()}
+                          </a>
+                        ) : null
                       )}
-                      {!i.screenshotSignedUrl && !i.evidenciaSignedUrl && '—'}
+                      {!i.screenshotSignedUrl && i.evidencias.length === 0 && '—'}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(i.created_at)}</td>

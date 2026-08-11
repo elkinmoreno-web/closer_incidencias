@@ -77,17 +77,41 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
     setError(null);
   }
 
+  /** Igual que alElegirArchivo, pero para el campo de evidencia (hasta 3 archivos). */
+  function alElegirEvidencias(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) {
+      setErrorEvidencia(null);
+      return;
+    }
+    if (files.length > 3) {
+      setErrorEvidencia('Máximo 3 archivos');
+      e.target.value = '';
+      return;
+    }
+    const errores = files.map((f) => validarArchivoCliente(f, TIPOS_IMAGEN)).filter((err): err is string => !!err);
+    if (errores.length > 0) {
+      setErrorEvidencia(errores[0]);
+      e.target.value = '';
+      return;
+    }
+    setErrorEvidencia(null);
+  }
+
   async function handleSubmit(formData: FormData) {
     ultimoFormData.current = formData;
     setComprimiendo(true);
     try {
       const screenshot = formData.get('screenshot') as File | null;
-      const evidencia = formData.get('evidencia') as File | null;
       if (screenshot && screenshot.size > 0) {
         formData.set('screenshot', await compressImageIfNeeded(screenshot));
       }
-      if (evidencia && evidencia.size > 0) {
-        formData.set('evidencia', await compressImageIfNeeded(evidencia));
+      const evidencias = formData.getAll('evidencia') as File[];
+      formData.delete('evidencia');
+      for (const f of evidencias) {
+        if (f && f.size > 0) {
+          formData.append('evidencia', await compressImageIfNeeded(f));
+        }
       }
     } finally {
       setComprimiendo(false);
@@ -225,9 +249,11 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
           type="file"
           name="evidencia"
           accept="image/jpeg,image/png,image/webp"
-          onChange={(e) => alElegirArchivo(e, setErrorEvidencia)}
+          multiple
+          onChange={alElegirEvidencias}
           className="text-sm"
         />
+        <span className="text-xs text-ink-muted">Hasta 3 imágenes.</span>
         {errorEvidencia && <p className="text-xs text-danger">{errorEvidencia}</p>}
       </div>
 

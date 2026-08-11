@@ -97,7 +97,7 @@ export interface Incidencia {
   direccion_recogida: string | null;
   direccion_entrega: string | null;
   screenshot_url: string | null; // ID del archivo en Google Drive
-  evidencia_url: string | null; // ID del archivo en Google Drive
+  evidencia_ids: string[]; // IDs de los archivos de evidencia adicional en Google Drive (hasta 3)
   estado: EstadoIncidencia;
   gestor_id: string | null;
   fecha_gestion: string | null;

@@ -88,7 +88,9 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     if (!motivo) return { error: 'Motivo no válido' };
 
     const screenshot = formData.get('screenshot') as File | null;
-    const evidencia = formData.get('evidencia') as File | null;
+    const evidenciasFiles = formData.getAll('evidencia') as File[];
+    const evidenciasValidas = evidenciasFiles.filter((f) => f && f.size > 0);
+    if (evidenciasValidas.length > 3) return { error: 'Máximo 3 archivos de evidencia adicional' };
 
     /*if (motivo.requiere_captura) {
       const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
@@ -100,10 +102,14 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     if (motivo.requiere_direcciones && (!parsed.data.direccionRecogida || !parsed.data.direccionEntrega)) {
       return { error: 'Este motivo requiere ambas direcciones' };
     }
+    for (const f of evidenciasValidas) {
+      const err = validarArchivo(f, ALLOWED_IMAGE_MIME);
+      if (err) return { error: err };
+    }
 
     const stamp = Date.now();
     let screenshotFileId: string | null = null;
-    let evidenciaFileId: string | null = null;
+    const evidenciaIds: string[] = [];
 
     if (screenshot && screenshot.size > 0) {
       const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
@@ -116,15 +122,15 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
         return { error: registrarError('enviarIncidencia:captura', e, 'No se pudo subir la captura. Inténtalo de nuevo en unos minutos.') };
       }
     }
-    if (evidencia && evidencia.size > 0) {
-      const err = validarArchivo(evidencia, ALLOWED_IMAGE_MIME);
-      if (err) return { error: err };
-      const nombre = `${rider.dni}_${stamp}_evidencia.${extFromMime(evidencia.type)}`;
+    for (let i = 0; i < evidenciasValidas.length; i++) {
+      const f = evidenciasValidas[i];
+      const nombre = `${rider.dni}_${stamp}_evidencia_${i + 1}.${extFromMime(f.type)}`;
       try {
-        const buffer = Buffer.from(await evidencia.arrayBuffer());
-        evidenciaFileId = await subirArchivoDrive('Incidencias', nombre, buffer, evidencia.type);
+        const buffer = Buffer.from(await f.arrayBuffer());
+        const fileId = await subirArchivoDrive('Incidencias', nombre, buffer, f.type);
+        evidenciaIds.push(fileId);
       } catch (e) {
-        return { error: registrarError('enviarIncidencia:evidencia', e, 'No se pudo subir la evidencia. Inténtalo de nuevo en unos minutos.') };
+        return { error: registrarError('enviarIncidencia:evidencia', e, 'No se pudo subir una de las evidencias. Inténtalo de nuevo en unos minutos.') };
       }
     }
 
@@ -139,7 +145,7 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
       direccion_recogida: parsed.data.direccionRecogida,
       direccion_entrega: parsed.data.direccionEntrega,
       screenshot_url: screenshotFileId,
-      evidencia_url: evidenciaFileId,
+      evidencia_ids: evidenciaIds,
       estado: 'pendiente',
     });
 

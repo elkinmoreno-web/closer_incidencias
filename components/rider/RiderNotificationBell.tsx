@@ -61,7 +61,7 @@ function playBeep() {
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.35);gi
+    osc.stop(ctx.currentTime + 0.35);
   } catch {
     // No es crítico: si falla, simplemente no suena esta vez.
   }

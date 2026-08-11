@@ -5,11 +5,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { Plus, X } from 'lucide-react';
 import { crearIncidenciaAdmin, type FormActionState } from '@/app/dashboard/incidencias/actions';
 import type { Motivo } from '@/lib/types';
-
-interface RiderOpcion {
-  nombre: string;
-  dni: string;
-}
+import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -24,7 +20,7 @@ function SubmitButton() {
   );
 }
 
-export function NuevaIncidenciaModal({ riders, motivos }: { riders: RiderOpcion[]; motivos: Motivo[] }) {
+export function NuevaIncidenciaModal({ motivos }: { motivos: Motivo[] }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useFormState<FormActionState, FormData>(crearIncidenciaAdmin, undefined);
   const [motivoId, setMotivoId] = useState('');
@@ -62,19 +58,7 @@ export function NuevaIncidenciaModal({ riders, motivos }: { riders: RiderOpcion[
             <form action={formAction} className="flex flex-col gap-3" encType="multipart/form-data">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-muted">Rider (busca por nombre o DNI)</label>
-                <input
-                  name="riderDni"
-                  list="ridersDatalist"
-                  required
-                  placeholder="Escribe para buscar..."
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                />
-                <datalist id="ridersDatalist">
-                  {riders.map((r) => (
-                    <option key={r.dni} value={r.dni}>{`${r.nombre} — ${r.dni}`}</option>
-                  ))}
-                </datalist>
-                <p className="mt-1 text-xs text-ink-muted">Escribe el DNI exacto del rider (lo autocompleta la lista).</p>
+                <BuscadorRiderRemoto />
               </div>
 
               <div>

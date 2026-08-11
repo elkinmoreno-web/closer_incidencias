@@ -20,18 +20,43 @@ export function PendingBadge({ tabla, initialCount }: { tabla: 'incidencias' | '
 
   useEffect(() => {
     const supabase = createClient();
+    let pendiente: ReturnType<typeof setTimeout> | null = null;
+    let ultimo = 0;
+    // Freno: hay hasta 4 de estos contadores montados por usuario (sidebar
+    // de escritorio + cajón móvil, x incidencias y ausencias). Sin freno,
+    // cada cambio en la tabla lanzaba un COUNT por cada instancia, de cada
+    // usuario conectado — con varias personas trabajando a la vez eso es
+    // una avalancha de consultas por algo que solo muestra un número.
+    const VENTANA_MS = 3000;
 
     const refetch = async () => {
       const { count: nuevo } = await supabase.from(tabla).select('id', { count: 'exact', head: true }).eq('estado', 'pendiente');
       setCount(nuevo ?? 0);
     };
 
+    function refetchConFreno() {
+      const ahora = Date.now();
+      const transcurrido = ahora - ultimo;
+      if (transcurrido >= VENTANA_MS) {
+        ultimo = ahora;
+        void refetch();
+        return;
+      }
+      if (pendiente) return;
+      pendiente = setTimeout(() => {
+        pendiente = null;
+        ultimo = Date.now();
+        void refetch();
+      }, VENTANA_MS - transcurrido);
+    }
+
     const channel = supabase
       .channel(`${tabla}-pendientes-${idInstancia}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: tabla }, refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: tabla }, refetchConFreno)
       .subscribe();
 
     return () => {
+      if (pendiente) clearTimeout(pendiente);
       supabase.removeChannel(channel);
     };
   }, [idInstancia, tabla]);

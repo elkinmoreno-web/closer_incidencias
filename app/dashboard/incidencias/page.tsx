@@ -65,12 +65,11 @@ export default async function IncidenciasPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: incidencias, count }, { data: motivos }, { data: gestores }, { data: riders }, zona] =
+  const [{ data: incidencias, count }, { data: motivos }, { data: gestores }, zona] =
     await Promise.all([
       query,
       supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
       supabase.from('gestores').select('*').order('nombre'),
-      supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
       ciudadesYCentrosDeMiZona(),
     ]);
   const centros = zona.centros;
@@ -98,7 +97,7 @@ export default async function IncidenciasPage({
         </div>
         <div className="flex items-center gap-2">
           <ExportarIncidenciasButton />
-          <NuevaIncidenciaModal riders={riders ?? []} motivos={motivos ?? []} />
+          <NuevaIncidenciaModal motivos={motivos ?? []} />
         </div>
       </div>
 

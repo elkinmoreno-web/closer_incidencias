@@ -106,16 +106,16 @@ function agregarPorRider(filas: DriverDailyStat[]): DriverPerformance[] {
   });
 }
 
-/** Rendimiento de un centro/ciudad para UN día concreto (yyyy-mm-dd). */
-export async function obtenerRendimientoDiario(cityName: string, fechaIso: string): Promise<DriverPerformance[]> {
+/** Rendimiento de UN centro (por su id real en Closer CRM) para un día concreto (yyyy-mm-dd). */
+export async function obtenerRendimientoDiario(centroId: number, fechaIso: string): Promise<DriverPerformance[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase.rpc('get_center_data', { p_city: cityName, p_date_from: fechaIso, p_date_to: fechaIso });
+  const { data, error } = await supabase.rpc('get_center_data', { p_centro_id: centroId, p_date_from: fechaIso, p_date_to: fechaIso });
   if (error) throw new Error(`Supabase respondió con error al pedir métricas: ${error.message}`);
   return agregarPorRider((data ?? []) as DriverDailyStat[]);
 }
 
-/** Rendimiento de un centro/ciudad agregado para una semana ISO (año + número de semana). */
-export async function obtenerRendimientoSemanal(cityName: string, year: number, week: number): Promise<DriverPerformance[]> {
+/** Rendimiento de UN centro (por su id real en Closer CRM) agregado para una semana ISO (año + número de semana). */
+export async function obtenerRendimientoSemanal(centroId: number, year: number, week: number): Promise<DriverPerformance[]> {
   const supabase = createAdminClient();
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
   const dow = simple.getUTCDay();
@@ -125,7 +125,7 @@ export async function obtenerRendimientoSemanal(cityName: string, year: number, 
   domingo.setUTCDate(lunes.getUTCDate() + 6);
   const fmt = (d: Date) => d.toISOString().split('T')[0];
 
-  const { data, error } = await supabase.rpc('get_center_data', { p_city: cityName, p_date_from: fmt(lunes), p_date_to: fmt(domingo) });
+  const { data, error } = await supabase.rpc('get_center_data', { p_centro_id: centroId, p_date_from: fmt(lunes), p_date_to: fmt(domingo) });
   if (error) throw new Error(`Supabase respondió con error al pedir métricas: ${error.message}`);
   return agregarPorRider((data ?? []) as DriverDailyStat[]);
 }

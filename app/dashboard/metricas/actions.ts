@@ -130,7 +130,7 @@ export async function obtenerMetricasAdminSemanal(
 
   await conConcurrencia(centrosAConsultar, 5, async (centro) => {
     try {
-      const drivers = await obtenerRendimientoSemanal(centro.nombre, year, week);
+      const drivers = await obtenerRendimientoSemanal(centro.id, year, week);
       resultadosPorCentro.set(centro.id, drivers);
       await admClient
         .from('fleet_metrics_cache')
@@ -183,7 +183,7 @@ export async function obtenerMetricasAdminDiario(
 
   await conConcurrencia(centrosAConsultar, 5, async (centro) => {
     try {
-      const drivers = await obtenerRendimientoDiario(centro.nombre, fecha);
+      const drivers = await obtenerRendimientoDiario(centro.id, fecha);
       resultadosPorCentro.set(centro.id, drivers);
       await admClient
         .from('fleet_metrics_cache_diario')

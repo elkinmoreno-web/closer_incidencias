@@ -250,9 +250,9 @@ const CACHE_TTL_MINUTOS_RIDER = 30;
 async function centroDelRider() {
   const { supabase, rider } = await getCurrentRider();
   if (!rider.centro_id) return null;
-  const { data: centro } = await supabase.from('centros').select('nombre').eq('id', rider.centro_id).maybeSingle();
+  const { data: centro } = await supabase.from('centros').select('id, nombre').eq('id', rider.centro_id).maybeSingle();
   if (!centro) return null;
-  return { rider, centroNombre: centro.nombre };
+  return { rider, centroId: centro.id, centroNombre: centro.nombre };
 }
 
 /** Resumen semanal (agregado), igual que ve el admin, pero solo la fila propia del rider. */
@@ -269,28 +269,22 @@ export async function obtenerMiResumenSemanal(year: number, week: number, forzar
     let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoSemanal>> | null;
     if (!forzar) {
       const limite = new Date(Date.now() - CACHE_TTL_MINUTOS_RIDER * 60 * 1000).toISOString();
-      const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
-      if (centroFila) {
-        const { data: cacheRow } = await admClient
-          .from('fleet_metrics_cache')
-          .select('datos')
-          .eq('centro_id', centroFila.id)
-          .eq('year', year)
-          .eq('week', week)
-          .gte('actualizado_en', limite)
-          .maybeSingle();
-        if (cacheRow) drivers = cacheRow.datos as typeof drivers;
-      }
+      const { data: cacheRow } = await admClient
+        .from('fleet_metrics_cache')
+        .select('datos')
+        .eq('centro_id', info.centroId)
+        .eq('year', year)
+        .eq('week', week)
+        .gte('actualizado_en', limite)
+        .maybeSingle();
+      if (cacheRow) drivers = cacheRow.datos as typeof drivers;
     }
 
     if (!drivers) {
-      drivers = await obtenerRendimientoSemanal(info.centroNombre, year, week);
-      const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
-      if (centroFila) {
-        await admClient
-          .from('fleet_metrics_cache')
-          .upsert({ centro_id: centroFila.id, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
-      }
+      drivers = await obtenerRendimientoSemanal(info.centroId, year, week);
+      await admClient
+        .from('fleet_metrics_cache')
+        .upsert({ centro_id: info.centroId, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
     }
 
     // Antes se cruzaba por DNI (document_number) contra Fleet Manager —
@@ -345,31 +339,28 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
   const { createAdminClient } = await import('@/lib/supabase/server');
   const { obtenerRendimientoDiario } = await import('@/lib/fleetMetricsSupabase');
   const admClient = createAdminClient();
-  const { data: centroFila } = await admClient.from('centros').select('id').eq('nombre', info.centroNombre).maybeSingle();
   const miEmail = info.rider.email.trim().toLowerCase();
 
   const resultado = await Promise.all(
     dias.map(async ({ dia, fecha }): Promise<MisMetricasDia> => {
       try {
         let drivers = null as Awaited<ReturnType<typeof obtenerRendimientoDiario>> | null;
-        if (!forzar && centroFila) {
+        if (!forzar) {
           const limite = new Date(Date.now() - CACHE_TTL_MINUTOS_RIDER * 60 * 1000).toISOString();
           const { data: cacheRow } = await admClient
             .from('fleet_metrics_cache_diario')
             .select('datos')
-            .eq('centro_id', centroFila.id)
+            .eq('centro_id', info.centroId)
             .eq('fecha', fecha)
             .gte('actualizado_en', limite)
             .maybeSingle();
           if (cacheRow) drivers = cacheRow.datos as typeof drivers;
         }
         if (!drivers) {
-          drivers = await obtenerRendimientoDiario(info.centroNombre, fecha);
-          if (centroFila) {
-            await admClient
-              .from('fleet_metrics_cache_diario')
-              .upsert({ centro_id: centroFila.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
-          }
+          drivers = await obtenerRendimientoDiario(info.centroId, fecha);
+          await admClient
+            .from('fleet_metrics_cache_diario')
+            .upsert({ centro_id: info.centroId, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
         }
         const mio = drivers.find((d) => d.email.trim().toLowerCase() === miEmail);
         return {

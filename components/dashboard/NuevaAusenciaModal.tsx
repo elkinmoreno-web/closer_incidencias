@@ -5,11 +5,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { Plus, X } from 'lucide-react';
 import { crearAusenciaAdmin, type FormActionState } from '@/app/dashboard/ausencias/actions';
 import type { MotivoAusencia } from '@/lib/types';
-
-interface RiderOpcion {
-  nombre: string;
-  dni: string;
-}
+import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -24,7 +20,7 @@ function SubmitButton() {
   );
 }
 
-export function NuevaAusenciaModal({ riders, motivos }: { riders: RiderOpcion[]; motivos: MotivoAusencia[] }) {
+export function NuevaAusenciaModal({ motivos }: { motivos: MotivoAusencia[] }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useFormState<FormActionState, FormData>(crearAusenciaAdmin, undefined);
   const [fechaInicio, setFechaInicio] = useState('');
@@ -59,19 +55,7 @@ export function NuevaAusenciaModal({ riders, motivos }: { riders: RiderOpcion[];
             <form action={formAction} className="flex flex-col gap-3" encType="multipart/form-data">
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-muted">Rider (busca por nombre o DNI)</label>
-                <input
-                  name="riderDni"
-                  list="ridersDatalistAusencia"
-                  required
-                  placeholder="Escribe para buscar..."
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                />
-                <datalist id="ridersDatalistAusencia">
-                  {riders.map((r) => (
-                    <option key={r.dni} value={r.dni}>{`${r.nombre} — ${r.dni}`}</option>
-                  ))}
-                </datalist>
-                <p className="mt-1 text-xs text-ink-muted">Escribe el DNI exacto del rider.</p>
+                <BuscadorRiderRemoto />
               </div>
 
               <div>

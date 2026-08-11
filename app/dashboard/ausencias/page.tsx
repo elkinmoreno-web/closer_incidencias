@@ -56,10 +56,9 @@ export default async function AusenciasPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: ausencias, count }, { data: riders }, { data: motivosAusencia }, { data: gestores }, zona] =
+  const [{ data: ausencias, count }, { data: motivosAusencia }, { data: gestores }, zona] =
     await Promise.all([
       query,
-      supabase.from('riders').select('nombre, dni').eq('activo', true).order('nombre'),
       supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
       supabase.from('gestores').select('*').order('nombre'),
       ciudadesYCentrosDeMiZona(),
@@ -87,7 +86,7 @@ export default async function AusenciasPage({
         </div>
         <div className="flex items-center gap-2">
           <ExportarAusenciasButton />
-          <NuevaAusenciaModal riders={riders ?? []} motivos={motivosAusencia ?? []} />
+          <NuevaAusenciaModal motivos={motivosAusencia ?? []} />
         </div>
       </div>
 

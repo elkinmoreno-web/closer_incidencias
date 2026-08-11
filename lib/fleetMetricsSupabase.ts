@@ -125,7 +125,18 @@ export async function obtenerRendimientoSemanal(centroId: number, year: number, 
   domingo.setUTCDate(lunes.getUTCDate() + 6);
   const fmt = (d: Date) => d.toISOString().split('T')[0];
 
-  const { data, error } = await supabase.rpc('get_center_data', { p_centro_id: centroId, p_date_from: fmt(lunes), p_date_to: fmt(domingo) });
+  // Mismo límite que usa la tabla día por día (fechaLimiteMetricas: hoy
+  // -2 días, los datos más recientes aún se están asentando) — sin
+  // esto, el resumen agregado (estas tarjetas) mostraba datos de días
+  // que la tabla de abajo todavía no mostraba, dando la impresión
+  // contradictoria de "no hay días con datos" pero sí un resumen con
+  // números.
+  const { fechaLimiteMetricas } = await import('@/lib/metricas');
+  const limiteIso = fechaLimiteMetricas();
+  const hastaIso = fmt(domingo) > limiteIso ? limiteIso : fmt(domingo);
+  if (fmt(lunes) > limiteIso) return []; // toda la semana es futura respecto al límite
+
+  const { data, error } = await supabase.rpc('get_center_data', { p_centro_id: centroId, p_date_from: fmt(lunes), p_date_to: hastaIso });
   if (error) throw new Error(`Supabase respondió con error al pedir métricas: ${error.message}`);
   return agregarPorRider((data ?? []) as DriverDailyStat[]);
 }

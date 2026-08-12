@@ -1,5 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/server';
+import { canonicalEmail } from '@/lib/utils';
 
 /**
  * Lee las métricas de riders desde `driver_daily_stats` — la misma
@@ -55,7 +56,7 @@ export interface DriverPerformance {
 
 function mapear(d: DriverDailyStat): DriverPerformance {
   return {
-    email: (d.email ?? '').trim().toLowerCase(),
+    email: canonicalEmail(d.email ?? ''),
     dni: d.rider_dni ?? null,
     driver_name: d.rider_nombre ?? d.driver_name ?? '',
     driver_number: d.driver_number ?? '',
@@ -77,7 +78,11 @@ function mapear(d: DriverDailyStat): DriverPerformance {
 function agregarPorRider(filas: DriverDailyStat[]): DriverPerformance[] {
   const porEmail = new Map<string, DriverDailyStat[]>();
   for (const f of filas) {
-    const key = (f.email ?? '').trim().toLowerCase();
+    // canonicalEmail agrupa variantes del mismo buzón (ej. con y sin el
+    // alias +driver que añade la fuente de métricas) bajo la misma
+    // clave — sin esto, un mismo rider con días reportados en ambos
+    // formatos se contaba como dos personas distintas.
+    const key = canonicalEmail(f.email ?? '');
     if (!porEmail.has(key)) porEmail.set(key, []);
     porEmail.get(key)!.push(f);
   }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clock, Gauge, TrendingUp, Ban, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { obtenerMiResumenSemanal, obtenerMisDiasSemana, type MisMetricasResumen, type MisMetricasDia } from '@/app/rider/dashboard/actions';
-import { semanaIsoDe } from '@/lib/metricas';
+import { semanaIsoDe, semanaEsMuyAntigua } from '@/lib/metricas';
 
 const fmtInt = (n: number) => Math.round(n).toLocaleString('es-ES');
 const fmtFloat = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
@@ -60,21 +60,37 @@ export function MetricasPanel() {
       });
   }, [semana]);
 
-  function cambiarSemana(delta: number) {
+  function semanaDesplazada(delta: number): { year: number; week: number } {
     const { lunes } = rangoSemanaIso(semana.year, semana.week);
     const d = new Date(lunes + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() + delta * 7);
-    setSemana(semanaIsoDe(d));
+    return semanaIsoDe(d);
+  }
+
+  function cambiarSemana(delta: number) {
+    const nueva = semanaDesplazada(delta);
+    // Solo se puede ver la semana actual y, como máximo, la anterior —
+    // no tiene sentido navegar a semanas más viejas, ni tampoco a
+    // semanas futuras.
+    if (delta < 0 && semanaEsMuyAntigua(nueva.year, nueva.week)) return;
+    setSemana(nueva);
   }
 
   const rango = rangoSemanaIso(semana.year, semana.week);
   const semanaHoy = semanaIsoDe(new Date());
   const esSemanaActual = semana.year === semanaHoy.year && semana.week === semanaHoy.week;
+  const anteriorPosible = semanaDesplazada(-1);
+  const anteriorDeshabilitado = semanaEsMuyAntigua(anteriorPosible.year, anteriorPosible.week);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-center gap-3">
-        <button onClick={() => cambiarSemana(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink" aria-label="Semana anterior">
+        <button
+          onClick={() => cambiarSemana(-1)}
+          disabled={anteriorDeshabilitado}
+          className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+          aria-label="Semana anterior"
+        >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-center">

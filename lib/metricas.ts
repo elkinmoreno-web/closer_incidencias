@@ -110,3 +110,22 @@ export function semanaIsoDe(fecha: Date): { year: number; week: number } {
   const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
   return { year: d.getUTCFullYear(), week };
 }
+
+/**
+ * Semana más antigua que se puede navegar en el selector de métricas:
+ * la semana actual (en curso) y, como máximo, la inmediatamente
+ * anterior — nunca semanas más viejas que esa. No depende de en qué
+ * día de la semana se esté (lunes o viernes da el mismo resultado).
+ */
+export function semanaIsoMasAntiguaPermitida(): { year: number; week: number } {
+  const hoy = new Date();
+  const haceUnaSemana = new Date(hoy);
+  haceUnaSemana.setDate(hoy.getDate() - 7);
+  return semanaIsoDe(haceUnaSemana);
+}
+
+/** ¿La semana (year, week) es más vieja que la más antigua permitida? */
+export function semanaEsMuyAntigua(year: number, week: number): boolean {
+  const limite = semanaIsoMasAntiguaPermitida();
+  return year < limite.year || (year === limite.year && week < limite.week);
+}

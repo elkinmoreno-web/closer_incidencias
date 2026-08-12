@@ -175,3 +175,16 @@ export function registrarError(contexto: string, e: unknown, mensajeUsuario = 'O
   console.error(`[${contexto}]`, mensajeError(e));
   return mensajeUsuario;
 }
+
+/**
+ * Normaliza un email quitando el "alias" +algo antes de la @ (ej.
+ * 'nombre+driver@gmail.com' -> 'nombre@gmail.com'). Gmail y proveedores
+ * compatibles tratan esa parte como el mismo buzón — algunos riders
+ * tienen el email real guardado en Closer CRM sin el sufijo, pero la
+ * fuente de métricas puede reportarlo CON el sufijo (u otra variación
+ * de mayúsculas/espacios). Sin esto, esas filas nunca cruzan aunque
+ * sean la misma persona.
+ */
+export function canonicalEmail(email: string): string {
+  return email.trim().toLowerCase().replace(/\+[^@]*(@)/, '$1');
+}

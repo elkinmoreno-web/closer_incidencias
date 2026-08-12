@@ -13,7 +13,7 @@ import {
   type CentroConId,
 } from '@/app/dashboard/metricas/actions';
 import { paginasAMostrar } from '@/lib/pagination';
-import { semanaIsoDe, fechaLimiteMetricas } from '@/lib/metricas';
+import { semanaIsoDe, fechaLimiteMetricas, semanaEsMuyAntigua } from '@/lib/metricas';
 
 const fmtInt = (n: number | null) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('es-ES'));
 const fmtFloat = (n: number | null) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : n.toFixed(2));
@@ -109,6 +109,9 @@ export function MetricasAdminPanel() {
     const d = new Date(lunes + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() + delta * 7);
     const nueva = semanaIsoDe(d);
+    // Mismo límite que en el panel del rider: como máximo, una semana
+    // hacia atrás — no tiene sentido consultar semanas más viejas.
+    if (delta < 0 && semanaEsMuyAntigua(nueva.year, nueva.week)) return;
     setYear(nueva.year);
     setWeek(nueva.week);
   }
@@ -122,6 +125,22 @@ export function MetricasAdminPanel() {
   const rango = modo === 'semanal' && year !== null && week !== null ? rangoSemanaIso(year, week) : null;
   const limite = fechaLimiteMetricas(); // los últimos 2 días no se muestran: los datos aún se están asentando
   const esHoyODespues = modo === 'diario' ? fechaDia >= limite : rango ? rango.lunes >= semanaIsoDeHoyLunes() : false;
+  const anteriorSemanaDeshabilitada = (() => {
+    if (year === null || week === null) return true;
+    const { lunes } = rangoSemanaIso(year, week);
+    const d = new Date(lunes + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 7);
+    const previa = semanaIsoDe(d);
+    return semanaEsMuyAntigua(previa.year, previa.week);
+  })();
+  const diaMasAntiguoPermitido = (() => {
+    const s = semanaIsoDe(new Date());
+    const { lunes } = rangoSemanaIso(s.year, s.week);
+    const d = new Date(lunes + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 7);
+    return d.toISOString().split('T')[0];
+  })();
+  const diaAnteriorDeshabilitado = fechaDia <= diaMasAntiguoPermitido;
 
   function semanaIsoDeHoyLunes(): string {
     const s = semanaIsoDe(new Date());
@@ -203,7 +222,11 @@ export function MetricasAdminPanel() {
 
           {modo === 'semanal' ? (
             <>
-              <button onClick={() => cambiarSemana(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink">
+              <button
+                onClick={() => cambiarSemana(-1)}
+                disabled={anteriorSemanaDeshabilitada}
+                className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-xs font-medium text-brand-text">{rango ? `Semana del ${fmtDMY(rango.lunes)} al ${fmtDMY(rango.domingo)}` : '—'}</span>
@@ -217,7 +240,11 @@ export function MetricasAdminPanel() {
             </>
           ) : (
             <>
-              <button onClick={() => cambiarDia(-1)} className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink">
+              <button
+                onClick={() => cambiarDia(-1)}
+                disabled={diaAnteriorDeshabilitado}
+                className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <input

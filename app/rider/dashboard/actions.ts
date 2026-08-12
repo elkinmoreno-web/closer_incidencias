@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
-import { mensajeError, registrarError } from '@/lib/utils';
+import { mensajeError, registrarError, canonicalEmail } from '@/lib/utils';
 export async function riderSignOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
@@ -296,8 +296,8 @@ export async function obtenerMiResumenSemanal(year: number, week: number, forzar
     // Antes se cruzaba por DNI (document_number) contra Fleet Manager —
     // la nueva fuente (pipeline propio) no tiene DNI, así que se cruza
     // por email; insensible a mayúsculas/espacios por seguridad.
-    const miEmail = info.rider.email.trim().toLowerCase();
-    const mio = drivers.find((d) => d.email.trim().toLowerCase() === miEmail);
+    const miEmail = canonicalEmail(info.rider.email);
+    const mio = drivers.find((d) => canonicalEmail(d.email) === miEmail);
     if (!mio) return { ...vacio, centro: info.centroNombre };
 
     return {
@@ -345,7 +345,7 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
   const { createAdminClient } = await import('@/lib/supabase/server');
   const { obtenerRendimientoDiario } = await import('@/lib/fleetMetricsSupabase');
   const admClient = createAdminClient();
-  const miEmail = info.rider.email.trim().toLowerCase();
+  const miEmail = canonicalEmail(info.rider.email);
 
   const resultado = await Promise.all(
     dias.map(async ({ dia, fecha }): Promise<MisMetricasDia> => {
@@ -368,7 +368,7 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
             .from('fleet_metrics_cache_diario')
             .upsert({ centro_id: info.centroId, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
         }
-        const mio = drivers.find((d) => d.email.trim().toLowerCase() === miEmail);
+        const mio = drivers.find((d) => canonicalEmail(d.email) === miEmail);
         return {
           dia,
           fecha,

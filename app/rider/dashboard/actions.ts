@@ -22,7 +22,7 @@ async function getCurrentRider() {
 
   const { data: rider, error } = await supabase
     .from('riders')
-    .select('id, nombre, dni, email, centro_id, activo')
+    .select('id, nombre, dni, email, uber_uuid, centro_id, activo')
     .eq('auth_user_id', user.id)
     .single();
 
@@ -293,11 +293,13 @@ export async function obtenerMiResumenSemanal(year: number, week: number, forzar
         .upsert({ centro_id: info.centroId, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
     }
 
-    // Antes se cruzaba por DNI (document_number) contra Fleet Manager —
-    // la nueva fuente (pipeline propio) no tiene DNI, así que se cruza
-    // por email; insensible a mayúsculas/espacios por seguridad.
+    // Prioridad: uber_uuid (más confiable, no cambia si el rider usa un
+    // email distinto para conectarse) y, si no hay uuid guardado, el
+    // email normalizado como respaldo (cubre alias +driver).
     const miEmail = canonicalEmail(info.rider.email);
-    const mio = drivers.find((d) => canonicalEmail(d.email) === miEmail);
+    const mio = info.rider.uber_uuid
+      ? drivers.find((d) => d.courier_uuid === info.rider.uber_uuid)
+      : drivers.find((d) => canonicalEmail(d.email) === miEmail);
     if (!mio) return { ...vacio, centro: info.centroNombre };
 
     return {
@@ -368,7 +370,9 @@ export async function obtenerMisDiasSemana(year: number, week: number, forzar = 
             .from('fleet_metrics_cache_diario')
             .upsert({ centro_id: info.centroId, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
         }
-        const mio = drivers.find((d) => canonicalEmail(d.email) === miEmail);
+        const mio = info.rider.uber_uuid
+          ? drivers.find((d) => d.courier_uuid === info.rider.uber_uuid)
+          : drivers.find((d) => canonicalEmail(d.email) === miEmail);
         return {
           dia,
           fecha,

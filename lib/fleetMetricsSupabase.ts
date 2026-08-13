@@ -38,6 +38,7 @@ export interface DriverDailyStat {
 /** Mismo shape que usaba el resto de la app con Fleet Manager, para minimizar cambios en el código que ya lo consume. */
 export interface DriverPerformance {
   email: string;
+  courier_uuid: string;
   dni: string | null;
   driver_name: string;
   driver_number: string;
@@ -57,6 +58,7 @@ export interface DriverPerformance {
 function mapear(d: DriverDailyStat): DriverPerformance {
   return {
     email: canonicalEmail(d.email ?? ''),
+    courier_uuid: d.courier_uuid,
     dni: d.rider_dni ?? null,
     driver_name: d.rider_nombre ?? d.driver_name ?? '',
     driver_number: d.driver_number ?? '',
@@ -76,18 +78,19 @@ function mapear(d: DriverDailyStat): DriverPerformance {
 
 /** Suma varias filas del mismo rider en el rango (un rider puede tener varios días) en un único acumulado. */
 function agregarPorRider(filas: DriverDailyStat[]): DriverPerformance[] {
-  const porEmail = new Map<string, DriverDailyStat[]>();
+  const porRider = new Map<string, DriverDailyStat[]>();
   for (const f of filas) {
-    // canonicalEmail agrupa variantes del mismo buzón (ej. con y sin el
-    // alias +driver que añade la fuente de métricas) bajo la misma
-    // clave — sin esto, un mismo rider con días reportados en ambos
-    // formatos se contaba como dos personas distintas.
-    const key = canonicalEmail(f.email ?? '');
-    if (!porEmail.has(key)) porEmail.set(key, []);
-    porEmail.get(key)!.push(f);
+    // courier_uuid es la clave más confiable (una fila por rider y día,
+    // según la restricción unique de la tabla) — se usa como clave de
+    // agrupación siempre que exista. canonicalEmail sigue de respaldo
+    // para agrupar variantes del mismo buzón (alias +driver) cuando por
+    // algún motivo faltara el uuid.
+    const key = f.courier_uuid || canonicalEmail(f.email ?? '');
+    if (!porRider.has(key)) porRider.set(key, []);
+    porRider.get(key)!.push(f);
   }
 
-  return Array.from(porEmail.values()).map((filasRider) => {
+  return Array.from(porRider.values()).map((filasRider) => {
     const base = mapear(filasRider[0]);
     const suma = filasRider.reduce(
       (acc, f) => ({

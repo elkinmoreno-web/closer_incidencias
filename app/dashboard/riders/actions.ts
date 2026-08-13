@@ -33,6 +33,7 @@ type RiderInput = z.infer<typeof riderSchema>;
 interface RiderExtra {
   gestor?: string | null;
   activo?: boolean;
+  uberUuid?: string | null;
   nacionalidad?: string | null;
   genero?: string | null;
   empresaContratante?: string | null;
@@ -107,6 +108,7 @@ async function crearUsuarioYFila(
     nombre: data.nombre,
     dni: data.dni,
     email: data.email,
+    uber_uuid: extra.uberUuid ?? null,
     centro_id: data.centroId,
     vehiculo_id: data.vehiculoId,
     gestor: extra.gestor ?? null,
@@ -206,6 +208,7 @@ export interface FilaImportacion {
   nombre: string;
   dni: string;
   email: string;
+  uberUuid: string | null;
   nacionalidad: string | null;
   genero: string | null;
   centro: string | null;
@@ -426,6 +429,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
       nombre: v.fila.nombre,
       dni: v.dni,
       email: v.email,
+      uber_uuid: v.fila.uberUuid,
       centro_id: v.centroId,
       vehiculo_id: v.vehiculoId,
       gestor: v.fila.gestor,
@@ -475,6 +479,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
         {
           gestor: v.fila.gestor,
           activo: v.fila.activo,
+          uberUuid: v.fila.uberUuid,
           nacionalidad: v.fila.nacionalidad,
           genero: v.fila.genero,
           empresaContratante: v.fila.empresaContratante,
@@ -650,4 +655,69 @@ export async function eliminarRider(riderId: string): Promise<{ ok: boolean; mot
 
   revalidatePath('/dashboard/riders');
   return { ok: true };
+}
+
+export interface FilaUuid {
+  dni: string;
+  uberUuid: string;
+}
+
+export interface ResultadoCargaUuid {
+  actualizados: number;
+  sinCoincidencia: number;
+  errores: string[];
+}
+
+/**
+ * Actualiza SOLO el campo uber_uuid de riders ya existentes, buscando
+ * por DNI. A diferencia de "Importar Excel" (que crea/actualiza toda la
+ * ficha del rider), esta acción es deliberadamente estrecha: no toca
+ * nombre, email, centro ni ningún otro campo — es para completar el
+ * identificador de Uber en riders que ya están dados de alta, sin
+ * arriesgar sus demás datos.
+ *
+ * Un DNI del archivo que no coincide con ningún rider de Closer CRM se
+ * cuenta en "sinCoincidencia", sin generar error — es un caso esperado
+ * (el Excel de RRHH trae riders de operaciones que no usan este CRM).
+ */
+export async function cargarUuidsLote(filas: FilaUuid[]): Promise<ResultadoCargaUuid> {
+  try {
+    await assertAdmin();
+  } catch (e) {
+    return { actualizados: 0, sinCoincidencia: 0, errores: [mensajeError(e)] };
+  }
+
+  const admin = createAdminClient();
+  const dnis = filas.map((f) => f.dni);
+  const { data: existentes } = await admin.from('riders').select('dni').in('dni', dnis);
+  const dnisExistentes = new Set((existentes ?? []).map((r) => r.dni));
+
+  const paraActualizar = filas.filter((f) => dnisExistentes.has(f.dni));
+  const sinCoincidencia = filas.length - paraActualizar.length;
+
+  if (paraActualizar.length === 0) return { actualizados: 0, sinCoincidencia, errores: [] };
+
+  const errores: string[] = [];
+  let actualizados = 0;
+
+  // Un UPDATE por fila (no hay upsert-por-campo-suelto en supabase-js),
+  // pero en paralelo controlado — con miles de filas, esto sigue siendo
+  // razonable porque solo escribe una columna, no la ficha completa.
+  const CONCURRENCIA = 15;
+  for (let i = 0; i < paraActualizar.length; i += CONCURRENCIA) {
+    const lote = paraActualizar.slice(i, i + CONCURRENCIA);
+    const resultados = await Promise.all(
+      lote.map((f) => admin.from('riders').update({ uber_uuid: f.uberUuid }).eq('dni', f.dni))
+    );
+    for (let j = 0; j < resultados.length; j++) {
+      if (resultados[j].error) {
+        errores.push(`${lote[j].dni}: ${resultados[j].error!.message}`);
+      } else {
+        actualizados++;
+      }
+    }
+  }
+
+  revalidatePath('/dashboard/riders');
+  return { actualizados, sinCoincidencia, errores };
 }

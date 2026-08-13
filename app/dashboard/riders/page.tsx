@@ -3,6 +3,7 @@ import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CrearRiderForm } from '@/components/riders/CrearRiderForm';
 import { ImportRidersModal } from '@/components/riders/ImportRidersModal';
+import { CargarUuidsModal } from '@/components/riders/CargarUuidsModal';
 import { RecalcularPasswordsButton } from '@/components/riders/RecalcularPasswordsButton';
 import { RidersList } from '@/components/riders/RidersList';
 import { TableFilters } from '@/components/dashboard/TableFilters';
@@ -23,6 +24,7 @@ export default async function RidersPage({
   const supabase = createClient();
   const yo = await getAdminActual();
   const esSuperAdmin = yo?.rol === 'super_admin';
+  const esAdministrador = yo?.rol === 'administrador';
 
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
@@ -73,6 +75,7 @@ export default async function RidersPage({
         </div>
         <div className="flex items-center gap-2">
           {esSuperAdmin && <RecalcularPasswordsButton />}
+          {(esSuperAdmin || esAdministrador) && <CargarUuidsModal />}
           <ImportRidersModal />
         </div>
       </div>

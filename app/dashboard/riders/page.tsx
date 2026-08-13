@@ -75,7 +75,12 @@ export default async function RidersPage({
         </div>
         <div className="flex items-center gap-2">
           {esSuperAdmin && <RecalcularPasswordsButton />}
-          {(esSuperAdmin || esAdministrador) && <CargarUuidsModal />}
+          {/* "Cargar UUIDs de Uber" quedó redundante: "Importar Excel" ya
+              carga el Uber UUID en el mismo paso (misma columna del
+              archivo de RRHH). Se deja el componente disponible por si
+              algún día llega un archivo suelto con solo DNI+UUID, pero
+              oculto por defecto para no confundir el flujo habitual. */}
+          {false && (esSuperAdmin || esAdministrador) && <CargarUuidsModal />}
           <ImportRidersModal />
         </div>
       </div>

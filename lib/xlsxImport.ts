@@ -4,6 +4,7 @@ export interface RiderExcelRow {
   nombre: string;
   dni: string;
   email: string;
+  uberUuid: string | null;
   nacionalidad: string | null;
   genero: string | null;
   centro: string | null;
@@ -28,11 +29,18 @@ export interface RiderExcelRow {
 const HEADER_MAP: Record<string, string> = {
   empleado: 'nombre',
   dni: 'dni',
+  'dni/nie': 'dni',
   email: 'email',
+  // El archivo de RRHH usa "Uber UUID" — el identificador estable que
+  // Uber asigna al rider (courier_uuid). Es más confiable que el email
+  // para cruzar con las métricas: no cambia si el rider usa un alias
+  // de correo (+driver) o directamente una cuenta de email distinta.
+  'uber uuid': 'uberUuid',
   nacionalidad: 'nacionalidad',
   genero: 'genero',
   centro: 'centro',
   'empresa contratante': 'empresaContratante',
+  'empresa contrate': 'empresaContratante',
   provincia: 'provincia',
   puesto: 'puesto',
   'fecha de alta': 'fechaAlta',
@@ -44,7 +52,9 @@ const HEADER_MAP: Record<string, string> = {
   direccion: 'direccion',
   estado: 'estado',
   'tipo de vehiculo': 'vehiculo',
+  'herramienta de trabajo': 'vehiculo',
   'horas de trabajo': 'horasTrabajo',
+  'nº de horas': 'horasTrabajo',
   turno: 'turno',
   gestor: 'gestor',
 };
@@ -181,6 +191,7 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
       nombre,
       dni,
       email,
+      uberUuid: strOrNull(fila.uberUuid),
       nacionalidad: strOrNull(fila.nacionalidad),
       genero: strOrNull(fila.genero),
       centro: strOrNull(fila.centro),
@@ -205,4 +216,47 @@ export function mapearFilasExcel(filasCrudas: Record<string, unknown>[]): {
   });
 
   return { validas, errores, omitidas };
+}
+
+/**
+ * Parseo más simple, solo para la herramienta "Cargar UUIDs de Uber":
+ * lee ÚNICAMENTE DNI/NIE y Uber UUID del mismo Excel de RRHH — no
+ * exige ni valida el resto de columnas (empresa, puesto, estado...)
+ * porque esta carga no crea ni actualiza fichas completas, solo
+ * completa ese identificador en riders que ya existen.
+ */
+export interface FilaUuidExcel {
+  dni: string;
+  uberUuid: string;
+}
+
+export function mapearFilasUuid(filasCrudas: Record<string, unknown>[]): {
+  validas: FilaUuidExcel[];
+  omitidas: number;
+} {
+  const validas: FilaUuidExcel[] = [];
+  let omitidas = 0;
+  const dnisVistos = new Set<string>();
+
+  filasCrudas.forEach((cruda) => {
+    const fila: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(cruda)) {
+      const destino = HEADER_MAP[normKey(k)];
+      if (destino) fila[destino] = v;
+    }
+    const dni = strOrNull(fila.dni)?.toUpperCase() ?? null;
+    const uberUuid = strOrNull(fila.uberUuid);
+    if (!dni || !uberUuid) {
+      omitidas++;
+      return;
+    }
+    if (dnisVistos.has(dni)) {
+      omitidas++;
+      return;
+    }
+    dnisVistos.add(dni);
+    validas.push({ dni, uberUuid });
+  });
+
+  return { validas, omitidas };
 }

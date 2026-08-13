@@ -4,6 +4,8 @@ import { CentrosList, VehiculosList, MotivosList, MotivosAusenciaList } from '@/
 import { CrearAdminForm } from '@/components/config/CrearAdminForm';
 import { AdminRow } from '@/components/config/AdminRow';
 import { AnuncioForm } from '@/components/config/AnuncioForm';
+import { AliasEmailPanel } from '@/components/config/AliasEmailPanel';
+import { listarAliasEmail } from '@/app/dashboard/configuracion/alias-email-actions';
 
 
 export default async function ConfiguracionPage() {
@@ -17,6 +19,7 @@ export default async function ConfiguracionPage() {
   if (yo?.rol !== 'super_admin' && yo?.rol !== 'administrador') redirect('/dashboard');
 
   const esSuperAdmin = yo.rol === 'super_admin';
+  const aliasEmail = esSuperAdmin ? await listarAliasEmail() : [];
 
   // Ciudades del Administrador actual (para filtrar qué usuarios ve).
   // El Super Admin ve todos, así que no necesita este filtro.
@@ -140,6 +143,8 @@ export default async function ConfiguracionPage() {
           ))}
         </div>
       </div>
+
+      {esSuperAdmin && <AliasEmailPanel aliasIniciales={aliasEmail ?? []} />}
     </div>
   );
 }

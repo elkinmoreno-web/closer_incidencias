@@ -413,7 +413,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
 
   // ---- 3. Averiguar en UNA consulta quiénes ya existen (por DNI) ----
   const dnis = conIds.map((v) => v.dni);
-  const { data: existentes } = await admin.from('riders').select('id, dni, email, auth_user_id').in('dni', dnis);
+  const { data: existentes } = await admin.from('riders').select('id, dni, email, auth_user_id, uber_uuid').in('dni', dnis);
   const existentePorDni = new Map((existentes ?? []).map((r) => [r.dni, r]));
 
   const paraActualizar = conIds.filter((v) => existentePorDni.has(v.dni));
@@ -429,7 +429,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
       nombre: v.fila.nombre,
       dni: v.dni,
       email: v.email,
-      uber_uuid: v.fila.uberUuid,
+      uber_uuid: v.fila.uberUuid ?? existentePorDni.get(v.dni)!.uber_uuid,
       centro_id: v.centroId,
       vehiculo_id: v.vehiculoId,
       gestor: v.fila.gestor,

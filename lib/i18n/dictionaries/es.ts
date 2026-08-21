@@ -126,6 +126,8 @@ const es = {
   'notif.titulo': 'Notificaciones',
   'notif.sinNovedades': 'Sin novedades por ahora.',
   'notif.incidenciaRechazada': 'Incidencia rechazada',
+  'notif.tuIncidencia': 'Tu incidencia',
+  'notif.sinMotivoEspecifico': 'No se indicó un motivo específico.',
 
   // Página de Incidencias (admin)
   'admIncidencias.titulo': 'Incidencias',
@@ -574,6 +576,8 @@ const es = {
   'catalogo.sinCiudad': 'Sin ciudad',
   'catalogo.tituloInstrucciones': 'Instrucciones que verá el rider cuando se apruebe una incidencia de este motivo',
   'catalogo.sinInstruccionesAprobar': 'Sin instrucciones al aprobar',
+  'catalogo.tituloInstruccionesEn': 'Instrucciones en inglés (para la sede de Alemania)',
+  'catalogo.sinInstruccionesEnUsa': 'Sin instrucciones en inglés (usa las de español)',
   'catalogo.instruccionesTitulo': 'Instrucciones —',
   'catalogo.instruccionesPlaceholder': 'Ej: Recuerda entregar el paquete en la oficina antes de las 18:00...',
   'catalogo.motivo': 'Motivo',

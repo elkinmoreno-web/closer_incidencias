@@ -11,6 +11,7 @@ import {
   toggleMotivoAusencia,
   asignarCiudadCentro,
   actualizarInstruccionesMotivo,
+  actualizarInstruccionesMotivoEn,
   actualizarNombreMotivoEn,
   actualizarNombreMotivoAusenciaEn,
 } from '@/app/dashboard/configuracion/actions';
@@ -92,7 +93,17 @@ export function VehiculosList({ vehiculos }: { vehiculos: Vehiculo[] }) {
 }
 
 /** Icono de ojo que muestra el texto completo en un popup centrado, sin entrar a modo edición ni desbordarse de su fila. */
-function InstruccionesAprobacion({ nombreMotivo, motivoId, valorActual }: { nombreMotivo: string; motivoId: number; valorActual: string | null | undefined }) {
+function InstruccionesAprobacion({
+  nombreMotivo,
+  valorActual,
+  onGuardar,
+  ingles,
+}: {
+  nombreMotivo: string;
+  valorActual: string | null | undefined;
+  onGuardar: (valor: string) => Promise<void>;
+  ingles?: boolean;
+}) {
   const { t } = useIdioma();
   const [editando, setEditando] = useState(false);
   const [valor, setValor] = useState(valorActual ?? '');
@@ -104,12 +115,15 @@ function InstruccionesAprobacion({ nombreMotivo, motivoId, valorActual }: { nomb
         <button
           onClick={() => setEditando(true)}
           className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-primary"
-          title={t('catalogo.tituloInstrucciones')}
+          title={ingles ? t('catalogo.tituloInstruccionesEn') : t('catalogo.tituloInstrucciones')}
         >
+          {ingles && <Languages size={10} />}
           {valorActual ? (
             <span className="max-w-[220px] truncate italic">&quot;{valorActual}&quot;</span>
           ) : (
-            <span className="italic opacity-60">{t('catalogo.sinInstruccionesAprobar')}</span>
+            <span className="italic opacity-60">
+              {ingles ? t('catalogo.sinInstruccionesEnUsa') : t('catalogo.sinInstruccionesAprobar')}
+            </span>
           )}
           <Pencil size={10} />
         </button>
@@ -124,7 +138,7 @@ function InstruccionesAprobacion({ nombreMotivo, motivoId, valorActual }: { nomb
         autoFocus
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        placeholder={t('catalogo.instruccionesPlaceholder')}
+        placeholder={ingles ? 'English instructions...' : t('catalogo.instruccionesPlaceholder')}
         rows={2}
         className="w-64 rounded border border-border bg-surface px-1.5 py-1 text-xs focus:border-primary focus:outline-none"
       />
@@ -133,7 +147,7 @@ function InstruccionesAprobacion({ nombreMotivo, motivoId, valorActual }: { nomb
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              await actualizarInstruccionesMotivo(motivoId, valor);
+              await onGuardar(valor);
               setEditando(false);
             })
           }
@@ -254,7 +268,17 @@ export function MotivosList({ motivos }: { motivos: Motivo[] }) {
             <ToggleSwitch activo={m.activo} onToggle={(v) => toggleMotivo(m.id, v)} />
           </div>
           <NombreEnEditable nombreEs={m.nombre} valorActual={m.nombre_en} onGuardar={(v) => actualizarNombreMotivoEn(m.id, v)} />
-          <InstruccionesAprobacion nombreMotivo={m.nombre} motivoId={m.id} valorActual={m.instrucciones_aprobacion} />
+          <InstruccionesAprobacion
+            nombreMotivo={m.nombre}
+            valorActual={m.instrucciones_aprobacion}
+            onGuardar={(v) => actualizarInstruccionesMotivo(m.id, v)}
+          />
+          <InstruccionesAprobacion
+            nombreMotivo={m.nombre}
+            valorActual={m.instrucciones_aprobacion_en}
+            onGuardar={(v) => actualizarInstruccionesMotivoEn(m.id, v)}
+            ingles
+          />
         </div>
       ))}
     </div>

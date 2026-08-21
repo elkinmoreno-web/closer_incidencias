@@ -80,6 +80,19 @@ export async function actualizarInstruccionesMotivo(id: number, instrucciones: s
 }
 
 /**
+ * Igual que actualizarInstruccionesMotivo, pero para el texto en
+ * inglés. Vacío = la app usa las instrucciones en español como
+ * respaldo (nunca deja el popup sin protocolo).
+ */
+export async function actualizarInstruccionesMotivoEn(id: number, instrucciones: string) {
+  const supabase = await assertSuperAdmin();
+  const valor = instrucciones.trim() || null;
+  const { error } = await supabase.from('motivos').update({ instrucciones_aprobacion_en: valor }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
+/**
  * Guarda el nombre en inglés de un motivo — el mismo catálogo
  * compartido entre España y Alemania, mostrado en el idioma de quien
  * lo esté viendo. Si queda vacío, la aplicación usa el nombre en

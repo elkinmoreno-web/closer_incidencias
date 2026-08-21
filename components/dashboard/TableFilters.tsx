@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState, useTransition } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { Centro, Ciudad, Gestor } from '@/lib/types';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 interface Opcion {
   value: string;
@@ -12,6 +14,7 @@ interface Opcion {
 interface MotivoOpcion {
   id: number;
   nombre: string;
+  nombre_en?: string | null;
 }
 
 export function TableFilters({
@@ -20,7 +23,7 @@ export function TableFilters({
   ciudades,
   centros,
   motivos,
-  motivoLabel = 'Motivo',
+  motivoLabel,
   gestores,
   showDateRange = false,
 }: {
@@ -33,6 +36,7 @@ export function TableFilters({
   gestores?: Gestor[];
   showDateRange?: boolean;
 }) {
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -56,6 +60,8 @@ export function TableFilters({
     return centros.filter((c) => String(c.ciudad_id) === ciudadSeleccionada);
   }, [centros, ciudadSeleccionada]);
 
+  const etiquetaMotivo = motivoLabel ?? t('admIncidencias.colMotivo');
+
   return (
     <div
       className="grid grid-cols-1 gap-3 rounded-card border border-border bg-surface p-4 sm:grid-cols-2"
@@ -77,7 +83,7 @@ export function TableFilters({
           onChange={(e) => setParam('estado', e.target.value)}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
-          <option value="">Todos los estados</option>
+          <option value="">{t('filtros.todosLosEstados')}</option>
           {estados.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
@@ -90,7 +96,7 @@ export function TableFilters({
           onChange={(e) => setParam('gestor', e.target.value)}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
-          <option value="">Todos los gestores</option>
+          <option value="">{t('filtros.todosLosGestores')}</option>
           {gestores.map((g) => (
             <option key={g.id} value={g.id}>{g.nombre}</option>
           ))}
@@ -107,7 +113,7 @@ export function TableFilters({
           }}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
-          <option value="">Todas las ciudades</option>
+          <option value="">{t('filtros.todasLasCiudades')}</option>
           {ciudades.map((c) => (
             <option key={c.id} value={c.id}>{c.nombre}</option>
           ))}
@@ -120,8 +126,8 @@ export function TableFilters({
           onChange={(e) => setParam('centro', e.target.value)}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
-          <option value="">Todos los centros</option>
-          <option value="sin-centro">⚠️ Sin centro asignado</option>
+          <option value="">{t('filtros.todosLosCentros')}</option>
+          <option value="sin-centro">{t('filtros.sinCentroAsignado')}</option>
           {centrosFiltrados.map((c) => (
             <option key={c.id} value={c.id}>{c.nombre}</option>
           ))}
@@ -134,9 +140,9 @@ export function TableFilters({
           onChange={(e) => setParam('motivo', e.target.value)}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >
-          <option value="">{`Todos (${motivoLabel.toLowerCase()})`}</option>
+          <option value="">{`${t('filtros.todosMotivo')} (${etiquetaMotivo.toLowerCase()})`}</option>
           {motivos.map((m) => (
-            <option key={m.id} value={m.id}>{m.nombre}</option>
+            <option key={m.id} value={m.id}>{nombreSegunIdioma(idioma, m.nombre, m.nombre_en)}</option>
           ))}
         </select>
       )}
@@ -148,14 +154,14 @@ export function TableFilters({
             defaultValue={searchParams.get('desde') ?? ''}
             onChange={(e) => setParam('desde', e.target.value)}
             className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            title="Desde"
+            title={t('filtros.desde')}
           />
           <input
             type="date"
             defaultValue={searchParams.get('hasta') ?? ''}
             onChange={(e) => setParam('hasta', e.target.value)}
             className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            title="Hasta"
+            title={t('filtros.hasta')}
           />
         </>
       )}

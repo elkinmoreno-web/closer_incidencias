@@ -6,9 +6,12 @@ import { AdminRow } from '@/components/config/AdminRow';
 import { AnuncioForm } from '@/components/config/AnuncioForm';
 import { AliasEmailPanel } from '@/components/config/AliasEmailPanel';
 import { listarAliasEmail } from '@/app/dashboard/configuracion/alias-email-actions';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor } from '@/lib/i18n/traducir';
 
 
 export default async function ConfiguracionPage() {
+  const t = crearTraductor(await resolverIdioma());
   const supabase = createClient();
   const {
     data: { user },
@@ -87,45 +90,43 @@ export default async function ConfiguracionPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Configuración</h1>
+        <h1 className="text-2xl font-semibold text-ink">{t('config.titulo')}</h1>
         <p className="text-sm text-ink-muted">
-          {esSuperAdmin ? 'Acceso completo (Super Admin).' : 'Como Administrador, aquí solo gestionas el anuncio global y das de alta moderadores.'}
+          {esSuperAdmin ? t('config.accesoCompleto') : t('config.soloAnuncioYModeradores')}
         </p>
       </div>
 
       <div className="rounded-card border border-border bg-surface p-5">
-        <h2 className="mb-1 font-semibold text-ink">Anuncio global</h2>
-        <p className="mb-4 text-sm text-ink-muted">
-          Se muestra como aviso en la parte superior de ambos portales (admin y riders).
-        </p>
+        <h2 className="mb-1 font-semibold text-ink">{t('config.anuncioGlobal')}</h2>
+        <p className="mb-4 text-sm text-ink-muted">{t('config.anuncioGlobalDesc')}</p>
         <AnuncioForm anunciosActivos={anunciosVisibles} ciudadesAsignables={ciudadesAsignables} esSuperAdmin={esSuperAdmin} />
       </div>
 
       {esSuperAdmin && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <div className="rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 font-semibold text-ink">Centros</h2>
+            <h2 className="mb-3 font-semibold text-ink">{t('config.centros')}</h2>
             <CentrosList centros={centros ?? []} ciudades={ciudades ?? []} />
           </div>
           <div className="rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 font-semibold text-ink">Vehículos</h2>
+            <h2 className="mb-3 font-semibold text-ink">{t('config.vehiculos')}</h2>
             <VehiculosList vehiculos={vehiculos ?? []} />
           </div>
           <div className="rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 font-semibold text-ink">Motivos de incidencia</h2>
+            <h2 className="mb-3 font-semibold text-ink">{t('config.motivosIncidencia')}</h2>
             <MotivosList motivos={motivos ?? []} />
           </div>
           <div className="rounded-card border border-border bg-surface p-5">
-            <h2 className="mb-3 font-semibold text-ink">Motivos de ausencia</h2>
+            <h2 className="mb-3 font-semibold text-ink">{t('config.motivosAusencia')}</h2>
             <MotivosAusenciaList motivos={motivosAusencia ?? []} />
           </div>
         </div>
       )}
 
       <div className="rounded-card border border-border bg-surface p-5">
-        <h2 className="mb-1 font-semibold text-ink">Administradores</h2>
+        <h2 className="mb-1 font-semibold text-ink">{t('config.administradores')}</h2>
         <p className="mb-4 text-sm text-ink-muted">
-          {esSuperAdmin ? 'Da de alta nuevas cuentas de acceso al panel.' : 'Da de alta nuevos moderadores y elige a qué ciudades tienen acceso.'}
+          {esSuperAdmin ? t('config.daDeAltaCuentas') : t('config.daDeAltaModeradores')}
         </p>
         <CrearAdminForm ciudades={ciudadesAsignables} puedeCrearTodosLosRoles={esSuperAdmin} />
 

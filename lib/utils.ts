@@ -29,6 +29,13 @@ const ESTADO_INCIDENCIA_LABEL: Record<EstadoIncidencia, string> = {
   papelera: 'En papelera',
 };
 
+const ESTADO_INCIDENCIA_LABEL_EN: Record<EstadoIncidencia, string> = {
+  pendiente: 'Pending',
+  aprobada: 'Approved',
+  rechazada: 'Rejected',
+  papelera: 'In trash',
+};
+
 const ESTADO_INCIDENCIA_COLOR: Record<EstadoIncidencia, string> = {
   pendiente: 'bg-amber-100 text-amber-800',
   aprobada: 'bg-emerald-100 text-emerald-800',
@@ -36,8 +43,9 @@ const ESTADO_INCIDENCIA_COLOR: Record<EstadoIncidencia, string> = {
   papelera: 'bg-slate-200 text-slate-600',
 };
 
-export function estadoIncidenciaLabel(estado: EstadoIncidencia): string {
-  return ESTADO_INCIDENCIA_LABEL[estado];
+/** `idioma` es opcional (por defecto español) para no romper llamadas que aún no se hayan actualizado. */
+export function estadoIncidenciaLabel(estado: EstadoIncidencia, idioma: 'es' | 'en' = 'es'): string {
+  return idioma === 'en' ? ESTADO_INCIDENCIA_LABEL_EN[estado] : ESTADO_INCIDENCIA_LABEL[estado];
 }
 
 export function estadoIncidenciaColor(estado: EstadoIncidencia): string {
@@ -51,6 +59,13 @@ const ESTADO_AUSENCIA_LABEL: Record<EstadoAusencia, string> = {
   revisada: 'Revisada', // en desuso, se conserva por compatibilidad de tipos
 };
 
+const ESTADO_AUSENCIA_LABEL_EN: Record<EstadoAusencia, string> = {
+  pendiente: 'Pending review',
+  aprobada: 'Approved',
+  rechazada: 'Rejected',
+  revisada: 'Reviewed',
+};
+
 const ESTADO_AUSENCIA_COLOR: Record<EstadoAusencia, string> = {
   pendiente: 'bg-amber-100 text-amber-800',
   aprobada: 'bg-emerald-100 text-emerald-800',
@@ -58,8 +73,8 @@ const ESTADO_AUSENCIA_COLOR: Record<EstadoAusencia, string> = {
   revisada: 'bg-emerald-100 text-emerald-800',
 };
 
-export function estadoAusenciaLabel(estado: EstadoAusencia): string {
-  return ESTADO_AUSENCIA_LABEL[estado];
+export function estadoAusenciaLabel(estado: EstadoAusencia, idioma: 'es' | 'en' = 'es'): string {
+  return idioma === 'en' ? ESTADO_AUSENCIA_LABEL_EN[estado] : ESTADO_AUSENCIA_LABEL[estado];
 }
 
 export function estadoAusenciaColor(estado: EstadoAusencia): string {

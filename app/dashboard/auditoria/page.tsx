@@ -3,6 +3,8 @@ import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { formatFecha } from '@/lib/utils';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor } from '@/lib/i18n/traducir';
 
 const PAGE_SIZE = 30;
 
@@ -11,6 +13,7 @@ export default async function AuditoriaPage({
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
+  const t = crearTraductor(await resolverIdioma());
   const supabase = createClient();
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
@@ -38,27 +41,27 @@ export default async function AuditoriaPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Auditoría</h1>
+        <h1 className="text-2xl font-semibold text-ink">{t('auditoria.titulo')}</h1>
         <p className="text-sm text-ink-muted">
-          Registro de quién aprobó, rechazó, editó o creó cada cosa
-          {!zona.esSuperAdmin && ' — solo se muestra lo de tus ciudades'}.
+          {t('auditoria.descripcion')}
+          {!zona.esSuperAdmin && t('auditoria.soloTusCiudades')}.
         </p>
       </div>
 
-      <TableFilters searchPlaceholder="Buscar por acción o detalle..." ciudades={zona.ciudades} showDateRange />
+      <TableFilters searchPlaceholder={t('auditoria.buscarPlaceholder')} ciudades={zona.ciudades} showDateRange />
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
         {!eventos || eventos.length === 0 ? (
-          <EmptyState title="No hay actividad con estos filtros" />
+          <EmptyState title={t('auditoria.sinActividad')} />
         ) : (
           <table className="w-full min-w-[700px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
-                <th className="px-4 py-3">Admin</th>
-                <th className="px-4 py-3">Acción</th>
-                <th className="px-4 py-3">Centro</th>
-                <th className="px-4 py-3">Detalles</th>
-                <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">{t('auditoria.colAdmin')}</th>
+                <th className="px-4 py-3">{t('auditoria.colAccion')}</th>
+                <th className="px-4 py-3">{t('auditoria.colCentro')}</th>
+                <th className="px-4 py-3">{t('auditoria.colDetalles')}</th>
+                <th className="px-4 py-3">{t('auditoria.colFecha')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -82,7 +85,7 @@ export default async function AuditoriaPage({
 
       {(count ?? 0) > PAGE_SIZE && (
         <p className="text-center text-xs text-ink-muted">
-          Mostrando los {PAGE_SIZE} más recientes de {count} que cumplen el filtro.
+          {t('auditoria.mostrandoRecientes').replace('{n}', String(PAGE_SIZE)).replace('{total}', String(count))}
         </p>
       )}
     </div>

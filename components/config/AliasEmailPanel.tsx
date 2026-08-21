@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Trash2, Plus } from 'lucide-react';
 import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 import { crearAliasEmail, eliminarAliasEmail, type AliasEmail, type AliasActionState } from '@/app/dashboard/configuracion/alias-email-actions';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 /**
  * Solo para casos donde el email que reporta Uber NO tiene ninguna
@@ -14,6 +15,7 @@ import { crearAliasEmail, eliminarAliasEmail, type AliasEmail, type AliasActionS
  * no necesitan que nadie los registre aquí.
  */
 export function AliasEmailPanel({ aliasIniciales }: { aliasIniciales: AliasEmail[] }) {
+  const { t } = useIdioma();
   const [lista, setLista] = useState(aliasIniciales);
   const [state, formAction] = useFormState<AliasActionState, FormData>(crearAliasEmail, undefined);
   const [pendingDelete, startDelete] = useTransition();
@@ -30,18 +32,15 @@ export function AliasEmailPanel({ aliasIniciales }: { aliasIniciales: AliasEmail
     <div className="rounded-card border border-border bg-surface p-5">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-ink">Alias de email para métricas</h3>
-          <p className="text-xs text-ink-muted">
-            Cuando el email que reporta Uber para un rider no coincide con el de su ficha (ej. usa una cuenta personal
-            distinta), regístralo aquí para que sus métricas se muestren correctamente.
-          </p>
+          <h3 className="text-sm font-semibold text-ink">{t('aliasEmail.titulo')}</h3>
+          <p className="text-xs text-ink-muted">{t('aliasEmail.descripcion')}</p>
         </div>
         <button
           onClick={() => setAbierto((v) => !v)}
           className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark"
         >
           <Plus size={14} />
-          Añadir
+          {t('aliasEmail.anadir')}
         </button>
       </div>
 
@@ -53,7 +52,7 @@ export function AliasEmailPanel({ aliasIniciales }: { aliasIniciales: AliasEmail
           className="mb-4 flex flex-col gap-2 rounded-lg border border-border bg-bg p-3"
         >
           <div>
-            <label className="mb-1 block text-xs font-semibold text-ink-muted">Email que reporta Uber</label>
+            <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('aliasEmail.emailQueReportaUber')}</label>
             <input
               name="emailUber"
               type="email"
@@ -63,23 +62,23 @@ export function AliasEmailPanel({ aliasIniciales }: { aliasIniciales: AliasEmail
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-ink-muted">Rider real (busca por nombre o DNI)</label>
+            <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('aliasEmail.riderReal')}</label>
             <BuscadorRiderRemoto nombreCampo="riderDni" />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-ink-muted">Nota (opcional)</label>
-            <input name="nota" placeholder="ej. usa cuenta personal para conectarse" className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
+            <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('aliasEmail.notaOpcional')}</label>
+            <input name="nota" placeholder={t('aliasEmail.notaPlaceholder')} className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
           </div>
           {state?.error && <p className="text-xs font-medium text-danger">{state.error}</p>}
-          {state?.success && <p className="text-xs font-medium text-emerald-700">Guardado — recarga la página para verlo en la lista.</p>}
+          {state?.success && <p className="text-xs font-medium text-emerald-700">{t('aliasEmail.guardadoRecarga')}</p>}
           <button type="submit" className="mt-1 self-end rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark">
-            Guardar
+            {t('aliasEmail.guardar')}
           </button>
         </form>
       )}
 
       {lista.length === 0 ? (
-        <p className="py-4 text-center text-sm text-ink-muted">No hay alias registrados.</p>
+        <p className="py-4 text-center text-sm text-ink-muted">{t('aliasEmail.sinAlias')}</p>
       ) : (
         <div className="flex flex-col gap-1.5">
           {lista.map((a) => (
@@ -90,7 +89,7 @@ export function AliasEmailPanel({ aliasIniciales }: { aliasIniciales: AliasEmail
                 </div>
                 {a.nota && <div className="mt-0.5 text-ink-muted">{a.nota}</div>}
               </div>
-              <button disabled={pendingDelete} onClick={() => borrar(a.id)} className="text-danger hover:text-red-700" title="Eliminar">
+              <button disabled={pendingDelete} onClick={() => borrar(a.id)} className="text-danger hover:text-red-700" title={t('aliasEmail.eliminar')}>
                 <Trash2 size={14} />
               </button>
             </div>

@@ -4,17 +4,21 @@ import { RecoverButton } from '@/components/dashboard/RecoverButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { formatFecha } from '@/lib/utils';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 export default async function PapeleraPage({
   searchParams,
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
+  const idioma = await resolverIdioma();
+  const t = crearTraductor(idioma);
   const supabase = createClient();
 
   let query = supabase
     .from('incidencias')
-    .select('*, centros(nombre), motivos(nombre), admins:eliminado_por_id(usuario)')
+    .select('*, centros(nombre), motivos(nombre, nombre_en), admins:eliminado_por_id(usuario)')
     .eq('estado', 'papelera')
     .order('fecha_eliminacion', { ascending: false });
 
@@ -40,27 +44,25 @@ export default async function PapeleraPage({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Papelera</h1>
-        <p className="text-sm text-ink-muted">
-          Incidencias eliminadas. Se conservan aquí (nada se borra de verdad) y se pueden recuperar.
-        </p>
+        <h1 className="text-2xl font-semibold text-ink">{t('papelera.titulo')}</h1>
+        <p className="text-sm text-ink-muted">{t('papelera.descripcion')}</p>
       </div>
 
-      <TableFilters searchPlaceholder="Buscar rider o DNI..." ciudades={ciudades ?? []} centros={centros ?? []} showDateRange />
+      <TableFilters searchPlaceholder={t('papelera.buscarPlaceholder')} ciudades={ciudades ?? []} centros={centros ?? []} showDateRange />
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
         {!incidencias || incidencias.length === 0 ? (
-          <EmptyState title="La papelera está vacía" />
+          <EmptyState title={t('papelera.vacia')} />
         ) : (
           <table className="w-full min-w-[850px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
-                <th className="px-4 py-3">Rider</th>
-                <th className="px-4 py-3">Centro</th>
-                <th className="px-4 py-3">Motivo</th>
-                <th className="px-4 py-3">Eliminado por</th>
-                <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
+                <th className="px-4 py-3">{t('papelera.colRider')}</th>
+                <th className="px-4 py-3">{t('papelera.colCentro')}</th>
+                <th className="px-4 py-3">{t('papelera.colMotivo')}</th>
+                <th className="px-4 py-3">{t('papelera.colEliminadoPor')}</th>
+                <th className="px-4 py-3">{t('papelera.colFecha')}</th>
+                <th className="px-4 py-3 text-right">{t('papelera.colAcciones')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -71,7 +73,7 @@ export default async function PapeleraPage({
                     <div className="text-xs text-ink-muted">{i.dni}</div>
                   </td>
                   <td className="px-4 py-3 text-xs">{i.centros?.nombre ?? '—'}</td>
-                  <td className="px-4 py-3">{i.motivos?.nombre ?? '—'}</td>
+                  <td className="px-4 py-3">{i.motivos ? nombreSegunIdioma(idioma, i.motivos.nombre, i.motivos.nombre_en) : '—'}</td>
                   <td className="px-4 py-3">{i.admins?.usuario ?? '—'}</td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(i.fecha_eliminacion)}</td>
                   <td className="px-4 py-3 text-right">

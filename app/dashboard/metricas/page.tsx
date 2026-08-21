@@ -1,14 +1,14 @@
 import { MetricasAdminPanel } from '@/components/metricas/MetricasAdminPanel';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor } from '@/lib/i18n/traducir';
 
-export default function MetricasPage() {
+export default async function MetricasPage() {
+  const t = crearTraductor(await resolverIdioma());
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-ink">Métricas operativas</h1>
-        <p className="text-sm text-ink-muted">
-          Conexión, aceptación, cancelación y viajes por rider. Se actualiza sola cada día; si falla, puedes subir el
-          archivo a mano.
-        </p>
+        <h1 className="text-lg font-semibold text-ink">{t('admMetricas.titulo')}</h1>
+        <p className="text-sm text-ink-muted">{t('admMetricas.subtitulo')}</p>
       </div>
       <MetricasAdminPanel />
     </div>

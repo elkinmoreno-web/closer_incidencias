@@ -5,6 +5,7 @@ import { KeyRound, Trash2 } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
 import { toggleRiderActivo, restablecerPasswordRider, eliminarRider } from '@/app/dashboard/riders/actions';
 import { EditarRiderModal } from '@/components/riders/EditarRiderModal';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 interface RiderRow {
   id: string;
@@ -20,18 +21,19 @@ interface RiderRow {
 }
 
 function BotonResetPassword({ riderId }: { riderId: string }) {
+  const { t } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col items-end gap-1">
       <button
-        title="Restablecer contraseña al esquema actual"
+        title={t('ridersList.restablecerPassword')}
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
             const res = await restablecerPasswordRider(riderId);
-            setMensaje(res.ok ? `Nueva: ${res.passwordNueva}` : res.motivo ?? 'Error');
+            setMensaje(res.ok ? `${t('ridersList.nueva')}: ${res.passwordNueva}` : res.motivo ?? t('ridersList.error'));
             setTimeout(() => setMensaje(null), 8000);
           })
         }
@@ -51,15 +53,16 @@ function BotonResetPassword({ riderId }: { riderId: string }) {
  * "borrar" era hacerlo a mano en Supabase, y eso se olvidaba de Auth.
  */
 function BotonEliminar({ riderId, nombre }: { riderId: string; nombre: string }) {
+  const { t } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [mensaje, setMensaje] = useState<string | null>(null);
 
   function eliminar() {
-    if (!confirm(`¿Eliminar a ${nombre} por completo? Esto borra su acceso y no se puede deshacer.`)) return;
+    if (!confirm(t('ridersList.confirmarEliminar').replace('{nombre}', nombre))) return;
     startTransition(async () => {
       const res = await eliminarRider(riderId);
       if (!res.ok) {
-        setMensaje(res.motivo ?? 'Error');
+        setMensaje(res.motivo ?? t('ridersList.error'));
         setTimeout(() => setMensaje(null), 8000);
       }
     });
@@ -68,7 +71,7 @@ function BotonEliminar({ riderId, nombre }: { riderId: string; nombre: string })
   return (
     <div className="flex flex-col items-end gap-1">
       <button
-        title="Eliminar rider por completo (fila + acceso)"
+        title={t('ridersList.eliminarTitulo')}
         disabled={pending}
         onClick={eliminar}
         className="rounded-full bg-red-50 p-2 text-danger transition hover:bg-red-100 disabled:opacity-60"
@@ -91,18 +94,19 @@ export function RidersList({
   vehiculos: { id: number; nombre: string }[];
   esSuperAdmin: boolean;
 }) {
+  const { t } = useIdioma();
   return (
     <table className="w-full min-w-[980px] text-sm">
       <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
         <tr>
-          <th className="px-4 py-3">Rider</th>
-          <th className="px-4 py-3">Centro</th>
-          <th className="px-4 py-3">Provincia</th>
-          <th className="px-4 py-3">Vehículo</th>
-          <th className="px-4 py-3 text-right">Activo</th>
-          <th className="px-4 py-3 text-right">Contraseña</th>
-          {esSuperAdmin && <th className="px-4 py-3 text-right">Editar</th>}
-          {esSuperAdmin && <th className="px-4 py-3 text-right">Eliminar</th>}
+          <th className="px-4 py-3">{t('ridersList.colRider')}</th>
+          <th className="px-4 py-3">{t('ridersList.colCentro')}</th>
+          <th className="px-4 py-3">{t('ridersList.colProvincia')}</th>
+          <th className="px-4 py-3">{t('ridersList.colVehiculo')}</th>
+          <th className="px-4 py-3 text-right">{t('ridersList.colActivo')}</th>
+          <th className="px-4 py-3 text-right">{t('ridersList.colContrasena')}</th>
+          {esSuperAdmin && <th className="px-4 py-3 text-right">{t('ridersList.colEditar')}</th>}
+          {esSuperAdmin && <th className="px-4 py-3 text-right">{t('ridersList.colEliminar')}</th>}
         </tr>
       </thead>
       <tbody className="divide-y divide-border">

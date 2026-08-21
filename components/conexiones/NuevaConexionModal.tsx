@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Plus, X, Search, Loader2 } from 'lucide-react';
 import { crearConexionFueraZona, buscarRidersConexion, type FormActionState, type RiderBusqueda } from '@/app/dashboard/conexiones/actions';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
+  const { t } = useIdioma();
   return (
     <button type="submit" disabled={pending || disabled} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
-      {pending ? 'Guardando...' : 'Registrar conexión'}
+      {pending ? t('nuevaConexion.guardando') : t('nuevaConexion.registrar')}
     </button>
   );
 }
@@ -22,6 +24,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
  * que era justo lo que hacía "desaparecer" riders antes).
  */
 function BuscadorRider({ onSeleccionar }: { onSeleccionar: (r: RiderBusqueda | null) => void }) {
+  const { t } = useIdioma();
   const [texto, setTexto] = useState('');
   const [resultados, setResultados] = useState<RiderBusqueda[]>([]);
   const [buscando, setBuscando] = useState(false);
@@ -70,7 +73,7 @@ function BuscadorRider({ onSeleccionar }: { onSeleccionar: (r: RiderBusqueda | n
           value={texto}
           onChange={(e) => alCambiarTexto(e.target.value)}
           onFocus={() => setAbierto(true)}
-          placeholder="Escribe al menos 2 letras del nombre o DNI..."
+          placeholder={t('nuevaConexion.buscarPlaceholder')}
           className="w-full rounded-lg border border-border py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
         />
       </div>
@@ -80,9 +83,9 @@ function BuscadorRider({ onSeleccionar }: { onSeleccionar: (r: RiderBusqueda | n
           <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
           <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
             {buscando ? (
-              <p className="px-3 py-2.5 text-xs text-ink-muted">Buscando...</p>
+              <p className="px-3 py-2.5 text-xs text-ink-muted">{t('nuevaConexion.buscando')}</p>
             ) : resultados.length === 0 ? (
-              <p className="px-3 py-2.5 text-xs text-ink-muted">Sin coincidencias en tu zona.</p>
+              <p className="px-3 py-2.5 text-xs text-ink-muted">{t('nuevaConexion.sinCoincidencias')}</p>
             ) : (
               resultados.map((r) => (
                 <button key={r.id} type="button" onClick={() => elegir(r)} className="block w-full px-3 py-2 text-left text-sm hover:bg-bg">
@@ -94,7 +97,7 @@ function BuscadorRider({ onSeleccionar }: { onSeleccionar: (r: RiderBusqueda | n
               ))
             )}
             {resultados.length === 15 && (
-              <p className="border-t border-border px-3 py-1.5 text-[11px] text-ink-muted">Sigue escribiendo para acotar más.</p>
+              <p className="border-t border-border px-3 py-1.5 text-[11px] text-ink-muted">{t('nuevaConexion.sigueEscribiendo')}</p>
             )}
           </div>
         </>
@@ -104,6 +107,7 @@ function BuscadorRider({ onSeleccionar }: { onSeleccionar: (r: RiderBusqueda | n
 }
 
 export function NuevaConexionModal() {
+  const { t } = useIdioma();
   const [open, setOpen] = useState(false);
   const [state, formAction] = useFormState<FormActionState, FormData>(crearConexionFueraZona, undefined);
   const [riderEncontrado, setRiderEncontrado] = useState<RiderBusqueda | null>(null);
@@ -116,14 +120,14 @@ export function NuevaConexionModal() {
     <>
       <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark">
         <Plus size={16} />
-        Nueva conexión
+        {t('nuevaConexion.nueva')}
       </button>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-ink">Nueva conexión fuera de zona</h2>
+              <h2 className="text-lg font-semibold text-ink">{t('nuevaConexion.titulo')}</h2>
               <button onClick={() => setOpen(false)} className="text-ink-muted hover:text-ink">
                 <X size={18} />
               </button>
@@ -132,41 +136,41 @@ export function NuevaConexionModal() {
             <form action={formAction} className="flex flex-col gap-3" encType="multipart/form-data">
               <input type="hidden" name="riderId" value={riderEncontrado?.id ?? ''} />
               <div>
-                <label className="mb-1 block text-xs font-semibold text-ink-muted">Rider (nombre o DNI)</label>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaConexion.rider')}</label>
                 <BuscadorRider onSeleccionar={setRiderEncontrado} />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-ink-muted">Zona / Centro del rider</label>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaConexion.zonaCentro')}</label>
                 <input
                   disabled
                   value={riderEncontrado?.centro ?? ''}
-                  placeholder="Se rellena solo al elegir el rider"
+                  placeholder={t('nuevaConexion.zonaPlaceholder')}
                   className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink-muted"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-ink-muted">Fecha</label>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaConexion.fecha')}</label>
                 <input type="date" name="fecha" required className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-ink-muted">Captura de pantalla</label>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaConexion.captura')}</label>
                 <input type="file" name="screenshot" accept="image/jpeg,image/png,image/webp" required className="text-sm" />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-ink-muted">Observaciones</label>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaConexion.observaciones')}</label>
                 <textarea name="observaciones" rows={3} className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none" />
               </div>
 
               {state?.error && <p className="text-sm font-medium text-danger">{state.error}</p>}
-              {state?.success && <p className="text-sm font-medium text-emerald-700">Conexión registrada.</p>}
+              {state?.success && <p className="text-sm font-medium text-emerald-700">{t('nuevaConexion.registrada')}</p>}
 
               <div className="mt-2 flex justify-end gap-2">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted">
-                  Cancelar
+                  {t('nuevaConexion.cancelar')}
                 </button>
                 <SubmitButton disabled={!riderEncontrado} />
               </div>

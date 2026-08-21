@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 interface Presencia {
   usuario: string;
@@ -32,6 +33,7 @@ export function ConnectedAdmins({
   rol: string;
   misCiudades: string[];
 }) {
+  const { t } = useIdioma();
   const [presencias, setPresencias] = useState<Presencia[]>([{ usuario, rol, ciudades: misCiudades }]);
   const esSuperAdmin = rol === 'super_admin';
 
@@ -76,7 +78,7 @@ export function ConnectedAdmins({
     return (
       <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
-        Conectados: {visibles.map((p) => p.usuario).join(', ')}
+        {t('conectados.conectados')}: {visibles.map((p) => p.usuario).join(', ')}
       </div>
     );
   }
@@ -100,10 +102,10 @@ export function ConnectedAdmins({
     <div className="group relative inline-block text-xs">
       <div className="flex cursor-default items-center gap-2 font-semibold text-emerald-700">
         <span className="h-2 w-2 rounded-full bg-emerald-500" />
-        Conectados: {visibles.length}
+        {t('conectados.conectados')}: {visibles.length}
       </div>
       <div className="invisible absolute left-0 top-5 z-50 w-64 rounded-card border border-border bg-surface p-3 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
-        {ciudadesOrdenadas.length === 0 && sinZona.length === 0 && <p className="text-ink-muted">Nadie más conectado.</p>}
+        {ciudadesOrdenadas.length === 0 && sinZona.length === 0 && <p className="text-ink-muted">{t('conectados.nadieMasConectado')}</p>}
         {ciudadesOrdenadas.map((ciudad) => (
           <div key={ciudad} className="mb-1.5 last:mb-0">
             <p className="font-semibold text-ink">{ciudad}</p>
@@ -112,7 +114,7 @@ export function ConnectedAdmins({
         ))}
         {sinZona.length > 0 && (
           <div className="mb-1.5 last:mb-0">
-            <p className="font-semibold text-ink">Sin zona asignada</p>
+            <p className="font-semibold text-ink">{t('conectados.sinZonaAsignada')}</p>
             <p className="text-ink-muted">{sinZona.join(', ')}</p>
           </div>
         )}

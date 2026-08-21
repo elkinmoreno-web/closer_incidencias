@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 export function Tabs({
   incidenciaPanel,
@@ -11,6 +12,7 @@ export function Tabs({
   ausenciaPanel: React.ReactNode;
   metricasPanel: React.ReactNode;
 }) {
+  const { t } = useIdioma();
   const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'metricas'>('incidencia');
 
   return (
@@ -22,7 +24,7 @@ export function Tabs({
             tab === 'incidencia' ? 'bg-primary text-white' : 'text-ink-muted'
           }`}
         >
-          Incidencia
+          {t('tabs.incidencia')}
         </button>
         <button
           onClick={() => setTab('ausencia')}
@@ -30,7 +32,7 @@ export function Tabs({
             tab === 'ausencia' ? 'bg-primary text-white' : 'text-ink-muted'
           }`}
         >
-          Ausencia
+          {t('tabs.ausencia')}
         </button>
         <button
           onClick={() => setTab('metricas')}
@@ -38,7 +40,7 @@ export function Tabs({
             tab === 'metricas' ? 'bg-primary text-white' : 'text-ink-muted'
           }`}
         >
-          Mis métricas
+          {t('tabs.metricas')}
         </button>
       </div>
       {tab === 'incidencia' && incidenciaPanel}

@@ -1,11 +1,14 @@
 import { OvertimePanel } from '@/components/overtime/OvertimePanel';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor } from '@/lib/i18n/traducir';
 
-export default function OvertimePage() {
+export default async function OvertimePage() {
+  const t = crearTraductor(await resolverIdioma());
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold text-ink">Horas extra</h1>
-        <p className="text-sm text-ink-muted">Consulta y audita las horas extra reportadas por semana y centro.</p>
+        <h1 className="text-lg font-semibold text-ink">{t('overtime.titulo')}</h1>
+        <p className="text-sm text-ink-muted">{t('overtime.subtitulo')}</p>
       </div>
       <OvertimePanel />
     </div>

@@ -8,25 +8,37 @@ import clsx from 'clsx';
 import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity } from 'lucide-react';
 import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { SelectorIdioma } from '@/components/i18n/SelectorIdioma';
+import type { ClaveTraduccion } from '@/lib/i18n/dictionaries/es';
 
 const NAV = [
-  { href: '/dashboard', label: 'Resumen', icon: LayoutDashboard, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/incidencias', label: 'Incidencias', icon: AlertTriangle, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/ausencias', label: 'Ausencias', icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/riders', label: 'Riders', icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/conexiones', label: 'Conexiones fuera de zona', icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/overtime', label: 'Horas extra', icon: Clock, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/ch-vs-wh', label: 'CH vs WH', icon: Scale, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/metricas', label: 'Métricas operativas', icon: Activity, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/reportes', label: 'Reportes', icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/auditoria', label: 'Auditoría', icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/papelera', label: 'Papelera', icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/configuracion', label: 'Configuración', icon: Settings, roles: ['super_admin', 'administrador'] },
+  { href: '/dashboard', clave: 'nav.resumen' as ClaveTraduccion, icon: LayoutDashboard, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/incidencias', clave: 'nav.incidencias' as ClaveTraduccion, icon: AlertTriangle, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/ausencias', clave: 'nav.ausencias' as ClaveTraduccion, icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/riders', clave: 'nav.riders' as ClaveTraduccion, icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/conexiones', clave: 'nav.conexiones' as ClaveTraduccion, icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/overtime', clave: 'nav.horasExtra' as ClaveTraduccion, icon: Clock, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/ch-vs-wh', clave: 'nav.chVsWh' as ClaveTraduccion, icon: Scale, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/metricas', clave: 'nav.metricas' as ClaveTraduccion, icon: Activity, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/reportes', clave: 'nav.reportes' as ClaveTraduccion, icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/auditoria', clave: 'nav.auditoria' as ClaveTraduccion, icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/papelera', clave: 'nav.papelera' as ClaveTraduccion, icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { href: '/dashboard/configuracion', clave: 'nav.configuracion' as ClaveTraduccion, icon: Settings, roles: ['super_admin', 'administrador'] },
 ] as const;
 
-export function Sidebar({ rol, pendientesCount, ausenciasPendientesCount }: { rol: RolAdmin; pendientesCount: number; ausenciasPendientesCount: number }) {
+export function Sidebar({
+  rol,
+  pendientesCount,
+  ausenciasPendientesCount,
+}: {
+  rol: RolAdmin;
+  pendientesCount: number;
+  ausenciasPendientesCount: number;
+}) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
+  const { t } = useIdioma();
 
   const items = NAV.filter((item) => (item.roles as readonly string[]).includes(rol));
 
@@ -34,9 +46,12 @@ export function Sidebar({ rol, pendientesCount, ausenciasPendientesCount }: { ro
     <>
       <div className="mb-4 flex items-center justify-between px-2">
         <Image src="/logo-closer.png" alt="Closer Logistics" width={160} height={38} className="h-9 w-auto" priority />
-        <button onClick={() => setAbierto(false)} className="text-ink-muted md:hidden" aria-label="Cerrar menú">
+        <button onClick={() => setAbierto(false)} className="text-ink-muted md:hidden" aria-label={t('nav.cerrarMenu')}>
           <X size={20} />
         </button>
+      </div>
+      <div className="mb-2 px-2 md:hidden">
+        <SelectorIdioma />
       </div>
       {items.map((item) => {
         const active = pathname === item.href;
@@ -52,7 +67,7 @@ export function Sidebar({ rol, pendientesCount, ausenciasPendientesCount }: { ro
             )}
           >
             <Icon size={18} />
-            {item.label}
+            {t(item.clave)}
             {item.href === '/dashboard/incidencias' && <PendingBadge tabla="incidencias" initialCount={pendientesCount} />}
             {item.href === '/dashboard/ausencias' && <PendingBadge tabla="ausencias" initialCount={ausenciasPendientesCount} />}
           </Link>

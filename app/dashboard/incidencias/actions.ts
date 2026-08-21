@@ -6,6 +6,8 @@ import { ALLOWED_IMAGE_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/valida
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { registrarError, formatFecha, estadoIncidenciaLabel } from '@/lib/utils';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 function extFromMime(mime: string): string {
   switch (mime) {
     case 'image/jpeg':
@@ -132,10 +134,11 @@ export async function exportarIncidencias(filtros: {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return [];
+  const idioma = await resolverIdioma();
 
   let query = supabase
     .from('incidencias')
-    .select('created_at, nombre_rider, dni, codigo_pedido, observaciones, estado, motivo_rechazo, centros(nombre), motivos(nombre), admins:gestor_id(usuario)')
+    .select('created_at, nombre_rider, dni, codigo_pedido, observaciones, estado, motivo_rechazo, centros(nombre), motivos(nombre, nombre_en), admins:gestor_id(usuario)')
     .neq('estado', 'papelera')
     .order('created_at', { ascending: false });
 
@@ -161,16 +164,19 @@ export async function exportarIncidencias(filtros: {
 
   const { data } = await query.limit(5000);
 
-  return (data ?? []).map((i) => ({
-    fecha: formatFecha(i.created_at),
-    rider: i.nombre_rider,
-    dni: i.dni,
-    centro: (i.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
-    motivo: (i.motivos as unknown as { nombre: string } | null)?.nombre ?? '—',
-    codigoPedido: i.codigo_pedido,
-    observaciones: i.observaciones,
-    estado: estadoIncidenciaLabel(i.estado),
-    motivoRechazo: i.motivo_rechazo,
-    gestor: (i.admins as unknown as { usuario: string } | null)?.usuario ?? null,
-  }));
+  return (data ?? []).map((i) => {
+    const motivo = i.motivos as unknown as { nombre: string; nombre_en: string | null } | null;
+    return {
+      fecha: formatFecha(i.created_at),
+      rider: i.nombre_rider,
+      dni: i.dni,
+      centro: (i.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
+      motivo: motivo ? nombreSegunIdioma(idioma, motivo.nombre, motivo.nombre_en) : '—',
+      codigoPedido: i.codigo_pedido,
+      observaciones: i.observaciones,
+      estado: estadoIncidenciaLabel(i.estado, idioma),
+      motivoRechazo: i.motivo_rechazo,
+      gestor: (i.admins as unknown as { usuario: string } | null)?.usuario ?? null,
+    };
+  });
 }

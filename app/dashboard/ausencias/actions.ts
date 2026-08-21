@@ -6,6 +6,8 @@ import { ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validati
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { registrarError, formatFecha, formatFechaCorta, estadoAusenciaLabel } from '@/lib/utils';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
     data: { user },
@@ -163,10 +165,11 @@ export async function exportarAusencias(filtros: {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return [];
+  const idioma = await resolverIdioma();
 
   let query = supabase
     .from('ausencias')
-    .select('created_at, fecha_inicio, fecha_fin, nombre_rider, dni, comentario, estado, motivo_rechazo, centros(nombre), motivos_ausencia(nombre), admins:revisado_por_id(usuario)')
+    .select('created_at, fecha_inicio, fecha_fin, nombre_rider, dni, comentario, estado, motivo_rechazo, centros(nombre), motivos_ausencia(nombre, nombre_en), admins:revisado_por_id(usuario)')
     .order('created_at', { ascending: false });
 
   if (filtros.estado) query = query.eq('estado', filtros.estado);
@@ -191,16 +194,19 @@ export async function exportarAusencias(filtros: {
 
   const { data } = await query.limit(5000);
 
-  return (data ?? []).map((a) => ({
-    creado: formatFecha(a.created_at),
-    rango: `${formatFechaCorta(a.fecha_inicio)} → ${formatFechaCorta(a.fecha_fin)}`,
-    rider: a.nombre_rider,
-    dni: a.dni,
-    centro: (a.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
-    motivo: (a.motivos_ausencia as unknown as { nombre: string } | null)?.nombre ?? '—',
-    comentario: a.comentario,
-    estado: estadoAusenciaLabel(a.estado),
-    motivoRechazo: a.motivo_rechazo,
-    revisadoPor: (a.admins as unknown as { usuario: string } | null)?.usuario ?? null,
-  }));
+  return (data ?? []).map((a) => {
+    const motivo = a.motivos_ausencia as unknown as { nombre: string; nombre_en: string | null } | null;
+    return {
+      creado: formatFecha(a.created_at),
+      rango: `${formatFechaCorta(a.fecha_inicio)} → ${formatFechaCorta(a.fecha_fin)}`,
+      rider: a.nombre_rider,
+      dni: a.dni,
+      centro: (a.centros as unknown as { nombre: string } | null)?.nombre ?? '—',
+      motivo: motivo ? nombreSegunIdioma(idioma, motivo.nombre, motivo.nombre_en) : '—',
+      comentario: a.comentario,
+      estado: estadoAusenciaLabel(a.estado, idioma),
+      motivoRechazo: a.motivo_rechazo,
+      revisadoPor: (a.admins as unknown as { usuario: string } | null)?.usuario ?? null,
+    };
+  });
 }

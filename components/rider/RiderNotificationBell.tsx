@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Bell, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 const STORAGE_KEY_PREFIX = 'notificacionesRider_';
 const ULTIMO_VISTO_PREFIX = 'ultimoVistoRider_';
@@ -57,8 +58,8 @@ function playBeep() {
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 660;
-    gain.gain.setValueAtTime(0.45, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    gain.gain.setValueAtTime(0.90, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.75);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
@@ -84,7 +85,7 @@ function formatHora(iso: string) {
  * Cualquier cambio detectado refresca la página entera (router.refresh()).
  */
 export function RiderNotificationBell({ riderId }: { riderId: string }) {
-  const { t } = useIdioma();
+  const { t, idioma } = useIdioma();
   const router = useRouter();
   const [notis, setNotis] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
@@ -139,15 +140,25 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
 
     async function mostrarPopupSiHayInstrucciones(motivoId: number | null | undefined) {
       if (!motivoId) return;
-      const { data } = await supabase.from('motivos').select('nombre, instrucciones_aprobacion').eq('id', motivoId).maybeSingle();
+      const { data } = await supabase
+        .from('motivos')
+        .select('nombre, nombre_en, instrucciones_aprobacion, instrucciones_aprobacion_en')
+        .eq('id', motivoId)
+        .maybeSingle();
       if (data?.instrucciones_aprobacion) {
-        setPopupInstrucciones({ motivo: data.nombre, texto: data.instrucciones_aprobacion });
+        setPopupInstrucciones({
+          motivo: nombreSegunIdioma(idioma, data.nombre, data.nombre_en),
+          texto: nombreSegunIdioma(idioma, data.instrucciones_aprobacion, data.instrucciones_aprobacion_en),
+        });
       }
     }
 
     async function mostrarPopupRechazo(motivoId: number | null | undefined, motivoRechazo: string | null | undefined) {
-      const { data } = motivoId ? await supabase.from('motivos').select('nombre').eq('id', motivoId).maybeSingle() : { data: null };
-      setPopupRechazo({ motivo: data?.nombre ?? 'Tu incidencia', razon: motivoRechazo?.trim() || 'No se indicó un motivo específico.' });
+      const { data } = motivoId
+        ? await supabase.from('motivos').select('nombre, nombre_en').eq('id', motivoId).maybeSingle()
+        : { data: null };
+      const nombreMotivo = data ? nombreSegunIdioma(idioma, data.nombre, data.nombre_en) : t('riderPage.sinMotivo');
+      setPopupRechazo({ motivo: data ? nombreMotivo : t('notif.tuIncidencia'), razon: motivoRechazo?.trim() || t('notif.sinMotivoEspecifico') });
     }
 
     /** Revisa qué cambió desde la última vez que el rider abrió la app. */
@@ -243,7 +254,7 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       cancelado = true;
       supabase.removeChannel(channel);
     };
-  }, [riderId, storageKey, ultimoVistoKey, router]);
+  }, [riderId, storageKey, ultimoVistoKey, router, idioma, t]);
 
   function alAbrir() {
     setAbierto((v) => {

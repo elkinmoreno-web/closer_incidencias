@@ -129,6 +129,8 @@ const en: Record<ClaveTraduccion, string> = {
   'notif.titulo': 'Notifications',
   'notif.sinNovedades': 'No news for now.',
   'notif.incidenciaRechazada': 'Incident rejected',
+  'notif.tuIncidencia': 'Your incident',
+  'notif.sinMotivoEspecifico': 'No specific reason was given.',
 
   // Página de Incidencias (admin)
   'admIncidencias.titulo': 'Incidents',
@@ -577,6 +579,8 @@ const en: Record<ClaveTraduccion, string> = {
   'catalogo.sinCiudad': 'No city',
   'catalogo.tituloInstrucciones': 'Instructions the rider will see when an incident with this reason is approved',
   'catalogo.sinInstruccionesAprobar': 'No instructions on approval',
+  'catalogo.tituloInstruccionesEn': 'English instructions (for the Germany office)',
+  'catalogo.sinInstruccionesEnUsa': 'No English instructions (uses the Spanish ones)',
   'catalogo.instruccionesTitulo': 'Instructions —',
   'catalogo.instruccionesPlaceholder': 'E.g.: Remember to deliver the package to the office before 6:00 PM...',
   'catalogo.motivo': 'Reason',

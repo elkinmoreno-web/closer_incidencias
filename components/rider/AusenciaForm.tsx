@@ -5,11 +5,14 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { enviarAusencia, type FormActionState } from '@/app/rider/dashboard/actions';
 import { compressImageIfNeeded, validarArchivoCliente } from '@/lib/compressImage';
 import type { MotivoAusencia } from '@/lib/types';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 const TIPOS_JUSTIFICANTE = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
 function EstadoEnvio({ comprimiendo }: { comprimiendo: boolean }) {
   const { pending } = useFormStatus();
+  const { t } = useIdioma();
   const [segundos, setSegundos] = useState(0);
   const activo = comprimiendo || pending;
 
@@ -29,14 +32,19 @@ function EstadoEnvio({ comprimiendo }: { comprimiendo: boolean }) {
         disabled={activo}
         className="w-full rounded-full bg-primary py-3 font-semibold text-white transition hover:bg-primary-dark disabled:opacity-60"
       >
-        {comprimiendo ? 'Optimizando archivos...' : pending ? 'Enviando...' : 'Enviar comunicación'}
+        {comprimiendo ? t('ausenciaForm.optimizando') : pending ? t('ausenciaForm.enviando') : t('ausenciaForm.enviar')}
       </button>
-      {activo && segundos >= 3 && <p className="text-xs text-ink-muted">Sigue trabajando... ({segundos}s)</p>}
+      {activo && segundos >= 3 && (
+        <p className="text-xs text-ink-muted">
+          {t('ausenciaForm.sigueTrabajando')} ({segundos}s)
+        </p>
+      )}
     </div>
   );
 }
 
 export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAusencia[] }) {
+  const { t, idioma } = useIdioma();
   const [state, formAction] = useFormState<FormActionState, FormData>(enviarAusencia, undefined);
   const [fechaInicio, setFechaInicio] = useState('');
   const [archivos, setArchivos] = useState<File[]>([]);
@@ -82,9 +90,9 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
   if (state?.success) {
     return (
       <div className="rounded-xl bg-emerald-50 px-4 py-4 text-sm font-medium text-emerald-800">
-        Ausencia comunicada. Quedará pendiente de revisión.
+        {t('ausenciaForm.comunicada')}
         <button onClick={() => window.location.reload()} className="ml-2 underline">
-          Enviar otra
+          {t('ausenciaForm.enviarOtra')}
         </button>
       </div>
     );
@@ -95,7 +103,7 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
       <input type="hidden" name="dni" value={dni} />
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold text-ink-muted">Motivo *</label>
+        <label className="text-sm font-semibold text-ink-muted">{t('ausenciaForm.motivo')} *</label>
         <select
           name="motivoId"
           required
@@ -103,11 +111,11 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
           className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
         >
           <option value="" disabled>
-            Selecciona un motivo
+            {t('ausenciaForm.selecciona')}
           </option>
           {motivos.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.nombre}
+              {nombreSegunIdioma(idioma, m.nombre, m.nombre_en)}
             </option>
           ))}
         </select>
@@ -115,7 +123,7 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-semibold text-ink-muted">Fecha de inicio *</label>
+          <label className="text-sm font-semibold text-ink-muted">{t('ausenciaForm.fechaInicio')} *</label>
           <input
             type="date"
             name="fechaInicio"
@@ -126,7 +134,7 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-semibold text-ink-muted">Fecha de fin *</label>
+          <label className="text-sm font-semibold text-ink-muted">{t('ausenciaForm.fechaFin')} *</label>
           <input
             type="date"
             name="fechaFin"
@@ -138,7 +146,7 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold text-ink-muted">Justificantes *</label>
+        <label className="text-sm font-semibold text-ink-muted">{t('ausenciaForm.justificantes')} *</label>
         <input
           type="file"
           name="justificantes"
@@ -148,7 +156,7 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
           onChange={alElegirArchivos}
           className="text-sm"
         />
-        <span className="text-xs text-ink-muted">Imágenes o PDF, máx. 10 MB cada uno y 10 archivos.</span>
+        <span className="text-xs text-ink-muted">{t('ausenciaForm.justificantesAyuda')}</span>
         {errorArchivos && <p className="text-xs text-danger">{errorArchivos}</p>}
         {archivos.length > 0 && (
           <ul className="mt-1 text-xs text-ink-muted">
@@ -160,11 +168,11 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold text-ink-muted">Comentario (opcional)</label>
+        <label className="text-sm font-semibold text-ink-muted">{t('ausenciaForm.comentario')}</label>
         <textarea
           name="comentario"
           rows={3}
-          placeholder="Añade cualquier detalle que consideres relevante..."
+          placeholder={t('ausenciaForm.comentarioPlaceholder')}
           className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
         />
       </div>

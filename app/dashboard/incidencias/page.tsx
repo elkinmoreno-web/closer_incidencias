@@ -13,20 +13,24 @@ import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { estadoIncidenciaColor, estadoIncidenciaLabel, formatFecha } from '@/lib/utils';
 import { urlArchivoDrive } from '@/lib/driveUrl';
 import type { Incidencia } from '@/lib/types';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 const PAGE_SIZE = 10;
-
-const ESTADOS = [
-  { value: 'pendiente', label: 'Pendiente' },
-  { value: 'aprobada', label: 'Aprobada' },
-  { value: 'rechazada', label: 'Rechazada' },
-];
 
 export default async function IncidenciasPage({
   searchParams,
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
+  const idioma = await resolverIdioma();
+  const t = crearTraductor(idioma);
+  const ESTADOS = [
+    { value: 'pendiente', label: t('admIncidencias.estadoPendiente') },
+    { value: 'aprobada', label: t('admIncidencias.estadoAprobada') },
+    { value: 'rechazada', label: t('admIncidencias.estadoRechazada') },
+  ];
+
   const supabase = createClient();
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
@@ -34,7 +38,7 @@ export default async function IncidenciasPage({
 
   let query = supabase
     .from('incidencias')
-    .select('*, centros(nombre), motivos(nombre), admins:gestor_id(usuario)', { count: 'exact' })
+    .select('*, centros(nombre), motivos(nombre, nombre_en), admins:gestor_id(usuario)', { count: 'exact' })
     .neq('estado', 'papelera')
     .order('created_at', { ascending: false })
     .range(from, to);
@@ -79,13 +83,13 @@ export default async function IncidenciasPage({
 
   const filas = ((incidencias ?? []) as unknown as (Incidencia & {
     centros: { nombre: string } | null;
-    motivos: { nombre: string } | null;
+    motivos: { nombre: string; nombre_en: string | null } | null;
     admins: { usuario: string } | null;
   })[]).map((i) => ({
     ...i,
     screenshotSignedUrl: urlArchivoDrive(i.screenshot_url),
     evidencias: (i.evidencia_ids ?? []).map((fileId: string, idx: number) => ({
-      name: `Evidencia ${idx + 1}`,
+      name: `${t('admIncidencias.evidencia')} ${idx + 1}`,
       url: urlArchivoDrive(fileId),
     })),
   }));
@@ -95,8 +99,10 @@ export default async function IncidenciasPage({
       <LiveRefresh table="incidencias" />
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Incidencias</h1>
-          <p className="text-sm text-ink-muted">{count ?? 0} resultado(s)</p>
+          <h1 className="text-2xl font-semibold text-ink">{t('admIncidencias.titulo')}</h1>
+          <p className="text-sm text-ink-muted">
+            {count ?? 0} {t('admIncidencias.resultados')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <ExportarIncidenciasButton />
@@ -105,7 +111,7 @@ export default async function IncidenciasPage({
       </div>
 
       <TableFilters
-        searchPlaceholder="Buscar rider, DNI o código..."
+        searchPlaceholder={t('admIncidencias.buscarPlaceholder')}
         estados={ESTADOS}
         ciudades={ciudades ?? []}
         centros={centros ?? []}
@@ -116,20 +122,20 @@ export default async function IncidenciasPage({
 
       <div className="table-scroll overflow-x-auto rounded-card border border-border bg-surface">
         {filas.length === 0 ? (
-          <EmptyState title="No hay incidencias con estos filtros" description="Prueba a ampliar la búsqueda." />
+          <EmptyState title={t('admIncidencias.sinResultadosTitulo')} description={t('admIncidencias.sinResultadosDesc')} />
         ) : (
           <table className="w-full min-w-[1050px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
-                <th className="px-4 py-3">Rider</th>
-                <th className="px-4 py-3">Motivo</th>
-                <th className="px-4 py-3">Pedido</th>
-                <th className="px-4 py-3">Centro</th>
-                <th className="px-4 py-3">Evidencia</th>
-                <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3">Estado</th>
-                <th className="px-4 py-3">Gestionado por</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
+                <th className="px-4 py-3">{t('admIncidencias.colRider')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colMotivo')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colPedido')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colCentro')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colEvidencia')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colFecha')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colEstado')}</th>
+                <th className="px-4 py-3">{t('admIncidencias.colGestionadoPor')}</th>
+                <th className="px-4 py-3 text-right">{t('admIncidencias.colAcciones')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -140,17 +146,19 @@ export default async function IncidenciasPage({
                     <div className="text-xs text-ink-muted">{i.dni}</div>
                   </td>
                   <td className="max-w-xs px-4 py-3">
-                    <div>{i.motivos?.nombre ?? '—'}</div>
+                    <div>{i.motivos ? nombreSegunIdioma(idioma, i.motivos.nombre, i.motivos.nombre_en) : '—'}</div>
                     {i.observaciones && (
                       <div className="mt-0.5 flex items-start gap-1">
                         <div className="line-clamp-2 text-xs text-ink-muted">{i.observaciones}</div>
-                        {i.observaciones.length > 90 && <VerTextoCompleto titulo="Observaciones" texto={i.observaciones} />}
+                        {i.observaciones.length > 90 && <VerTextoCompleto titulo={t('admIncidencias.observaciones')} texto={i.observaciones} />}
                       </div>
                     )}
                     {i.estado === 'rechazada' && i.motivo_rechazo && (
                       <div className="mt-1 flex items-start gap-1 rounded bg-red-50 px-2 py-1">
-                        <div className="line-clamp-2 text-xs text-danger">Rechazo: {i.motivo_rechazo}</div>
-                        {i.motivo_rechazo.length > 80 && <VerTextoCompleto titulo="Motivo del rechazo" texto={i.motivo_rechazo} />}
+                        <div className="line-clamp-2 text-xs text-danger">
+                          {t('admIncidencias.rechazo')}: {i.motivo_rechazo}
+                        </div>
+                        {i.motivo_rechazo.length > 80 && <VerTextoCompleto titulo={t('admIncidencias.motivoRechazo')} texto={i.motivo_rechazo} />}
                       </div>
                     )}
                   </td>
@@ -160,13 +168,13 @@ export default async function IncidenciasPage({
                     <div className="flex flex-col gap-1">
                       {i.screenshotSignedUrl && (
                         <a href={i.screenshotSignedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                          Ver captura
+                          {t('admIncidencias.verCaptura')}
                         </a>
                       )}
                       {i.evidencias.map((f) =>
                         f.url ? (
                           <a key={f.name} href={f.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                            Ver {f.name.toLowerCase()}
+                            {t('admIncidencias.ver')} {f.name.toLowerCase()}
                           </a>
                         ) : null
                       )}
@@ -175,7 +183,7 @@ export default async function IncidenciasPage({
                   </td>
                   <td className="px-4 py-3 text-xs text-ink-muted">{formatFecha(i.created_at)}</td>
                   <td className="px-4 py-3">
-                    <Badge className={estadoIncidenciaColor(i.estado)}>{estadoIncidenciaLabel(i.estado)}</Badge>
+                    <Badge className={estadoIncidenciaColor(i.estado)}>{estadoIncidenciaLabel(i.estado, idioma)}</Badge>
                   </td>
                   <td className="px-4 py-3 text-xs text-ink-muted">
                     {i.admins?.usuario ? (

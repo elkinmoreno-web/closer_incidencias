@@ -7,6 +7,8 @@ import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { Pagination } from '@/components/dashboard/Pagination';
 import { formatFechaCorta, formatFecha } from '@/lib/utils';
 import { urlArchivoDrive } from '@/lib/driveUrl';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor } from '@/lib/i18n/traducir';
 
 const PAGE_SIZE = 10;
 
@@ -15,6 +17,8 @@ export default async function ConexionesPage({
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
+  const idioma = await resolverIdioma();
+  const t = crearTraductor(idioma);
   const supabase = createClient();
   const page = Math.max(1, Number(searchParams.page) || 1);
   const from = (page - 1) * PAGE_SIZE;
@@ -53,8 +57,10 @@ export default async function ConexionesPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Conexiones fuera de zona</h1>
-          <p className="text-sm text-ink-muted">{count ?? 0} resultado(s)</p>
+          <h1 className="text-2xl font-semibold text-ink">{t('conexiones.titulo')}</h1>
+          <p className="text-sm text-ink-muted">
+            {count ?? 0} {t('admIncidencias.resultados')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <ExportarConexionesButton />
@@ -63,7 +69,7 @@ export default async function ConexionesPage({
       </div>
 
       <TableFilters
-        searchPlaceholder="Buscar rider o DNI..."
+        searchPlaceholder={t('conexiones.buscarPlaceholder')}
         ciudades={ciudades ?? []}
         centros={centros ?? []}
         showDateRange
@@ -71,17 +77,17 @@ export default async function ConexionesPage({
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
         {filas.length === 0 ? (
-          <EmptyState title="No hay conexiones fuera de zona registradas" />
+          <EmptyState title={t('conexiones.sinRegistros')} />
         ) : (
           <table className="w-full min-w-[850px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
-                <th className="px-4 py-3">Rider</th>
-                <th className="px-4 py-3">Centro</th>
-                <th className="px-4 py-3">Fecha</th>
-                <th className="px-4 py-3">Captura</th>
-                <th className="px-4 py-3">Observaciones</th>
-                <th className="px-4 py-3">Registrado por</th>
+                <th className="px-4 py-3">{t('conexiones.colRider')}</th>
+                <th className="px-4 py-3">{t('conexiones.colCentro')}</th>
+                <th className="px-4 py-3">{t('conexiones.colFecha')}</th>
+                <th className="px-4 py-3">{t('conexiones.colCaptura')}</th>
+                <th className="px-4 py-3">{t('conexiones.colObservaciones')}</th>
+                <th className="px-4 py-3">{t('conexiones.colRegistradoPor')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -96,7 +102,7 @@ export default async function ConexionesPage({
                   <td className="px-4 py-3 text-xs">
                     {c.screenshotSignedUrl ? (
                       <a href={c.screenshotSignedUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                        Ver captura
+                        {t('conexiones.verCaptura')}
                       </a>
                     ) : (
                       '—'

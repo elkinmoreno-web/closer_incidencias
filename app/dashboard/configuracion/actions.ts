@@ -79,6 +79,28 @@ export async function actualizarInstruccionesMotivo(id: number, instrucciones: s
   revalidatePath('/dashboard/configuracion');
 }
 
+/**
+ * Guarda el nombre en inglés de un motivo — el mismo catálogo
+ * compartido entre España y Alemania, mostrado en el idioma de quien
+ * lo esté viendo. Si queda vacío, la aplicación usa el nombre en
+ * español como respaldo (nunca se muestra una fila en blanco).
+ */
+export async function actualizarNombreMotivoEn(id: number, nombreEn: string) {
+  const supabase = await assertSuperAdmin();
+  const valor = nombreEn.trim() || null;
+  const { error } = await supabase.from('motivos').update({ nombre_en: valor }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
+export async function actualizarNombreMotivoAusenciaEn(id: number, nombreEn: string) {
+  const supabase = await assertSuperAdmin();
+  const valor = nombreEn.trim() || null;
+  const { error } = await supabase.from('motivos_ausencia').update({ nombre_en: valor }).eq('id', id);
+  if (error) throw new Error(error.message);
+  revalidatePath('/dashboard/configuracion');
+}
+
 export async function toggleMotivoAusencia(id: number, activo: boolean) {
   const supabase = await assertSuperAdmin();
   const { error } = await supabase.from('motivos_ausencia').update({ activo }).eq('id', id);

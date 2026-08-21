@@ -5,8 +5,10 @@ import { useState, useTransition } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { exportarIncidencias } from '@/app/dashboard/incidencias/actions';
 import { mensajeError } from '@/lib/utils';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 export function ExportarIncidenciasButton() {
+  const { t } = useIdioma();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -26,22 +28,22 @@ export function ExportarIncidenciasButton() {
           q: searchParams.get('q') ?? undefined,
         });
         if (filas.length === 0) {
-          setError('No hay filas que exportar con estos filtros');
+          setError(t('exportar.sinFilas'));
           return;
         }
         const XLSX = await import('xlsx');
         const hoja = XLSX.utils.json_to_sheet(
           filas.map((f) => ({
-            Fecha: f.fecha,
-            Rider: f.rider,
-            DNI: f.dni,
-            Centro: f.centro,
-            Motivo: f.motivo,
-            'Código de pedido': f.codigoPedido ?? '',
-            Observaciones: f.observaciones ?? '',
-            Estado: f.estado,
-            'Motivo del rechazo': f.motivoRechazo ?? '',
-            Gestor: f.gestor ?? '',
+            [t('exportar.colFecha')]: f.fecha,
+            [t('exportar.colRider')]: f.rider,
+            [t('exportar.colDni')]: f.dni,
+            [t('exportar.colCentro')]: f.centro,
+            [t('exportar.colMotivo')]: f.motivo,
+            [t('exportar.colCodigoPedido')]: f.codigoPedido ?? '',
+            [t('exportar.colObservaciones')]: f.observaciones ?? '',
+            [t('exportar.colEstado')]: f.estado,
+            [t('exportar.colMotivoRechazo')]: f.motivoRechazo ?? '',
+            [t('exportar.colGestor')]: f.gestor ?? '',
           }))
         );
         const libro = XLSX.utils.book_new();
@@ -61,7 +63,7 @@ export function ExportarIncidenciasButton() {
         className="flex items-center gap-1.5 rounded-full border border-border px-3 py-2 text-xs font-semibold text-ink-muted hover:border-primary hover:text-primary disabled:opacity-60"
       >
         {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-        Exportar a Excel
+        {t('exportar.aExcel')}
       </button>
       {error && <span className="text-[10px] text-danger">{error}</span>}
     </div>

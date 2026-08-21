@@ -9,6 +9,7 @@ export type EstadoAusencia = 'pendiente' | 'aprobada' | 'rechazada' | 'revisada'
 export interface Ciudad {
   id: number;
   nombre: string;
+  pais: 'ES' | 'DE';
 }
 
 export interface Gestor {
@@ -33,16 +34,19 @@ export interface Vehiculo {
 export interface Motivo {
   id: number;
   nombre: string;
+  nombre_en: string | null;
   requiere_captura: boolean;
   requiere_observaciones: boolean;
   requiere_direcciones: boolean;
   instrucciones_aprobacion?: string | null;
+  instrucciones_aprobacion_en?: string | null;
   activo: boolean;
 }
 
 export interface MotivoAusencia {
   id: number;
   nombre: string;
+  nombre_en: string | null;
   activo: boolean;
 }
 

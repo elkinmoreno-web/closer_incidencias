@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, AlertCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 const STORAGE_KEY_PREFIX = 'notificacionesRider_';
 const ULTIMO_VISTO_PREFIX = 'ultimoVistoRider_';
@@ -56,7 +57,7 @@ function playBeep() {
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 660;
-    gain.gain.setValueAtTime(0.80, ctx.currentTime);
+    gain.gain.setValueAtTime(0.45, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -83,6 +84,7 @@ function formatHora(iso: string) {
  * Cualquier cambio detectado refresca la página entera (router.refresh()).
  */
 export function RiderNotificationBell({ riderId }: { riderId: string }) {
+  const { t } = useIdioma();
   const router = useRouter();
   const [notis, setNotis] = useState<Notificacion[]>([]);
   const [abierto, setAbierto] = useState(false);
@@ -265,7 +267,7 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
         type="button"
         onClick={alAbrir}
         className="relative rounded-full border border-border p-2.5 text-ink-muted transition hover:bg-bg"
-        title="Notificaciones"
+        title={t('notif.titulo')}
       >
         <Bell size={16} />
         {noLeidas > 0 && (
@@ -277,10 +279,10 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
 
       {abierto && (
         <div className="absolute right-0 top-12 z-[60] w-72 max-w-[90vw] rounded-card border border-border bg-surface shadow-lg">
-          <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">Notificaciones</div>
+          <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">{t('notif.titulo')}</div>
           <div className="max-h-72 overflow-y-auto">
             {notis.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-ink-muted">Sin novedades por ahora.</p>
+              <p className="px-4 py-6 text-center text-xs text-ink-muted">{t('notif.sinNovedades')}</p>
             ) : (
               notis.map((n) => (
                 <div key={n.id} className="border-b border-border px-4 py-2.5 text-xs last:border-0">
@@ -296,14 +298,14 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
       {popupInstrucciones && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-card bg-surface p-6 shadow-lg">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">✓ Incidencia aprobada</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-600">✓ {t('protocolo.incidenciaAprobada')}</p>
             <h3 className="mb-3 text-base font-semibold text-ink">{popupInstrucciones.motivo}</h3>
             <p className="mb-5 whitespace-pre-wrap text-sm text-ink-muted">{popupInstrucciones.texto}</p>
             <button
               onClick={() => setPopupInstrucciones(null)}
               className="w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-white hover:opacity-90"
             >
-              Entendido
+              {t('protocolo.entendido')}
             </button>
           </div>
         </div>
@@ -316,18 +318,18 @@ export function RiderNotificationBell({ riderId }: { riderId: string }) {
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-danger">
                 <AlertCircle size={16} />
               </div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-danger">Incidencia rechazada</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-danger">{t('notif.incidenciaRechazada')}</p>
             </div>
             <h3 className="mb-3 text-base font-semibold text-ink">{popupRechazo.motivo}</h3>
             <div className="mb-5 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-ink">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-danger">Motivo del rechazo</p>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-danger">{t('riderPage.motivoRechazo')}</p>
               <p className="whitespace-pre-wrap text-ink-muted">{popupRechazo.razon}</p>
             </div>
             <button
               onClick={() => setPopupRechazo(null)}
               className="w-full rounded-full border border-border py-2.5 text-sm font-semibold text-ink hover:bg-bg"
             >
-              Entendido
+              {t('protocolo.entendido')}
             </button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Upload, X } from 'lucide-react';
 import { leerArchivoExcel, mapearFilasExcel, type RiderExcelRow } from '@/lib/xlsxImport';
 import { importarRidersLote } from '@/app/dashboard/riders/actions';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 // Lotes más grandes que antes: ahora la mayoría de filas de un lote solo
 // necesitan un UPSERT en bloque (rápido), no una operación por fila. Solo
@@ -14,6 +15,7 @@ const TAMANO_LOTE = 200;
 type Fase = 'inicial' | 'previsualizando' | 'importando' | 'terminado';
 
 export function ImportRidersModal() {
+  const { t } = useIdioma();
   const [open, setOpen] = useState(false);
   const [fase, setFase] = useState<Fase>('inicial');
   const [filas, setFilas] = useState<RiderExcelRow[]>([]);
@@ -45,7 +47,7 @@ export function ImportRidersModal() {
       const crudas = await leerArchivoExcel(file);
       const { validas, errores, omitidas } = mapearFilasExcel(crudas);
       if (validas.length === 0) {
-        setErrorArchivo('No se encontró ninguna fila válida (Activo o Baja operativa). Revisa el Excel.');
+        setErrorArchivo(t('importRiders.errorSinFilas'));
         return;
       }
       setFilas(validas);
@@ -53,7 +55,7 @@ export function ImportRidersModal() {
       setOmitidasParseo(omitidas);
       setFase('previsualizando');
     } catch {
-      setErrorArchivo('No se pudo leer el archivo. Asegúrate de que sea un .xlsx válido.');
+      setErrorArchivo(t('importRiders.errorLeer'));
     }
   }
 
@@ -88,7 +90,7 @@ export function ImportRidersModal() {
         className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-ink transition hover:bg-bg"
       >
         <Upload size={16} />
-        Importar Excel
+        {t('importRiders.boton')}
       </button>
 
       {open && (
@@ -104,7 +106,7 @@ export function ImportRidersModal() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-ink">Importar riders desde Excel</h2>
+              <h2 className="text-lg font-semibold text-ink">{t('importRiders.titulo')}</h2>
               <button
                 onClick={() => {
                   setOpen(false);
@@ -119,15 +121,12 @@ export function ImportRidersModal() {
             {fase === 'inicial' && (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-ink-muted">
-                  Sube el .xlsx con las columnas habituales (Empleado, DNI, Email, Centro, Empresa
-                  contratante, Tipo de vehículo, Estado, etc.). Solo se cargan filas de{' '}
-                  <strong>Closer Logistics SL</strong> o <strong>Closer Go Germany GmbH</strong> con
-                  estado Activo o Baja operativa, y puesto Rider. Si un rider ya existe (por DNI), se
-                  actualiza en vez de duplicarse. Los centros se asocian a los que ya existen en el
-                  sistema; los centros <strong>MCD</strong> y los de <strong>Alemania</strong> se
-                  crean automáticamente con su propia ciudad. Cualquier <strong>otro</strong> centro
-                  que no se reconozca también se crea solo, pero <strong>sin ciudad asignada</strong> —
-                  se lista al final para que le asignes la ciudad a mano desde Configuración → Centros.
+                  {t('importRiders.descripcion1')} <strong>Closer Logistics SL</strong> {t('importRiders.descripcion2')}{' '}
+                  <strong>Closer Go Germany GmbH</strong> {t('importRiders.descripcion3')}{' '}
+                  <strong>MCD</strong> {t('importRiders.descripcion4')} <strong>Alemania</strong>{' '}
+                  {t('importRiders.descripcion5')} <strong>{t('importRiders.descripcion6')}</strong>{' '}
+                  {t('importRiders.descripcion7')} <strong>{t('importRiders.descripcion8')}</strong>{' '}
+                  {t('importRiders.descripcion9')}
                 </p>
                 <input
                   type="file"
@@ -142,17 +141,16 @@ export function ImportRidersModal() {
             {fase === 'previsualizando' && (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-ink">
-                  <span className="font-semibold">{filas.length}</span> rider(es) con estado Activo o Baja
-                  operativa, listos para importar.
+                  <span className="font-semibold">{filas.length}</span> {t('importRiders.ridersListos')}
                 </p>
                 {omitidasParseo.length > 0 && (
                   <div className="rounded-lg bg-bg p-3 text-xs text-ink-muted">
-                    {omitidasParseo.length} fila(s) omitidas por no tener estado Activo ni Baja operativa.
+                    {omitidasParseo.length} {t('importRiders.omitidas')}
                   </div>
                 )}
                 {erroresParseo.length > 0 && (
                   <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                    {erroresParseo.length} fila(s) se ignoraron por falta de datos:
+                    {erroresParseo.length} {t('importRiders.ignoradas')}
                     <ul className="mt-1 list-disc pl-4">
                       {erroresParseo.slice(0, 5).map((e, idx) => (
                         <li key={idx}>{e}</li>
@@ -175,10 +173,10 @@ export function ImportRidersModal() {
                 </div>
                 <div className="flex justify-end gap-2">
                   <button onClick={reset} className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted">
-                    Cancelar
+                    {t('importRiders.cancelar')}
                   </button>
                   <button onClick={iniciarImportacion} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white">
-                    Importar {filas.length} rider(es)
+                    {t('importRiders.importar')} {filas.length} {t('importRiders.rideres')}
                   </button>
                 </div>
               </div>
@@ -193,18 +191,16 @@ export function ImportRidersModal() {
                   />
                 </div>
                 <p className="text-sm text-ink">
-                  {progreso} / {filas.length} procesados —{' '}
-                  <span className="font-semibold text-emerald-700">{creadosTotal} nuevos</span>,{' '}
-                  <span className="font-semibold text-primary">{actualizadosTotal} actualizados</span>
-                  {erroresImport.length > 0 && <span className="text-danger"> · {erroresImport.length} con error</span>}
+                  {progreso} / {filas.length} {t('importRiders.procesados')}{' '}
+                  <span className="font-semibold text-emerald-700">{creadosTotal} {t('importRiders.nuevos')}</span>,{' '}
+                  <span className="font-semibold text-primary">{actualizadosTotal} {t('importRiders.actualizados')}</span>
+                  {erroresImport.length > 0 && <span className="text-danger"> · {erroresImport.length} {t('importRiders.conError')}</span>}
                 </p>
 
                 {fase === 'terminado' && sinCentroImport.length > 0 && (
                   <div className="max-h-40 overflow-y-auto rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
                     <p className="mb-1 font-semibold">
-                      {sinCentroImport.length} rider(es) con algo por revisar (centro nuevo creado sin
-                      ciudad, o que no se pudo crear). Revisa el detalle y asigna la ciudad desde
-                      Configuración → Centros:
+                      {sinCentroImport.length} {t('importRiders.algoQueRevisar1')}
                     </p>
                     {sinCentroImport.map((s, idx) => (
                       <div key={idx}>{s}</div>
@@ -229,7 +225,7 @@ export function ImportRidersModal() {
                       }}
                       className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white"
                     >
-                      Cerrar
+                      {t('importRiders.cerrar')}
                     </button>
                   </div>
                 )}

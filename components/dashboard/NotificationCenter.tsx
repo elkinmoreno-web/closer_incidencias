@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Bell, Volume2, VolumeX } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 const STORAGE_KEY = 'notificacionesPanelAdmin';
 const SONIDO_KEY = 'sonidoNotificacionesIncidencias';
@@ -34,11 +35,13 @@ function playBeep() {
   }
 }
 
-function formatHora(iso: string) {
-  return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+function formatHora(iso: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 }
 
 export function NotificationCenter() {
+  const { t, idioma } = useIdioma();
+  const locale = idioma === 'en' ? 'en-GB' : 'es-ES';
   const idInstancia = useId();
   const [sonido, setSonido] = useState(true);
   const [notis, setNotis] = useState<Notificacion[]>([]);
@@ -88,19 +91,19 @@ export function NotificationCenter() {
     const channel = supabase
       .channel(`avisos-panel-admin-${idInstancia}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'incidencias' }, (payload) => {
-        const nombre = (payload.new as { nombre_rider?: string })?.nombre_rider ?? 'Un rider';
-        agregar(`Nueva incidencia de ${nombre}`);
+        const nombre = (payload.new as { nombre_rider?: string })?.nombre_rider ?? t('notifCenter.unRider');
+        agregar(`${t('notifCenter.nuevaIncidenciaDe')} ${nombre}`);
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ausencias' }, (payload) => {
-        const nombre = (payload.new as { nombre_rider?: string })?.nombre_rider ?? 'Un rider';
-        agregar(`Nueva ausencia comunicada por ${nombre}`);
+        const nombre = (payload.new as { nombre_rider?: string })?.nombre_rider ?? t('notifCenter.unRider');
+        agregar(`${t('notifCenter.nuevaAusenciaDe')} ${nombre}`);
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [idInstancia]);
+  }, [idInstancia, t]);
 
   function toggleSonido() {
     setSonido((v) => {
@@ -130,18 +133,18 @@ export function NotificationCenter() {
       <button
         type="button"
         onClick={toggleSonido}
-        title={sonido ? 'Silenciar avisos' : 'Activar avisos'}
+        title={sonido ? t('notifCenter.silenciarAvisos') : t('notifCenter.activarAvisos')}
         className="flex items-center gap-1.5 rounded-full border border-border px-3 py-2 text-xs font-medium text-ink-muted transition hover:bg-bg"
       >
         {sonido ? <Volume2 size={14} /> : <VolumeX size={14} />}
-        <span className="hidden sm:inline">{sonido ? 'Sonido ON' : 'Sonido OFF'}</span>
+        <span className="hidden sm:inline">{sonido ? t('notifCenter.sonidoOn') : t('notifCenter.sonidoOff')}</span>
       </button>
 
       <button
         type="button"
         onClick={alAbrir}
         className="relative rounded-full border border-border p-2.5 text-ink-muted transition hover:bg-bg"
-        title="Notificaciones"
+        title={t('notif.titulo')}
       >
         <Bell size={16} />
         {noLeidas > 0 && (
@@ -153,15 +156,15 @@ export function NotificationCenter() {
 
       {abierto && (
         <div className="absolute right-0 top-12 z-[60] w-80 max-w-[90vw] rounded-card border border-border bg-surface shadow-lg">
-          <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">Notificaciones</div>
+          <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">{t('notif.titulo')}</div>
           <div className="max-h-80 overflow-y-auto">
             {notis.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-ink-muted">Sin novedades por ahora.</p>
+              <p className="px-4 py-6 text-center text-xs text-ink-muted">{t('notif.sinNovedades')}</p>
             ) : (
               notis.map((n) => (
                 <div key={n.id} className="border-b border-border px-4 py-2.5 text-xs last:border-0">
                   <div className="text-ink">{n.texto}</div>
-                  <div className="mt-0.5 text-ink-muted">{formatHora(n.fecha)}</div>
+                  <div className="mt-0.5 text-ink-muted">{formatHora(n.fecha, locale)}</div>
                 </div>
               ))
             )}

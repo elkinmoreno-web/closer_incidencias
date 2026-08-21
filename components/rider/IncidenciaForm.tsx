@@ -5,6 +5,8 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { enviarIncidencia, type FormActionState } from '@/app/rider/dashboard/actions';
 import { compressImageIfNeeded, validarArchivoCliente } from '@/lib/compressImage';
 import type { Motivo } from '@/lib/types';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -16,6 +18,7 @@ const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];
  */
 function EstadoEnvio({ comprimiendo }: { comprimiendo: boolean }) {
   const { pending } = useFormStatus();
+  const { t } = useIdioma();
   const [segundos, setSegundos] = useState(0);
   const activo = comprimiendo || pending;
 
@@ -35,16 +38,19 @@ function EstadoEnvio({ comprimiendo }: { comprimiendo: boolean }) {
         disabled={activo}
         className="w-full rounded-full bg-primary py-3 font-semibold text-white transition hover:bg-primary-dark disabled:opacity-60"
       >
-        {comprimiendo ? 'Optimizando imágenes...' : pending ? 'Enviando...' : 'Enviar incidencia'}
+        {comprimiendo ? t('incidenciaForm.optimizando') : pending ? t('incidenciaForm.enviando') : t('incidenciaForm.enviar')}
       </button>
       {activo && segundos >= 3 && (
-        <p className="text-xs text-ink-muted">Sigue trabajando... ({segundos}s)</p>
+        <p className="text-xs text-ink-muted">
+          {t('incidenciaForm.sigueTrabajando')} ({segundos}s)
+        </p>
       )}
     </div>
   );
 }
 
 export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[] }) {
+  const { t, idioma } = useIdioma();
   const [state, formAction] = useFormState<FormActionState, FormData>(enviarIncidencia, undefined);
   const [motivoId, setMotivoId] = useState('');
   const [comprimiendo, setComprimiendo] = useState(false);
@@ -153,9 +159,9 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
   if (state?.success) {
     return (
       <div className="rounded-xl bg-emerald-50 px-4 py-4 text-sm font-medium text-emerald-800">
-        Incidencia enviada. Quedará pendiente de revisión por el equipo.
+        {t('incidenciaForm.enviada')}
         <button onClick={() => window.location.reload()} className="ml-2 underline">
-          Enviar otra
+          {t('incidenciaForm.enviarOtra')}
         </button>
       </div>
     );
@@ -166,7 +172,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
       <input type="hidden" name="dni" value={dni} />
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold text-ink-muted">Motivo *</label>
+        <label className="text-sm font-semibold text-ink-muted">{t('incidenciaForm.motivo')} *</label>
         <select
           name="motivoId"
           required
@@ -175,21 +181,21 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
           className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
         >
           <option value="" disabled>
-            Selecciona un motivo
+            {t('incidenciaForm.selecciona')}
           </option>
           {motivos.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.nombre}
+              {nombreSegunIdioma(idioma, m.nombre, m.nombre_en)}
             </option>
           ))}
         </select>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold text-ink-muted">Código del pedido</label>
+        <label className="text-sm font-semibold text-ink-muted">{t('incidenciaForm.codigoPedido')}</label>
         <input
           name="codigoPedido"
-          placeholder="Ej: UB-123456"
+          placeholder={t('incidenciaForm.codigoPedidoEjemplo')}
           className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
         />
       </div>
@@ -197,7 +203,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
       {motivoSeleccionado?.requiere_direcciones && (
         <div className="grid grid-cols-1 gap-3 rounded-xl bg-bg p-3 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-semibold text-ink-muted">Dirección de recogida *</label>
+            <label className="text-sm font-semibold text-ink-muted">{t('incidenciaForm.direccionRecogida')} *</label>
             <input
               name="direccionRecogida"
               required
@@ -205,7 +211,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-semibold text-ink-muted">Dirección de entrega *</label>
+            <label className="text-sm font-semibold text-ink-muted">{t('incidenciaForm.direccionEntrega')} *</label>
             <input
               name="direccionEntrega"
               required
@@ -217,20 +223,20 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
 
       <div className="flex flex-col gap-1.5">
         <label className="text-sm font-semibold text-ink-muted">
-          Observaciones {motivoSeleccionado?.requiere_observaciones && '*'}
+          {t('incidenciaForm.observaciones')} {motivoSeleccionado?.requiere_observaciones && '*'}
         </label>
         <textarea
           name="observaciones"
           rows={3}
           required={motivoSeleccionado?.requiere_observaciones}
-          placeholder="Añade detalles que ayuden a la revisión..."
+          placeholder={t('incidenciaForm.observacionesPlaceholder')}
           className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
         />
       </div>
 
       {motivoSeleccionado?.requiere_captura && (
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-semibold text-ink-muted">Captura del código del pedido *</label>
+          <label className="text-sm font-semibold text-ink-muted">{t('incidenciaForm.captura')} *</label>
           <input
             type="file"
             name="screenshot"
@@ -244,7 +250,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
       )}
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-semibold text-ink-muted">Evidencia adicional (opcional)</label>
+        <label className="text-sm font-semibold text-ink-muted">{t('incidenciaForm.evidencia')}</label>
         <input
           type="file"
           name="evidencia"
@@ -253,7 +259,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
           onChange={alElegirEvidencias}
           className="text-sm"
         />
-        <span className="text-xs text-ink-muted">Hasta 3 imágenes.</span>
+        <span className="text-xs text-ink-muted">{t('incidenciaForm.hastaTresImagenes')}</span>
         {errorEvidencia && <p className="text-xs text-danger">{errorEvidencia}</p>}
       </div>
 

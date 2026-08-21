@@ -8,19 +8,23 @@ import { RecalcularPasswordsButton } from '@/components/riders/RecalcularPasswor
 import { RidersList } from '@/components/riders/RidersList';
 import { TableFilters } from '@/components/dashboard/TableFilters';
 import { Pagination } from '@/components/dashboard/Pagination';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { crearTraductor } from '@/lib/i18n/traducir';
 
 const PAGE_SIZE = 50; // Riders tiene muchos más registros que el resto de tablas (miles); con 10 por página serían cientos de páginas.
-
-const ESTADOS = [
-  { value: 'activo', label: 'Activo' },
-  { value: 'inactivo', label: 'Inactivo' },
-];
 
 export default async function RidersPage({
   searchParams,
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
+  const idioma = await resolverIdioma();
+  const t = crearTraductor(idioma);
+  const ESTADOS = [
+    { value: 'activo', label: t('admRiders.estadoActivo') },
+    { value: 'inactivo', label: t('admRiders.estadoInactivo') },
+  ];
+
   const supabase = createClient();
   const yo = await getAdminActual();
   const esSuperAdmin = yo?.rol === 'super_admin';
@@ -70,8 +74,10 @@ export default async function RidersPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-ink">Riders</h1>
-          <p className="text-sm text-ink-muted">{count ?? 0} rider(s) registrados.</p>
+          <h1 className="text-2xl font-semibold text-ink">{t('admRiders.titulo')}</h1>
+          <p className="text-sm text-ink-muted">
+            {count ?? 0} {t('admRiders.registrados')}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {esSuperAdmin && <RecalcularPasswordsButton />}
@@ -86,12 +92,12 @@ export default async function RidersPage({
       </div>
 
       <div className="rounded-card border border-border bg-surface p-5">
-        <h2 className="mb-3 font-semibold text-ink">Añadir un rider</h2>
+        <h2 className="mb-3 font-semibold text-ink">{t('admRiders.anadirRider')}</h2>
         <CrearRiderForm centros={centros ?? []} vehiculos={vehiculos ?? []} />
       </div>
 
       <TableFilters
-        searchPlaceholder="Buscar por nombre, DNI o email..."
+        searchPlaceholder={t('admRiders.buscarPlaceholder')}
         estados={ESTADOS}
         ciudades={ciudades ?? []}
         centros={centros ?? []}
@@ -100,7 +106,7 @@ export default async function RidersPage({
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
         {!riders || riders.length === 0 ? (
-          <EmptyState title="No hay riders con estos filtros" />
+          <EmptyState title={t('admRiders.sinResultados')} />
         ) : (
           <RidersList riders={riders as any} centros={centros ?? []} vehiculos={vehiculos ?? []} esSuperAdmin={esSuperAdmin} />
         )}

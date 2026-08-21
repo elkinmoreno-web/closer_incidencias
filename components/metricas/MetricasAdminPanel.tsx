@@ -14,8 +14,9 @@ import {
 } from '@/app/dashboard/metricas/actions';
 import { paginasAMostrar } from '@/lib/pagination';
 import { semanaIsoDe, fechaLimiteMetricas, semanaEsMuyAntigua } from '@/lib/metricas';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
-const fmtInt = (n: number | null) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString('es-ES'));
+const fmtInt = (n: number | null, locale: string) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString(locale));
 const fmtFloat = (n: number | null) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : n.toFixed(2));
 const fmtPct = (n: number | null) => (n === null || n === undefined || !Number.isFinite(n) ? '—' : `${(n * 100).toFixed(0)}%`);
 const fmtDMY = (iso: string) => {
@@ -39,6 +40,8 @@ function rangoSemanaIso(year: number, week: number): { lunes: string; domingo: s
 }
 
 export function MetricasAdminPanel() {
+  const { t, idioma } = useIdioma();
+  const locale = idioma === 'en' ? 'en-US' : 'es-ES';
   const [modo, setModo] = useState<Modo>('semanal');
   const [year, setYear] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
@@ -92,16 +95,16 @@ export function MetricasAdminPanel() {
         const desdeCache = ids.length - res.consultados;
         setInfoConsulta(
           res.consultados === 0
-            ? 'Todo servido desde caché (menos de 30 min) — sin consultar la API'
+            ? t('admMetricas.todoDesdeCache')
             : desdeCache > 0
-            ? `${res.consultados} centro(s) consultados a la API, ${desdeCache} desde caché`
-            : `${res.consultados} centro(s) consultados a la API`
+            ? `${res.consultados} ${t('admMetricas.centrosConsultadosYCache').replace('{n}', String(desdeCache))}`
+            : `${res.consultados} ${t('admMetricas.centrosConsultados')}`
         );
       })
       .finally(() => {
         if (turnoRef.current === miTurno) setCargando(false);
       });
-  }, [modo, year, week, fechaDia, centroFiltro, centros, forzar]);
+  }, [modo, year, week, fechaDia, centroFiltro, centros, forzar, t]);
 
   function cambiarSemana(delta: number) {
     if (year === null || week === null) return;
@@ -183,20 +186,20 @@ export function MetricasAdminPanel() {
     const XLSX = await import('xlsx');
     const hoja = XLSX.utils.json_to_sheet(
       filasFiltradas.map((f) => ({
-        Centro: f.centro,
-        DNI: f.dni,
-        Nombre: f.nombre,
-        Teléfono: f.telefono,
-        'Horas online': f.online_hours,
-        'Horas activo': f.active_hours,
-        Viajes: f.num_of_trips,
-        'Aceptación %': Math.round(f.acceptance_rate * 100),
-        'Cancelación %': Math.round(f.cancelation_rate * 100),
+        [t('admMetricas.exColCentro')]: f.centro,
+        [t('admMetricas.exColDni')]: f.dni,
+        [t('admMetricas.exColNombre')]: f.nombre,
+        [t('admMetricas.exColTelefono')]: f.telefono,
+        [t('admMetricas.exColHorasOnline')]: f.online_hours,
+        [t('admMetricas.exColHorasActivo')]: f.active_hours,
+        [t('admMetricas.exColViajes')]: f.num_of_trips,
+        [t('admMetricas.exColAceptacionPct')]: Math.round(f.acceptance_rate * 100),
+        [t('admMetricas.exColCancelacionPct')]: Math.round(f.cancelation_rate * 100),
         TPH: f.tph,
       }))
     );
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, 'Métricas');
+    XLSX.utils.book_append_sheet(libro, hoja, t('admMetricas.exSheetName'));
     const sufijo = modo === 'diario' ? fechaDia : rango ? `${rango.lunes}_a_${rango.domingo}` : 'export';
     XLSX.writeFile(libro, `metricas_${sufijo}.xlsx`);
   }
@@ -210,13 +213,13 @@ export function MetricasAdminPanel() {
               onClick={() => setModo('semanal')}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${modo === 'semanal' ? 'bg-primary text-white' : 'text-ink-muted'}`}
             >
-              Semanal
+              {t('admMetricas.semanal')}
             </button>
             <button
               onClick={() => setModo('diario')}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${modo === 'diario' ? 'bg-primary text-white' : 'text-ink-muted'}`}
             >
-              Diario
+              {t('admMetricas.diario')}
             </button>
           </div>
 
@@ -229,7 +232,9 @@ export function MetricasAdminPanel() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-xs font-medium text-brand-text">{rango ? `Semana del ${fmtDMY(rango.lunes)} al ${fmtDMY(rango.domingo)}` : '—'}</span>
+              <span className="text-xs font-medium text-brand-text">
+                {rango ? t('admMetricas.semanaDelAl').replace('{inicio}', fmtDMY(rango.lunes)).replace('{fin}', fmtDMY(rango.domingo)) : '—'}
+              </span>
               <button
                 onClick={() => cambiarSemana(1)}
                 disabled={esHoyODespues}
@@ -269,7 +274,7 @@ export function MetricasAdminPanel() {
             onChange={(e) => setCentroFiltro(e.target.value)}
             className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
           >
-            <option value="todos">Todos mis centros</option>
+            <option value="todos">{t('admMetricas.todosMisCentros')}</option>
             {centros.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.nombre}
@@ -278,7 +283,7 @@ export function MetricasAdminPanel() {
           </select>
           <label className="flex items-center gap-1.5 text-xs text-ink-muted">
             <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} className="accent-primary" />
-            Forzar (ignorar caché)
+            {t('admMetricas.forzarIgnorarCache')}
           </label>
         </div>
         <button
@@ -287,7 +292,7 @@ export function MetricasAdminPanel() {
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
         >
           <Download className="h-3.5 w-3.5" />
-          Exportar esta tabla
+          {t('admMetricas.exportarTabla')}
         </button>
       </div>
 
@@ -298,7 +303,7 @@ export function MetricasAdminPanel() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Filtrar por nombre o DNI en esta tabla..."
+            placeholder={t('admMetricas.filtrarPlaceholder')}
             className="w-64 rounded-lg border border-border bg-surface py-1.5 pl-8 pr-2 text-xs text-ink focus:border-primary focus:outline-none"
           />
         </div>
@@ -308,14 +313,14 @@ export function MetricasAdminPanel() {
           className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
         >
           {buscando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          Buscar rider en el CRM
+          {t('admMetricas.buscarRiderCrm')}
         </button>
       </div>
 
       {resultadoBusqueda && (
         <div className="rounded-xl border border-border bg-card p-3 text-xs">
           {resultadoBusqueda.length === 0 ? (
-            <p className="text-ink-muted">No se encontró ningún rider en el CRM con ese texto.</p>
+            <p className="text-ink-muted">{t('admMetricas.sinRiderEncontrado')}</p>
           ) : (
             <div className="space-y-1.5">
               {resultadoBusqueda.map((r) => {
@@ -326,7 +331,7 @@ export function MetricasAdminPanel() {
                       <span className="font-medium text-ink">{r.nombre}</span> <span className="text-ink-muted">· {r.dni} · {r.email}</span>
                     </span>
                     <span className={enDatos ? 'font-semibold text-emerald-600' : 'font-semibold text-danger'}>
-                      {enDatos ? '✓ Tiene datos en este periodo' : '✗ Sin datos en este periodo'}
+                      {enDatos ? `✓ ${t('admMetricas.tieneDatos')}` : `✗ ${t('admMetricas.sinDatosPeriodo')}`}
                     </span>
                   </div>
                 );
@@ -338,16 +343,16 @@ export function MetricasAdminPanel() {
 
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl border border-border bg-card px-3 py-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Riders con datos</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{t('admMetricas.ridersConDatos')}</div>
           <div className="font-mono text-lg font-medium text-ink">{totales.riders}</div>
         </div>
         <div className="rounded-xl border border-border bg-card px-3 py-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Horas online (total)</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{t('admMetricas.horasOnlineTotal')}</div>
           <div className="font-mono text-lg font-medium text-ink">{fmtFloat(totales.online)}</div>
         </div>
         <div className="rounded-xl border border-border bg-card px-3 py-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Viajes completados</div>
-          <div className="font-mono text-lg font-medium text-brand-text">{fmtInt(totales.viajes)}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{t('admMetricas.viajesCompletados')}</div>
+          <div className="font-mono text-lg font-medium text-brand-text">{fmtInt(totales.viajes, locale)}</div>
         </div>
       </div>
 
@@ -370,12 +375,12 @@ export function MetricasAdminPanel() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                  <th className="px-3 py-2">Centro</th>
-                  <th className="px-3 py-2">Rider</th>
-                  <th className="px-3 py-2 text-center">Horas online</th>
-                  <th className="px-3 py-2 text-center">Viajes</th>
-                  <th className="px-3 py-2 text-center">Aceptación</th>
-                  <th className="px-3 py-2 text-center">Cancelación</th>
+                  <th className="px-3 py-2">{t('admMetricas.colCentro')}</th>
+                  <th className="px-3 py-2">{t('admMetricas.colRider')}</th>
+                  <th className="px-3 py-2 text-center">{t('admMetricas.colHorasOnline')}</th>
+                  <th className="px-3 py-2 text-center">{t('admMetricas.colViajes')}</th>
+                  <th className="px-3 py-2 text-center">{t('admMetricas.colAceptacion')}</th>
+                  <th className="px-3 py-2 text-center">{t('admMetricas.colCancelacion')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -389,7 +394,7 @@ export function MetricasAdminPanel() {
                       <div className="font-mono text-[10px] text-ink-muted">{f.dni}</div>
                     </td>
                     <td className="px-3 py-2 text-center font-mono">{fmtFloat(f.online_hours)}</td>
-                    <td className="px-3 py-2 text-center font-mono text-primary">{fmtInt(f.num_of_trips)}</td>
+                    <td className="px-3 py-2 text-center font-mono text-primary">{fmtInt(f.num_of_trips, locale)}</td>
                     <td className="px-3 py-2 text-center font-mono">{fmtPct(f.acceptance_rate)}</td>
                     <td className="px-3 py-2 text-center font-mono">{fmtPct(f.cancelation_rate)}</td>
                   </tr>
@@ -397,7 +402,7 @@ export function MetricasAdminPanel() {
                 {filasPagina.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-3 py-10 text-center text-ink-muted">
-                      Sin datos para este periodo.
+                      {t('admMetricas.sinDatosPeriodoTabla')}
                     </td>
                   </tr>
                 )}

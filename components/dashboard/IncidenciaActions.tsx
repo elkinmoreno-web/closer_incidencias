@@ -4,8 +4,10 @@ import { useState, useTransition } from 'react';
 import { Check, X, Trash2 } from 'lucide-react';
 import { aprobarIncidencia, rechazarIncidencia, enviarAPapelera } from '@/app/dashboard/actions';
 import type { EstadoIncidencia } from '@/lib/types';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIncidencia }) {
+  const { t } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [rechazando, setRechazando] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState('');
@@ -19,7 +21,7 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
           autoFocus
           value={motivoRechazo}
           onChange={(e) => setMotivoRechazo(e.target.value)}
-          placeholder="Motivo del rechazo (lo verá el rider)"
+          placeholder={t('accIncidencia.motivoRechazoPlaceholder')}
           rows={2}
           className="w-56 rounded-lg border border-border px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
         />
@@ -35,13 +37,13 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
             }
             className="rounded-full bg-danger px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
           >
-            Confirmar rechazo
+            {t('accIncidencia.confirmarRechazo')}
           </button>
           <button
             onClick={() => setRechazando(false)}
             className="rounded-full border border-border px-3 py-1 text-xs font-medium text-ink-muted"
           >
-            Cancelar
+            {t('accIncidencia.cancelar')}
           </button>
         </div>
       </div>
@@ -51,7 +53,7 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
   return (
     <div className="flex items-center gap-1.5">
       <button
-        title={estado === 'aprobada' ? 'Ya aprobada' : 'Aprobar'}
+        title={estado === 'aprobada' ? t('accIncidencia.yaAprobada') : t('accIncidencia.aprobar')}
         disabled={pending || estado === 'aprobada'}
         onClick={() => startTransition(() => aprobarIncidencia(id))}
         className="rounded-full bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40"
@@ -59,7 +61,7 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
         <Check size={16} />
       </button>
       <button
-        title={estado === 'rechazada' ? 'Ya rechazada' : 'Rechazar'}
+        title={estado === 'rechazada' ? t('accIncidencia.yaRechazada') : t('accIncidencia.rechazar')}
         disabled={pending || estado === 'rechazada'}
         onClick={() => setRechazando(true)}
         className="rounded-full bg-red-50 p-2 text-danger transition hover:bg-red-100 disabled:opacity-40"
@@ -67,10 +69,10 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
         <X size={16} />
       </button>
       <button
-        title="Enviar a papelera"
+        title={t('accIncidencia.enviarPapelera')}
         disabled={pending}
         onClick={() => {
-          if (confirm('¿Enviar esta incidencia a la papelera?')) {
+          if (confirm(t('accIncidencia.confirmarPapelera'))) {
             startTransition(() => enviarAPapelera(id));
           }
         }}

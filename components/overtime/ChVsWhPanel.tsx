@@ -5,10 +5,12 @@ import { Loader2, RefreshCw, Search, RotateCw, Download } from 'lucide-react';
 import { centrosConsultablesChVsWh, obtenerChVsWh, refrescarCalculaHorario, type FilaChVsWh, type CentroConId } from '@/app/dashboard/ch-vs-wh/actions';
 import { SortableTh, type Direccion } from '@/components/overtime/SortableTh';
 import { lunesDe, domingoDe, fmtDMY } from '@/lib/metricas';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 type CampoOrdenChVsWh = 'centro' | 'rider' | 'ch' | 'wh' | 'balance' | 'horasExtra' | 'calculaHorario' | 'eventos';
 
 export function ChVsWhPanel() {
+  const { t } = useIdioma();
   const [centros, setCentros] = useState<CentroConId[]>([]);
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
   const [busquedaCentro, setBusquedaCentro] = useState('');
@@ -56,10 +58,10 @@ export function ChVsWhPanel() {
       setErrores(res.errores);
       setInfoConsulta(
         res.consultados === 0
-          ? `Todo servido desde caché (menos de 30 min) — sin consultar la API`
+          ? t('chVsWh.todoDesdeCache')
           : res.desdeCache > 0
-          ? `${res.consultados} centro(s) consultados a la API, ${res.desdeCache} desde caché`
-          : `${res.consultados} centro(s) consultados a la API`
+          ? `${res.consultados} ${t('chVsWh.centrosConsultadosYCache').replace('{n}', String(res.desdeCache))}`
+          : `${res.consultados} ${t('overtime.centrosConsultados')}`
       );
     } finally {
       setCargando(false);
@@ -117,20 +119,20 @@ export function ChVsWhPanel() {
     const XLSX = await import('xlsx');
     const hoja = XLSX.utils.json_to_sheet(
       filasOrdenadas.map((f) => ({
-        Centro: f.centro,
-        Rider: f.rider,
-        Usuario: f.usuario,
-        CH: f.ch,
-        WH: f.wh,
-        Balance: f.balance,
-        'Horas extra': f.horasExtra,
-        'Calcula horario': f.calculaHorario,
-        Eventos: f.eventos,
-        'Días con incidencia': f.diasIncidencia,
+        [t('overtime.exColCentro')]: f.centro,
+        [t('overtime.exColRider')]: f.rider,
+        [t('overtime.exColUsuario')]: f.usuario,
+        [t('chVsWh.exColCh')]: f.ch,
+        [t('chVsWh.exColWh')]: f.wh,
+        [t('chVsWh.exColBalance')]: f.balance,
+        [t('chVsWh.exColHorasExtra')]: f.horasExtra,
+        [t('chVsWh.exColCalculaHorario')]: f.calculaHorario,
+        [t('chVsWh.exColEventos')]: f.eventos,
+        [t('chVsWh.exColDiasIncidencia')]: f.diasIncidencia,
       }))
     );
     const libro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(libro, hoja, 'CH vs WH');
+    XLSX.utils.book_append_sheet(libro, hoja, t('chVsWh.exSheetName'));
     XLSX.writeFile(libro, 'ch_vs_wh.xlsx');
   }
 
@@ -139,7 +141,7 @@ export function ChVsWhPanel() {
       {/* Panel de filtros */}
       <div className="space-y-4">
         <div className="rounded-xl border border-border bg-card p-4">
-          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Semana</label>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-ink-muted">{t('overtime.semana')}</label>
           <input
             type="date"
             value={fecha}
@@ -153,14 +155,14 @@ export function ChVsWhPanel() {
 
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="mb-2 flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Ciudades / Centros</label>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{seleccionados.size} sel.</span>
+            <label className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{t('overtime.ciudadesCentros')}</label>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{seleccionados.size} {t('overtime.seleccionadas')}</span>
           </div>
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
             <input
               type="text"
-              placeholder="Buscar centro..."
+              placeholder={t('overtime.buscarCentro')}
               value={busquedaCentro}
               onChange={(e) => setBusquedaCentro(e.target.value)}
               className="w-full rounded-lg border border-border bg-surface py-1.5 pl-8 pr-2 text-xs text-ink focus:border-primary focus:outline-none"
@@ -168,15 +170,15 @@ export function ChVsWhPanel() {
           </div>
           <div className="mb-2 flex gap-3 text-xs text-ink-muted">
             <button onClick={() => setSeleccionados(new Set(centros.map((c) => c.id)))} className="hover:text-primary">
-              Todas
+              {t('overtime.todas')}
             </button>
             <button onClick={() => setSeleccionados(new Set())} className="hover:text-primary">
-              Ninguna
+              {t('overtime.ninguna')}
             </button>
           </div>
           <div className="max-h-56 space-y-0.5 overflow-y-auto pr-1">
-            {cargandoCentros && <p className="text-xs text-ink-muted">Cargando centros...</p>}
-            {!cargandoCentros && centrosFiltrados.length === 0 && <p className="text-xs text-ink-muted">Sin centros disponibles.</p>}
+            {cargandoCentros && <p className="text-xs text-ink-muted">{t('overtime.cargandoCentros')}</p>}
+            {!cargandoCentros && centrosFiltrados.length === 0 && <p className="text-xs text-ink-muted">{t('overtime.sinCentrosDisponibles')}</p>}
             {centrosFiltrados.map((c) => (
               <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-surface">
                 <input type="checkbox" checked={seleccionados.has(c.id)} onChange={() => toggleCentro(c.id)} className="accent-primary" />
@@ -188,7 +190,7 @@ export function ChVsWhPanel() {
 
         <label className="flex items-center gap-2 text-xs text-ink-muted">
           <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} className="accent-primary" />
-          Forzar actualización en vivo (ignorar caché de 30 min)
+          {t('chVsWh.forzarActualizacion')}
         </label>
 
         <button
@@ -197,7 +199,7 @@ export function ChVsWhPanel() {
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
         >
           {cargando ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          {cargando ? 'Consultando...' : 'Obtener datos'}
+          {cargando ? t('overtime.consultando') : t('overtime.obtenerDatos')}
         </button>
         {infoConsulta && <p className="text-xs text-ink-muted">{infoConsulta}</p>}
         {errores.length > 0 && (
@@ -214,7 +216,7 @@ export function ChVsWhPanel() {
         {huboConsulta && (
           <>
             <div className="flex items-center justify-between">
-              <p className="text-xs text-ink-muted">{filas.length} rider(es)</p>
+              <p className="text-xs text-ink-muted">{filas.length} {t('chVsWh.riders')}</p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={exportar}
@@ -222,16 +224,16 @@ export function ChVsWhPanel() {
                   className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Exportar a Excel
+                  {t('overtime.exportar')}
                 </button>
                 <button
                   onClick={refrescarTodosVisibles}
                   disabled={refrescandoTodos || filas.length === 0}
                   className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
-                  title="Volver a preguntar a la API si 'calcula horario' cambió, para todos los riders visibles"
+                  title={t('chVsWh.tituloRefrescarTodos')}
                 >
                   {refrescandoTodos ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
-                  Refrescar &quot;calcula horario&quot;
+                  {t('chVsWh.refrescarCalculaHorario')}
                 </button>
               </div>
             </div>
@@ -239,14 +241,14 @@ export function ChVsWhPanel() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border bg-surface uppercase tracking-wide text-ink-muted">
-                    <SortableTh campo="centro" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Centro</SortableTh>
-                    <SortableTh campo="rider" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Rider</SortableTh>
-                    <SortableTh campo="ch" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">CH</SortableTh>
-                    <SortableTh campo="wh" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">WH</SortableTh>
-                    <SortableTh campo="balance" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Balance</SortableTh>
-                    <SortableTh campo="horasExtra" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Horas extra</SortableTh>
-                    <SortableTh campo="calculaHorario" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">Calcula horario</SortableTh>
-                    <SortableTh campo="eventos" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>Incidencias</SortableTh>
+                    <SortableTh campo="centro" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>{t('overtime.colCentro')}</SortableTh>
+                    <SortableTh campo="rider" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>{t('overtime.colRider')}</SortableTh>
+                    <SortableTh campo="ch" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">{t('chVsWh.colCh')}</SortableTh>
+                    <SortableTh campo="wh" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">{t('chVsWh.colWh')}</SortableTh>
+                    <SortableTh campo="balance" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">{t('chVsWh.colBalance')}</SortableTh>
+                    <SortableTh campo="horasExtra" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">{t('chVsWh.colHorasExtra')}</SortableTh>
+                    <SortableTh campo="calculaHorario" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor} align="center">{t('chVsWh.colCalculaHorario')}</SortableTh>
+                    <SortableTh campo="eventos" activo={ordenCampo} direccion={ordenDir} onClick={ordenarPor}>{t('chVsWh.colIncidencias')}</SortableTh>
                   </tr>
                 </thead>
                 <tbody>
@@ -275,7 +277,7 @@ export function ChVsWhPanel() {
                             <button
                               onClick={() => refrescarUno(f.uuidExterno)}
                               disabled={refrescandoUno === f.uuidExterno}
-                              title="Volver a comprobar este dato en la API"
+                              title={t('chVsWh.tituloRefrescarUno')}
                               className="text-ink-muted hover:text-primary disabled:opacity-50"
                             >
                               {refrescandoUno === f.uuidExterno ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
@@ -291,7 +293,7 @@ export function ChVsWhPanel() {
                   {filas.length === 0 && (
                     <tr>
                       <td colSpan={8} className="px-3 py-10 text-center text-ink-muted">
-                        Sin registros para esta semana.
+                        {t('chVsWh.sinRegistrosSemana')}
                       </td>
                     </tr>
                   )}
@@ -302,8 +304,8 @@ export function ChVsWhPanel() {
         )}
         {!huboConsulta && (
           <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border text-ink-muted">
-            <p className="text-sm font-medium">Sin datos cargados</p>
-            <p className="text-xs">Selecciona semana y centros, luego pulsa &quot;Obtener datos&quot;</p>
+            <p className="text-sm font-medium">{t('overtime.sinDatosCargados')}</p>
+            <p className="text-xs">{t('overtime.seleccionaYPulsa')}</p>
           </div>
         )}
       </div>

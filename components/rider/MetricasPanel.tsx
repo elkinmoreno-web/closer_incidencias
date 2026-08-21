@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Clock, Gauge, TrendingUp, Ban, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { obtenerMiResumenSemanal, obtenerMisDiasSemana, type MisMetricasResumen, type MisMetricasDia } from '@/app/rider/dashboard/actions';
 import { semanaIsoDe, semanaEsMuyAntigua } from '@/lib/metricas';
+import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
-const fmtInt = (n: number) => Math.round(n).toLocaleString('es-ES');
 const fmtFloat = (n: number, d = 2) => (Number.isFinite(n) ? n.toFixed(d) : '—');
 const fmtPct = (n: number) => (Number.isFinite(n) ? `${(n * 100).toFixed(0)}%` : '—');
 const fmtDMY = (iso: string) => {
@@ -40,6 +40,8 @@ function Tile({ icon: Icon, label, value, tono }: { icon: typeof Clock; label: s
 }
 
 export function MetricasPanel() {
+  const { t, idioma } = useIdioma();
+  const fmtInt = (n: number) => Math.round(n).toLocaleString(idioma === 'en' ? 'en-US' : 'es-ES');
   const [semana, setSemana] = useState(() => semanaIsoDe(new Date()));
   const [resumen, setResumen] = useState<MisMetricasResumen | null>(null);
   const [dias, setDias] = useState<MisMetricasDia[]>([]);
@@ -89,21 +91,21 @@ export function MetricasPanel() {
           onClick={() => cambiarSemana(-1)}
           disabled={anteriorDeshabilitado}
           className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-30"
-          aria-label="Semana anterior"
+          aria-label={t('metricas.semanaAnterior')}
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className="text-center">
           <p className="text-sm font-semibold text-ink">
-            Semana del {fmtDMY(rango.lunes)} al {fmtDMY(rango.domingo)}
+            {t('metricas.semanaDel')} {fmtDMY(rango.lunes)} {t('metricas.al')} {fmtDMY(rango.domingo)}
           </p>
-          <p className="text-xs text-brand-text">{esSemanaActual ? 'Esta semana' : 'Semana anterior'}</p>
+          <p className="text-xs text-brand-text">{esSemanaActual ? t('metricas.estaSemanaLabel') : t('metricas.semanaAnterior')}</p>
         </div>
         <button
           onClick={() => cambiarSemana(1)}
           disabled={esSemanaActual}
           className="rounded-full border border-border p-1.5 text-ink-muted hover:text-ink disabled:opacity-30"
-          aria-label="Semana siguiente"
+          aria-label={t('metricas.semanaSiguiente')}
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -115,8 +117,8 @@ export function MetricasPanel() {
         </div>
       ) : !resumen || !resumen.hayDatos ? (
         <div className="flex flex-col items-center gap-1 py-10 text-center text-ink-muted">
-          <p className="text-sm font-medium">Sin datos para esta semana</p>
-          <p className="text-xs">Prueba con la semana anterior.</p>
+          <p className="text-sm font-medium">{t('metricas.sinDatos')}</p>
+          <p className="text-xs">{t('metricas.pruebaAnterior')}</p>
         </div>
       ) : (
         <>
@@ -125,12 +127,12 @@ export function MetricasPanel() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                  <th className="px-3 py-2">Día</th>
-                  <th className="px-3 py-2 text-center">Viajes</th>
-                  <th className="px-3 py-2 text-center">Horas</th>
-                  <th className="px-3 py-2 text-center">TPH</th>
-                  <th className="px-3 py-2 text-center">Aceptación</th>
-                  <th className="px-3 py-2 text-center">Cancelación</th>
+                  <th className="px-3 py-2">{t('metricas.dia')}</th>
+                  <th className="px-3 py-2 text-center">{t('metricas.viajes')}</th>
+                  <th className="px-3 py-2 text-center">{t('metricas.horas')}</th>
+                  <th className="px-3 py-2 text-center">{t('metricas.tph')}</th>
+                  <th className="px-3 py-2 text-center">{t('metricas.aceptacion')}</th>
+                  <th className="px-3 py-2 text-center">{t('metricas.cancelacion')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -150,7 +152,7 @@ export function MetricasPanel() {
                 {dias.filter((d) => d.hayDatos).length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-3 py-6 text-center text-ink-muted">
-                      Todavía no hay días con datos registrados esta semana.
+                      {t('metricas.sinDiasEstaSemana')}
                     </td>
                   </tr>
                 )}
@@ -160,16 +162,21 @@ export function MetricasPanel() {
 
           {/* Resumen de toda la semana */}
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">Resumen de la semana</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-muted">{t('metricas.resumenSemana')}</p>
             <div className="grid grid-cols-2 gap-3">
-              <Tile icon={CheckCircle2} label="Viajes realizados" value={fmtInt(resumen.num_of_trips)} />
-              <Tile icon={Clock} label="Horas online" value={fmtFloat(resumen.online_hours)} />
-              <Tile icon={Gauge} label="Viajes / hora" value={fmtFloat(resumen.tph)} />
-              <Tile icon={TrendingUp} label="Aceptación" value={fmtPct(resumen.acceptance_rate)} tono={resumen.acceptance_rate >= 0.95 ? 'green' : undefined} />
+              <Tile icon={CheckCircle2} label={t('metricas.viajesRealizados')} value={fmtInt(resumen.num_of_trips)} />
+              <Tile icon={Clock} label={t('metricas.horasOnline')} value={fmtFloat(resumen.online_hours)} />
+              <Tile icon={Gauge} label={t('metricas.viajesPorHora')} value={fmtFloat(resumen.tph)} />
+              <Tile
+                icon={TrendingUp}
+                label={t('metricas.aceptacion')}
+                value={fmtPct(resumen.acceptance_rate)}
+                tono={resumen.acceptance_rate >= 0.95 ? 'green' : undefined}
+              />
               <div className="col-span-2">
                 <Tile
                   icon={Ban}
-                  label="Cancelación"
+                  label={t('metricas.cancelacion')}
                   value={fmtPct(resumen.cancelation_rate)}
                   tono={resumen.cancelation_rate === 0 ? 'green' : resumen.cancelation_rate >= 0.1 ? 'red' : undefined}
                 />

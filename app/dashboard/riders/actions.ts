@@ -303,13 +303,13 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
    * los mapas en memoria para no repetir la creación dentro del mismo
    * lote.
    */
-  async function crearCentroYCiudad(nombreCentro: string, nombreCiudad: string): Promise<number | null> {
+  async function crearCentroYCiudad(nombreCentro: string, nombreCiudad: string, pais: 'ES' | 'DE' = 'ES'): Promise<number | null> {
     const claveCentro = normalizarNombreCentro(nombreCentro);
     const claveCiudad = normalizarNombreCentro(nombreCiudad);
 
     let ciudadId = ciudadMap.get(claveCiudad);
     if (!ciudadId) {
-      const { data: ciudadNueva } = await admin.from('ciudades').insert({ nombre: nombreCiudad }).select('id').single();
+      const { data: ciudadNueva } = await admin.from('ciudades').insert({ nombre: nombreCiudad, pais }).select('id').single();
       if (ciudadNueva) {
         ciudadId = ciudadNueva.id;
         ciudadMap.set(claveCiudad, ciudadNueva.id);
@@ -376,7 +376,7 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
     const esAlemania = normalizarNombreCentro(empresaContratante ?? '') === 'closer go germany gmbh';
     if (esAlemania) {
       const nombreCiudad = nombreExcel.trim().replace(/^fd\s+/i, '').toUpperCase();
-      const id = await crearCentroYCiudad(nombreExcel.trim(), nombreCiudad);
+      const id = await crearCentroYCiudad(nombreExcel.trim(), nombreCiudad, 'DE');
       if (id) return id;
     }
 

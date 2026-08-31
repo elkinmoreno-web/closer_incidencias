@@ -5,6 +5,8 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
 import { mensajeError, registrarError } from '@/lib/utils';
+import { subirImagenZonaConexion } from '@/lib/googleDrive';
+import { ALLOWED_IMAGE_MIME, validarArchivo } from '@/lib/validations';
 async function getCallerRol(): Promise<{ supabase: ReturnType<typeof createClient>; rol: string }> {
   const supabase = createClient();
   const {
@@ -393,5 +395,41 @@ export async function cambiarPasswordAdmin(adminId: string, nuevaPassword: strin
   const { error } = await admin.auth.admin.updateUserById(objetivo.auth_user_id, { password: nuevaPassword });
   if (error) return { ok: false, error: error.message };
 
+  return { ok: true };
+}
+
+/**
+ * Sube (o reemplaza) la imagen del mapa de zona de conexión de un
+ * centro. Solo Super Admin — es configuración de catálogo, igual que
+ * el resto de esta pantalla.
+ */
+export async function subirImagenZonaCentro(centroId: number, formData: FormData): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await assertSuperAdmin();
+
+  const archivo = formData.get('imagen') as File | null;
+  const err = validarArchivo(archivo, ALLOWED_IMAGE_MIME);
+  if (err || !archivo || archivo.size === 0) return { ok: false, error: err ?? 'Selecciona una imagen' };
+
+  try {
+    const ext = archivo.type === 'image/png' ? 'png' : archivo.type === 'image/webp' ? 'webp' : 'jpg';
+    const nombreArchivo = `centro_${centroId}_zona.${ext}`;
+    const buffer = Buffer.from(await archivo.arrayBuffer());
+    const fileId = await subirImagenZonaConexion(nombreArchivo, buffer, archivo.type);
+
+    const { error } = await supabase.from('centros').update({ imagen_zona_conexion_url: fileId }).eq('id', centroId);
+    if (error) return { ok: false, error: error.message };
+  } catch (e) {
+    return { ok: false, error: registrarError('subirImagenZonaCentro', e, 'No se pudo subir la imagen. Inténtalo de nuevo en unos minutos.') };
+  }
+
+  revalidatePath('/dashboard/configuracion');
+  return { ok: true };
+}
+
+export async function quitarImagenZonaCentro(centroId: number): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await assertSuperAdmin();
+  const { error } = await supabase.from('centros').update({ imagen_zona_conexion_url: null }).eq('id', centroId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/dashboard/configuracion');
   return { ok: true };
 }

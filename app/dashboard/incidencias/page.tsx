@@ -161,6 +161,16 @@ export default async function IncidenciasPage({
                         {i.motivo_rechazo.length > 80 && <VerTextoCompleto titulo={t('admIncidencias.motivoRechazo')} texto={i.motivo_rechazo} />}
                       </div>
                     )}
+                    {i.estado === 'aprobada' && i.comentario_aprobacion && (
+                      <div className="mt-1 flex items-start gap-1 rounded bg-emerald-50 px-2 py-1">
+                        <div className="line-clamp-2 text-xs text-emerald-700">
+                          {t('admIncidencias.comentarioAprobacion')}: {i.comentario_aprobacion}
+                        </div>
+                        {i.comentario_aprobacion.length > 80 && (
+                          <VerTextoCompleto titulo={t('admIncidencias.comentarioAprobacion')} texto={i.comentario_aprobacion} />
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">{i.codigo_pedido || '—'}</td>
                   <td className="px-4 py-3">{i.centros?.nombre ?? '—'}</td>

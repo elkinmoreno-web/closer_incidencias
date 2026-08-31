@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Check, X, Trash2 } from 'lucide-react';
+import { Check, X, Trash2, MessageSquarePlus } from 'lucide-react';
 import { aprobarIncidencia, rechazarIncidencia, enviarAPapelera } from '@/app/dashboard/actions';
 import type { EstadoIncidencia } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
@@ -10,7 +10,9 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
   const { t } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [rechazando, setRechazando] = useState(false);
+  const [aprobandoConComentario, setAprobandoConComentario] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState('');
+  const [comentarioAprobacion, setComentarioAprobacion] = useState('');
 
   if (estado === 'papelera') return null;
 
@@ -50,6 +52,42 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
     );
   }
 
+  if (aprobandoConComentario) {
+    return (
+      <div className="flex flex-col gap-2">
+        <textarea
+          autoFocus
+          value={comentarioAprobacion}
+          onChange={(e) => setComentarioAprobacion(e.target.value)}
+          placeholder={t('accIncidencia.comentarioAprobacionPlaceholder')}
+          rows={2}
+          className="w-56 rounded-lg border border-border px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+        />
+        <div className="flex gap-2">
+          <button
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                await aprobarIncidencia(id, comentarioAprobacion.trim());
+                setAprobandoConComentario(false);
+                setComentarioAprobacion('');
+              })
+            }
+            className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            {t('accIncidencia.confirmarAprobacion')}
+          </button>
+          <button
+            onClick={() => setAprobandoConComentario(false)}
+            className="rounded-full border border-border px-3 py-1 text-xs font-medium text-ink-muted"
+          >
+            {t('accIncidencia.cancelar')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-1.5">
       <button
@@ -59,6 +97,14 @@ export function IncidenciaActions({ id, estado }: { id: string; estado: EstadoIn
         className="rounded-full bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40"
       >
         <Check size={16} />
+      </button>
+      <button
+        title={t('accIncidencia.aprobarConComentario')}
+        disabled={pending || estado === 'aprobada'}
+        onClick={() => setAprobandoConComentario(true)}
+        className="rounded-full bg-emerald-50 p-2 text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-40"
+      >
+        <MessageSquarePlus size={16} />
       </button>
       <button
         title={estado === 'rechazada' ? t('accIncidencia.yaRechazada') : t('accIncidencia.rechazar')}

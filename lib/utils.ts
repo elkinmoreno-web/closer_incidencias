@@ -99,6 +99,50 @@ export function daysAgoISO(n: number): string {
   return d.toISOString();
 }
 
+// Duración del período de prueba (NSPP) en días naturales, desde
+// fecha_alta. Un solo sitio para el número — si algún día cambia,
+// se cambia aquí y ya.
+const DURACION_PERIODO_PRUEBA_DIAS = 45;
+
+export type EstadoPeriodoPrueba = 'verde' | 'naranja' | 'rojo' | 'finalizado' | 'sin_fecha';
+
+export interface PeriodoPrueba {
+  estado: EstadoPeriodoPrueba;
+  diasTranscurridos: number;
+  diasRestantes: number;
+  fechaFin: string; // ISO yyyy-mm-dd
+}
+
+/**
+ * Calcula en qué punto del período de prueba (NSPP) está un rider, a
+ * partir de su fecha_alta. Semáforo:
+ *   verde 0-15 días · naranja 16-30 · rojo 31-45 (se acerca el límite)
+ *   finalizado: ya pasó la fecha límite de 45 días
+ */
+export function calcularPeriodoPrueba(fechaAlta: string | null | undefined): PeriodoPrueba | null {
+  if (!fechaAlta) return null;
+
+  const inicio = new Date(fechaAlta + (fechaAlta.length === 10 ? 'T00:00:00' : ''));
+  if (Number.isNaN(inicio.getTime())) return null;
+
+  const hoy = new Date(startOfTodayMadridISO());
+  const diasTranscurridos = Math.floor((hoy.getTime() - inicio.getTime()) / 86400000);
+
+  const fin = new Date(inicio);
+  fin.setDate(fin.getDate() + DURACION_PERIODO_PRUEBA_DIAS);
+  const fechaFin = fin.toISOString().split('T')[0];
+
+  const diasRestantes = DURACION_PERIODO_PRUEBA_DIAS - diasTranscurridos;
+
+  let estado: EstadoPeriodoPrueba;
+  if (diasTranscurridos > DURACION_PERIODO_PRUEBA_DIAS) estado = 'finalizado';
+  else if (diasTranscurridos <= 15) estado = 'verde';
+  else if (diasTranscurridos <= 30) estado = 'naranja';
+  else estado = 'rojo';
+
+  return { estado, diasTranscurridos, diasRestantes, fechaFin };
+}
+
 /** Lunes de esta semana (hora de Madrid), en ISO, para "solo esta semana". */
 export function inicioSemanaActualISO(): string {
   const ymd = new Intl.DateTimeFormat('en-CA', {

@@ -109,6 +109,11 @@ const es = {
   'tabs.incidencia': 'Incidencia',
   'tabs.ausencia': 'Ausencia',
   'tabs.metricas': 'Mis métricas',
+  'tabs.zona': 'Mi zona',
+  'zonaConexion.titulo': 'Mi zona de conexión',
+  'zonaConexion.sinImagenTitulo': 'Todavía no hay una imagen para tu centro',
+  'zonaConexion.sinImagenDesc': 'En cuanto se suba, la verás aquí.',
+  'zonaConexion.verEnGrande': 'Ver en grande',
   'riderPage.tusIncidenciasSemana': 'Tus incidencias de esta semana',
   'riderPage.tusAusenciasSemana': 'Tus ausencias de esta semana',
   'riderPage.sinIncidenciasSemana': 'No has reportado incidencias esta semana.',
@@ -153,6 +158,7 @@ const es = {
   'admIncidencias.verCaptura': 'Ver captura',
   'admIncidencias.ver': 'Ver',
   'admIncidencias.evidencia': 'Evidencia',
+  'admIncidencias.comentarioAprobacion': 'Comentario',
 
   // TableFilters (compartido)
   'filtros.todosLosEstados': 'Todos los estados',
@@ -174,6 +180,9 @@ const es = {
   'accIncidencia.rechazar': 'Rechazar',
   'accIncidencia.enviarPapelera': 'Enviar a papelera',
   'accIncidencia.confirmarPapelera': '¿Enviar esta incidencia a la papelera?',
+  'accIncidencia.aprobarConComentario': 'Aprobar con comentario',
+  'accIncidencia.comentarioAprobacionPlaceholder': 'Comentario opcional (solo visible en el panel, ej. detalle de la avería)',
+  'accIncidencia.confirmarAprobacion': 'Confirmar aprobación',
 
   // Editar incidencia (admin)
   'editIncidencia.editarCampos': 'Editar campos',
@@ -272,6 +281,11 @@ const es = {
   'ridersList.colContrasena': 'Contraseña',
   'ridersList.colEditar': 'Editar',
   'ridersList.colEliminar': 'Eliminar',
+  'ridersList.colPeriodoPrueba': 'Período de prueba',
+  'nspp.diaN': 'Día {n} de 45',
+  'nspp.finalizado': 'Finalizado',
+  'nspp.finalizaEl': 'Finaliza el',
+  'nspp.sinFecha': '—',
 
   // Crear rider (admin)
   'crearRider.creando': 'Creando...',
@@ -583,6 +597,13 @@ const es = {
   'catalogo.motivo': 'Motivo',
   'catalogo.tituloNombreEn': 'Nombre en inglés (para la sede de Alemania)',
   'catalogo.sinNombreEnUsa': 'Sin nombre en inglés (usa',
+  'catalogo.imagenZona': 'Imagen de zona',
+  'catalogo.subirImagenZona': 'Subir imagen de zona',
+  'catalogo.cambiarImagenZona': 'Cambiar',
+  'catalogo.quitarImagenZona': 'Quitar',
+  'catalogo.subiendoImagen': 'Subiendo...',
+  'catalogo.conImagenZona': 'Con imagen',
+  'catalogo.sinImagenZona': 'Sin imagen',
 
   // Fila de administrador (config)
   'adminRow.rolSuperAdmin': 'Super Admin',

@@ -112,6 +112,11 @@ const en: Record<ClaveTraduccion, string> = {
   'tabs.incidencia': 'Incident',
   'tabs.ausencia': 'Absence',
   'tabs.metricas': 'My metrics',
+  'tabs.zona': 'My zone',
+  'zonaConexion.titulo': 'My connection zone',
+  'zonaConexion.sinImagenTitulo': "There's no image for your center yet",
+  'zonaConexion.sinImagenDesc': "You'll see it here as soon as it's uploaded.",
+  'zonaConexion.verEnGrande': 'View full size',
   'riderPage.tusIncidenciasSemana': 'Your incidents this week',
   'riderPage.tusAusenciasSemana': 'Your absences this week',
   'riderPage.sinIncidenciasSemana': "You haven't reported any incidents this week.",
@@ -156,6 +161,7 @@ const en: Record<ClaveTraduccion, string> = {
   'admIncidencias.verCaptura': 'View screenshot',
   'admIncidencias.ver': 'View',
   'admIncidencias.evidencia': 'evidence',
+  'admIncidencias.comentarioAprobacion': 'Comment',
 
   // TableFilters (compartido)
   'filtros.todosLosEstados': 'All statuses',
@@ -177,6 +183,9 @@ const en: Record<ClaveTraduccion, string> = {
   'accIncidencia.rechazar': 'Reject',
   'accIncidencia.enviarPapelera': 'Send to trash',
   'accIncidencia.confirmarPapelera': 'Send this incident to the trash?',
+  'accIncidencia.aprobarConComentario': 'Approve with a comment',
+  'accIncidencia.comentarioAprobacionPlaceholder': 'Optional comment (only visible in the panel, e.g. breakdown detail)',
+  'accIncidencia.confirmarAprobacion': 'Confirm approval',
 
   // Editar incidencia (admin)
   'editIncidencia.editarCampos': 'Edit fields',
@@ -275,6 +284,11 @@ const en: Record<ClaveTraduccion, string> = {
   'ridersList.colContrasena': 'Password',
   'ridersList.colEditar': 'Edit',
   'ridersList.colEliminar': 'Delete',
+  'ridersList.colPeriodoPrueba': 'Trial period',
+  'nspp.diaN': 'Day {n} of 45',
+  'nspp.finalizado': 'Finished',
+  'nspp.finalizaEl': 'Ends on',
+  'nspp.sinFecha': '—',
 
   // Crear rider (admin)
   'crearRider.creando': 'Creating...',
@@ -586,6 +600,13 @@ const en: Record<ClaveTraduccion, string> = {
   'catalogo.motivo': 'Reason',
   'catalogo.tituloNombreEn': 'English name (for the Germany office)',
   'catalogo.sinNombreEnUsa': 'No English name (uses',
+  'catalogo.imagenZona': 'Zone image',
+  'catalogo.subirImagenZona': 'Upload zone image',
+  'catalogo.cambiarImagenZona': 'Change',
+  'catalogo.quitarImagenZona': 'Remove',
+  'catalogo.subiendoImagen': 'Uploading...',
+  'catalogo.conImagenZona': 'Has image',
+  'catalogo.sinImagenZona': 'No image',
 
   // Fila de administrador (config)
   'adminRow.rolSuperAdmin': 'Super Admin',

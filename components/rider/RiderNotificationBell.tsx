@@ -58,8 +58,8 @@ function playBeep() {
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.value = 660;
-    gain.gain.setValueAtTime(0.85, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.95);
+    gain.gain.setValueAtTime(0.95, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();

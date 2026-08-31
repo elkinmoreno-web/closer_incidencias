@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Pencil, Check, X, Languages } from 'lucide-react';
+import { Pencil, Check, X, Languages, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { ToggleSwitch } from '@/components/config/ToggleSwitch';
 import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import {
@@ -14,9 +14,12 @@ import {
   actualizarInstruccionesMotivoEn,
   actualizarNombreMotivoEn,
   actualizarNombreMotivoAusenciaEn,
+  subirImagenZonaCentro,
+  quitarImagenZonaCentro,
 } from '@/app/dashboard/configuracion/actions';
 import type { Centro, Vehiculo, Motivo, MotivoAusencia, Ciudad } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { urlArchivoDrive } from '@/lib/driveUrl';
 
 function CatalogRow({
   nombre,
@@ -36,6 +39,68 @@ function CatalogRow({
         {subtitulo && <div className="text-xs text-ink-muted">{subtitulo}</div>}
       </div>
       <ToggleSwitch activo={activo} onToggle={onToggle} />
+    </div>
+  );
+}
+
+/**
+ * Botón compacto para subir/cambiar/quitar la imagen de zona de
+ * conexión de un centro. Un input file oculto detrás de un botón, para
+ * no romper el layout compacto de la lista de centros.
+ */
+function ImagenZonaCentro({ centro }: { centro: Centro }) {
+  const { t } = useIdioma();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const url = urlArchivoDrive(centro.imagen_zona_conexion_url);
+
+  function alElegirArchivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    e.target.value = ''; // permite volver a elegir el mismo archivo si hace falta reintentar
+    if (!archivo) return;
+    setError(null);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('imagen', archivo);
+      const res = await subirImagenZonaCentro(centro.id, fd);
+      if (!res.ok) setError(res.error ?? 'Error');
+    });
+  }
+
+  function quitar() {
+    setError(null);
+    startTransition(async () => {
+      const res = await quitarImagenZonaCentro(centro.id);
+      if (!res.ok) setError(res.error ?? 'Error');
+    });
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-1.5 text-[11px]">
+      {url ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-emerald-700 hover:underline">
+          <ImageIcon size={10} />
+          {t('catalogo.conImagenZona')}
+        </a>
+      ) : (
+        <span className="flex items-center gap-1 text-ink-muted opacity-70">
+          <ImageIcon size={10} />
+          {t('catalogo.sinImagenZona')}
+        </span>
+      )}
+
+      <label className="cursor-pointer text-primary hover:underline">
+        {pending ? t('catalogo.subiendoImagen') : url ? t('catalogo.cambiarImagenZona') : t('catalogo.subirImagenZona')}
+        <input type="file" accept="image/jpeg,image/png,image/webp" onChange={alElegirArchivo} disabled={pending} className="hidden" />
+      </label>
+
+      {url && !pending && (
+        <button onClick={quitar} className="text-danger hover:underline">
+          {t('catalogo.quitarImagenZona')}
+        </button>
+      )}
+      {pending && <Loader2 size={10} className="animate-spin text-ink-muted" />}
+      {error && <span className="text-danger">{error}</span>}
     </div>
   );
 }
@@ -73,6 +138,7 @@ export function CentrosList({ centros, ciudades }: { centros: Centro[]; ciudades
                   <option key={ci.id} value={ci.id}>{ci.nombre}</option>
                 ))}
               </select>
+              <ImagenZonaCentro centro={c} />
             </div>
             <ToggleSwitch activo={c.activo} onToggle={(v) => toggleCentro(c.id, v)} />
           </div>

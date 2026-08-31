@@ -7,13 +7,15 @@ export function Tabs({
   incidenciaPanel,
   ausenciaPanel,
   metricasPanel,
+  zonaPanel,
 }: {
   incidenciaPanel: React.ReactNode;
   ausenciaPanel: React.ReactNode;
   metricasPanel: React.ReactNode;
+  zonaPanel: React.ReactNode;
 }) {
   const { t } = useIdioma();
-  const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'metricas'>('incidencia');
+  const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'metricas' | 'zona'>('incidencia');
 
   return (
     <div>
@@ -42,10 +44,19 @@ export function Tabs({
         >
           {t('tabs.metricas')}
         </button>
+        <button
+          onClick={() => setTab('zona')}
+          className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
+            tab === 'zona' ? 'bg-primary text-white' : 'text-ink-muted'
+          }`}
+        >
+          {t('tabs.zona')}
+        </button>
       </div>
       {tab === 'incidencia' && incidenciaPanel}
       {tab === 'ausencia' && ausenciaPanel}
       {tab === 'metricas' && metricasPanel}
+      {tab === 'zona' && zonaPanel}
     </div>
   );
 }

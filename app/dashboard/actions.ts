@@ -69,7 +69,7 @@ export async function editarIncidencia(
   revalidatePath('/dashboard');
 }
 
-export async function aprobarIncidencia(id: string) {
+export async function aprobarIncidencia(id: string, comentario?: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdminId(supabase);
 
@@ -80,6 +80,7 @@ export async function aprobarIncidencia(id: string) {
       gestor_id: adminId,
       fecha_gestion: new Date().toISOString(),
       motivo_rechazo: null, // si venía de un rechazo, limpiamos el motivo anterior
+      comentario_aprobacion: comentario?.trim() || null,
     })
     .eq('id', id)
     .select('centro_id')

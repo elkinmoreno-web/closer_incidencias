@@ -6,6 +6,7 @@ import { ToggleSwitch } from '@/components/config/ToggleSwitch';
 import { toggleRiderActivo, restablecerPasswordRider, eliminarRider } from '@/app/dashboard/riders/actions';
 import { EditarRiderModal } from '@/components/riders/EditarRiderModal';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import { calcularPeriodoPrueba, formatFechaCorta } from '@/lib/utils';
 
 interface RiderRow {
   id: string;
@@ -16,8 +17,40 @@ interface RiderRow {
   provincia: string | null;
   centro_id: number | null;
   vehiculo_id: number | null;
+  fecha_alta: string | null;
   centros: { nombre: string } | null;
   vehiculos: { nombre: string } | null;
+}
+
+const COLOR_SEMAFORO: Record<string, string> = {
+  verde: 'bg-emerald-100 text-emerald-800',
+  naranja: 'bg-amber-100 text-amber-800',
+  rojo: 'bg-red-100 text-red-800',
+  finalizado: 'bg-slate-200 text-slate-600',
+};
+
+/**
+ * Semáforo del período de prueba (NSPP): verde los primeros 15 días,
+ * naranja del 16 al 30, rojo del 31 al 45 (se acerca el límite), y un
+ * estado aparte para cuando ya pasó la fecha — así nunca se confunde
+ * "está en rojo" con "ya terminó".
+ */
+function SemaforoNspp({ fechaAlta }: { fechaAlta: string | null }) {
+  const { t } = useIdioma();
+  const periodo = calcularPeriodoPrueba(fechaAlta);
+
+  if (!periodo) return <span className="text-xs text-ink-muted">{t('nspp.sinFecha')}</span>;
+
+  const etiqueta = periodo.estado === 'finalizado' ? t('nspp.finalizado') : t('nspp.diaN').replace('{n}', String(periodo.diasTranscurridos));
+
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${COLOR_SEMAFORO[periodo.estado]}`}>{etiqueta}</span>
+      <span className="text-[10px] text-ink-muted">
+        {t('nspp.finalizaEl')} {formatFechaCorta(periodo.fechaFin)}
+      </span>
+    </div>
+  );
 }
 
 function BotonResetPassword({ riderId }: { riderId: string }) {
@@ -96,13 +129,14 @@ export function RidersList({
 }) {
   const { t } = useIdioma();
   return (
-    <table className="w-full min-w-[980px] text-sm">
+    <table className="w-full min-w-[1130px] text-sm">
       <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
         <tr>
           <th className="px-4 py-3">{t('ridersList.colRider')}</th>
           <th className="px-4 py-3">{t('ridersList.colCentro')}</th>
           <th className="px-4 py-3">{t('ridersList.colProvincia')}</th>
           <th className="px-4 py-3">{t('ridersList.colVehiculo')}</th>
+          <th className="px-4 py-3">{t('ridersList.colPeriodoPrueba')}</th>
           <th className="px-4 py-3 text-right">{t('ridersList.colActivo')}</th>
           <th className="px-4 py-3 text-right">{t('ridersList.colContrasena')}</th>
           {esSuperAdmin && <th className="px-4 py-3 text-right">{t('ridersList.colEditar')}</th>}
@@ -119,6 +153,9 @@ export function RidersList({
             <td className="px-4 py-3">{r.centros?.nombre ?? '—'}</td>
             <td className="px-4 py-3 text-xs text-ink-muted">{r.provincia ?? '—'}</td>
             <td className="px-4 py-3">{r.vehiculos?.nombre ?? '—'}</td>
+            <td className="px-4 py-3">
+              <SemaforoNspp fechaAlta={r.fecha_alta} />
+            </td>
             <td className="px-4 py-3 text-right">
               <div className="flex justify-end">
                 <ToggleSwitch activo={r.activo} onToggle={(v) => toggleRiderActivo(r.id, v)} />

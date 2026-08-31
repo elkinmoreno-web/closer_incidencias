@@ -22,6 +22,7 @@ export interface Centro {
   nombre: string;
   activo: boolean;
   ciudad_id: number | null;
+  imagen_zona_conexion_url: string | null;
   ciudades?: Pick<Ciudad, 'id' | 'nombre'> | null;
 }
 
@@ -105,6 +106,7 @@ export interface Incidencia {
   estado: EstadoIncidencia;
   gestor_id: string | null;
   fecha_gestion: string | null;
+  comentario_aprobacion: string | null;
   eliminado_por_id: string | null;
   fecha_eliminacion: string | null;
   created_at: string;

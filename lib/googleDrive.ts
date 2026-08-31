@@ -120,6 +120,28 @@ export async function subirArchivoDrive(
   mimeType: string
 ): Promise<string> {
   const carpetaId = await carpetaDelMes(categoria);
+  return subirBufferACarpeta(carpetaId, nombreArchivo, contenido, mimeType);
+}
+
+/**
+ * Carpeta "ZonasConexion" en la raíz, SIN subcarpeta de mes — a
+ * diferencia de incidencias/ausencias/conexiones, aquí no se acumulan
+ * archivos con el tiempo (una imagen por centro, que se reemplaza de
+ * vez en cuando), así que agruparla por mes solo dificultaría
+ * encontrarla a mano en Drive si algún día hace falta.
+ */
+async function carpetaZonasConexion(): Promise<string> {
+  const raizId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FOLDER_ID');
+  return obtenerOCrearCarpeta('ZonasConexion', raizId);
+}
+
+export async function subirImagenZonaConexion(nombreArchivo: string, contenido: Buffer, mimeType: string): Promise<string> {
+  const carpetaId = await carpetaZonasConexion();
+  return subirBufferACarpeta(carpetaId, nombreArchivo, contenido, mimeType);
+}
+
+async function subirBufferACarpeta(carpetaId: string, nombreArchivo: string, contenido: Buffer, mimeType: string): Promise<string> {
 
   const boundary = `closer_crm_${Date.now()}`;
   const metadata = JSON.stringify({ name: nombreArchivo, parents: [carpetaId] });

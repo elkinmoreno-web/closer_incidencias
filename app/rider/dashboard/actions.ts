@@ -92,10 +92,10 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     const evidenciasValidas = evidenciasFiles.filter((f) => f && f.size > 0);
     if (evidenciasValidas.length > 3) return { error: 'Máximo 3 archivos de evidencia adicional' };
 
-    if (motivo.requiere_captura) {
+    /*if (motivo.requiere_captura) {
       const err = validarArchivo(screenshot, ALLOWED_IMAGE_MIME);
       if (err || !screenshot || screenshot.size === 0) return { error: err ?? 'Este motivo requiere una captura' };
-    }
+    }*/
     if (motivo.requiere_observaciones && !parsed.data.observaciones) {
       return { error: 'Este motivo requiere que añadas observaciones' };
     }

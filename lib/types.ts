@@ -151,6 +151,75 @@ export interface ConexionFueraZona {
   admins?: Pick<Admin, 'usuario'> | null;
 }
 
+// ============================================================
+// Gestión de Stock (Fase 1 — núcleo mínimo)
+// ============================================================
+
+export interface StockMaterial {
+  id: number;
+  clave: string; // 'MOCHILAS' | 'SOPORTES' | 'CHUBASQUEROS' — identificador estable
+  titulo: string;
+  titulo_en: string | null;
+  icono: string;
+  unidad: string;
+  uds_por_caja: number;
+  tiene_tallas: boolean;
+  activo: boolean;
+  orden: number;
+}
+
+export interface StockTalla {
+  id: number;
+  material_id: number;
+  talla: string; // 'M' | 'L' | 'XL' | 'XXL'
+  orden: number;
+}
+
+export type StockClaseMovimiento = 'entrada' | 'traslado' | 'salida' | 'merma' | 'perdida' | 'ajuste' | 'neutro';
+
+export interface StockTipoMovimiento {
+  clave: string;
+  etiqueta: string;
+  etiqueta_en: string | null;
+  clase: StockClaseMovimiento;
+  resta_origen: boolean | null; // null = depende de un parámetro que se resuelve en fases siguientes
+  suma_destino: boolean;
+  requiere_origen: boolean;
+  requiere_destino: boolean;
+  orden: number;
+}
+
+export interface StockMovimiento {
+  id: number;
+  material_id: number;
+  tipo_clave: string;
+  centro_origen_id: number | null;
+  centro_destino_id: number | null;
+  cajas: number;
+  unidades: number;
+  talla_m: number;
+  talla_l: number;
+  talla_xl: number;
+  talla_xxl: number;
+  rider_id: string | null;
+  rider_nombre_libre: string | null;
+  notas: string | null;
+  admin_id: string;
+  created_at: string;
+}
+
+/** Fila de stock disponible por centro y material, ya calculada (suma del ledger). */
+export interface StockDisponible {
+  material_id: number;
+  centro_id: number;
+  centro_nombre: string;
+  disponible: number;
+  talla_m: number;
+  talla_l: number;
+  talla_xl: number;
+  talla_xxl: number;
+}
+
 // Tipo mínimo requerido por @supabase/ssr; se puede reemplazar por el
 // tipo `Database` generado automáticamente por la CLI de Supabase.
 export type Database = any;

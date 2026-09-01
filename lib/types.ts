@@ -216,7 +216,7 @@ export interface StockDisponible {
   material_id: number;
   centro_id: number;
   centro_nombre: string;
-  gestor: string | null; // texto libre migrado del CSV original (Gestores.ciudad) — no es un admin real del sistema
+  gestores: string[]; // usuarios de admins/moderadores con la ciudad de este centro asignada en admin_ciudades — puede ser más de uno
   disponible: number;
   transito_entrante: number;
   transito_saliente: number;

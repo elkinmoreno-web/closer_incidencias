@@ -9,6 +9,8 @@ import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 import type { RiderResultado } from '@/app/dashboard/buscarRiders';
 
+const TIPOS_CON_RIDER = new Set(['ENTREGA_RIDER', 'DEVOLUCION_OK', 'DEVOLUCION_ROTA', 'NO_RECUPERADA', 'RIDER_YA_TIENE_SOPORTE', 'RECUPERADA_ROBO']);
+
 export function NuevoMovimientoModal({
   material,
   materiales,
@@ -43,6 +45,17 @@ export function NuevoMovimientoModal({
 
   const materialSeleccionado = materiales.find((m) => m.id === materialId) ?? material;
   const tipo = tipos.find((tp) => tp.clave === tipoClave);
+  const mostrarRider = tipo ? TIPOS_CON_RIDER.has(tipo.clave) : false;
+
+  function alElegirRider(r: RiderResultado | null) {
+    setRiderElegido(r);
+    if (!r || !r.centroId) return;
+    // Autocompleta el centro del movimiento con el centro del rider —
+    // en Entrega/Devolución el centro relevante es siempre el suyo,
+    // así se evita elegirlo dos veces.
+    if (tipo?.requiere_origen && !centroOrigenId) setCentroOrigenId(String(r.centroId));
+    if (tipo?.requiere_destino && !centroDestinoId) setCentroDestinoId(String(r.centroId));
+  }
 
   function guardar() {
     if (!tipoClave) {
@@ -174,18 +187,20 @@ export function NuevoMovimientoModal({
             </div>
           )}
 
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stock.riderOpcional')}</label>
-            <BuscadorRiderRemoto requerido={false} onSeleccionar={setRiderElegido} />
-            {!riderElegido && (
-              <input
-                value={riderNombreLibre}
-                onChange={(e) => setRiderNombreLibre(e.target.value)}
-                placeholder={t('stock.riderPlaceholderLibre')}
-                className="mt-1.5 w-full rounded-lg border border-border px-3 py-2 text-xs focus:border-primary focus:outline-none"
-              />
-            )}
-          </div>
+          {mostrarRider && (
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stock.riderOpcional')}</label>
+              <BuscadorRiderRemoto requerido={false} onSeleccionar={alElegirRider} />
+              {!riderElegido && (
+                <input
+                  value={riderNombreLibre}
+                  onChange={(e) => setRiderNombreLibre(e.target.value)}
+                  placeholder={t('stock.riderPlaceholderLibre')}
+                  className="mt-1.5 w-full rounded-lg border border-border px-3 py-2 text-xs focus:border-primary focus:outline-none"
+                />
+              )}
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stock.notas')}</label>

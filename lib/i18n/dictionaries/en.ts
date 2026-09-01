@@ -712,6 +712,9 @@ const en: Record<ClaveTraduccion, string> = {
   'stockImport.centrosNoEncontrados': "center(s) from the CSV don't match any existing center and were NOT imported. Review them and create them under Settings → Centers if needed, or fix the name in the CSV:",
   'stockImport.cerrar': 'Close',
   'stockImport.csvTraeTallas': 'The CSV has separate columns by size (M/L/XL/XXL)',
+  'stockImport.opcional': 'optional',
+  'stockImport.noImportarEsteDato': "Don't import this data",
+  'stockImport.otrosDatos': 'Other CSV data (optional)',
 
   // KPIs y tabla mejorada de Stock (Fase 2)
   'stock.kpiFisico': 'Physical stock',
@@ -766,6 +769,50 @@ const en: Record<ClaveTraduccion, string> = {
   'stockParams.guardar': 'Save parameters',
   'stockParams.guardando': 'Saving...',
   'stockParams.guardado': 'Parameters saved.',
+
+  // Lienzo de firma
+  'stockFirma.placeholder': 'Sign here',
+  'stockFirma.limpiar': 'Clear signature',
+
+  // Ficha de entrega/devolución con firma
+  'stockFicha.boton': 'New signed slip',
+  'stockFicha.tituloModal': 'Delivery / return slip',
+  'stockFicha.rider': 'Rider',
+  'stockFicha.centro': 'Center',
+  'stockFicha.estadoFicha': 'Slip type',
+  'stockFicha.asignacion': 'Assignment (delivery)',
+  'stockFicha.devolucionOk': 'Returned in good condition',
+  'stockFicha.devolucionMal': 'Returned in bad condition',
+  'stockFicha.materiales': 'Materials',
+  'stockFicha.anadirMaterial': 'Add material',
+  'stockFicha.quitarMaterial': 'Remove',
+  'stockFicha.observacionesMaterial': 'Notes (optional)',
+  'stockFicha.firmaDelRider': "Rider's signature",
+  'stockFicha.faltaRider': 'Choose a rider.',
+  'stockFicha.faltaCentro': 'Choose a center.',
+  'stockFicha.faltaMaterial': 'Add at least one material with a quantity.',
+  'stockFicha.generando': 'Generating slip...',
+  'stockFicha.generar': 'Generate slip and PDF',
+  'stockFicha.generada': 'Slip generated successfully.',
+  'stockFicha.verPdf': 'View PDF',
+  // Listado de fichas generadas
+  'stockFichas.titulo': 'Delivery / return slips',
+  'stockFichas.sinFichas': 'No slips have been generated yet.',
+  'stockFichas.colFecha': 'Date',
+  'stockFichas.colRider': 'Rider',
+  'stockFichas.colCentro': 'Center',
+  'stockFichas.colEstado': 'Type',
+  'stockFichas.colMateriales': 'Materials',
+  'stockFichas.colPdf': 'PDF',
+  'stockFichas.colRegistradaPor': 'Logged by',
+
+  // Filtro de cabecera de tabla (Stock)
+  'stockFiltro.contiene': 'Contains...',
+  'stockFiltro.mayorQue': 'Greater than',
+  'stockFiltro.menorQue': 'Less than',
+  'stockFiltro.igualA': 'Equal to',
+  'stockFiltro.limpiar': 'Clear',
+  'stockFiltro.aplicar': 'Apply',
 };
 
 export default en;

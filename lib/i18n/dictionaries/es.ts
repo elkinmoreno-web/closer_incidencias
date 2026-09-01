@@ -709,6 +709,9 @@ const es = {
   'stockImport.centrosNoEncontrados': 'centro(s) del CSV no coinciden con ningún centro existente y NO se importaron. Revísalos y créalos en Configuración → Centros si corresponde, o corrige el nombre en el CSV:',
   'stockImport.cerrar': 'Cerrar',
   'stockImport.csvTraeTallas': 'El CSV trae columnas separadas por talla (M/L/XL/XXL)',
+  'stockImport.opcional': 'opcional',
+  'stockImport.noImportarEsteDato': 'No importar este dato',
+  'stockImport.otrosDatos': 'Otros datos del CSV (opcional)',
 
   // KPIs y tabla mejorada de Stock (Fase 2)
   'stock.kpiFisico': 'Stock físico',
@@ -763,6 +766,50 @@ const es = {
   'stockParams.guardar': 'Guardar parámetros',
   'stockParams.guardando': 'Guardando...',
   'stockParams.guardado': 'Parámetros guardados.',
+
+  // Lienzo de firma
+  'stockFirma.placeholder': 'Firma aquí',
+  'stockFirma.limpiar': 'Borrar firma',
+
+  // Ficha de entrega/devolución con firma
+  'stockFicha.boton': 'Nueva ficha con firma',
+  'stockFicha.tituloModal': 'Ficha de entrega / devolución',
+  'stockFicha.rider': 'Rider',
+  'stockFicha.centro': 'Centro',
+  'stockFicha.estadoFicha': 'Tipo de ficha',
+  'stockFicha.asignacion': 'Asignación (entrega)',
+  'stockFicha.devolucionOk': 'Devolución en buen estado',
+  'stockFicha.devolucionMal': 'Devolución en mal estado',
+  'stockFicha.materiales': 'Materiales',
+  'stockFicha.anadirMaterial': 'Añadir material',
+  'stockFicha.quitarMaterial': 'Quitar',
+  'stockFicha.observacionesMaterial': 'Observaciones (opcional)',
+  'stockFicha.firmaDelRider': 'Firma del rider',
+  'stockFicha.faltaRider': 'Elige un rider.',
+  'stockFicha.faltaCentro': 'Elige un centro.',
+  'stockFicha.faltaMaterial': 'Añade al menos un material con cantidad.',
+  'stockFicha.generando': 'Generando ficha...',
+  'stockFicha.generar': 'Generar ficha y PDF',
+  'stockFicha.generada': 'Ficha generada correctamente.',
+  'stockFicha.verPdf': 'Ver PDF',
+  // Listado de fichas generadas
+  'stockFichas.titulo': 'Fichas de entrega/devolución',
+  'stockFichas.sinFichas': 'Todavía no se ha generado ninguna ficha.',
+  'stockFichas.colFecha': 'Fecha',
+  'stockFichas.colRider': 'Rider',
+  'stockFichas.colCentro': 'Centro',
+  'stockFichas.colEstado': 'Tipo',
+  'stockFichas.colMateriales': 'Materiales',
+  'stockFichas.colPdf': 'PDF',
+  'stockFichas.colRegistradaPor': 'Registrada por',
+
+  // Filtro de cabecera de tabla (Stock)
+  'stockFiltro.contiene': 'Contiene...',
+  'stockFiltro.mayorQue': 'Mayor que',
+  'stockFiltro.menorQue': 'Menor que',
+  'stockFiltro.igualA': 'Igual a',
+  'stockFiltro.limpiar': 'Limpiar',
+  'stockFiltro.aplicar': 'Aplicar',
 } as const;
 
 export default es;

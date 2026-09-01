@@ -10,13 +10,26 @@ import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 type Fase = 'inicial' | 'previsualizando' | 'importando' | 'terminado';
 
+// Patrones para adivinar cada columna por su nombre — cubren tanto el
+// formato de Mochilas/Chubasqueros ("Stock Actual", "Cajas Tránsito",
+// "... Entregadas/Rotas/No Recuperadas") como el de Soportes ("Stock
+// Físico", "En Tránsito", "En Poder de Riders", "Rotos / Basura",
+// "Robados / Perdidos") — confirmado con los 3 CSV reales.
+const PATRONES: Record<string, RegExp> = {
+  centro: /centro|ciudad/i,
+  cantidad: /stock\s*(actual|f[ií]sico)/i,
+  enTransito: /tr[aá]nsito/i,
+  entregadas: /entregad|poder de rider/i,
+  rotas: /rota|roto|basura/i,
+  noRecuperadas: /no\s*recuperad|robad|perdid/i,
+};
+
 /**
- * Importa el stock inicial de un material desde un CSV. A diferencia
- * de ImportRidersModal (que asume columnas fijas), aquí el nombre de
- * las columnas varía según el material — se confirmó con los datos
- * reales que Mochilas/Chubasqueros usan "Stock Actual" mientras que
- * Soportes usa "Stock Físico (Unid.)" — así que se deja elegir la
- * columna en vez de asumir un nombre.
+ * Importa el stock inicial de un material desde un CSV. Adivina cada
+ * columna relevante por su nombre (con los patrones reales de los 3
+ * CSV que se usaron para migrar) y deja ajustar a mano si hace falta
+ * — el nombre de columna varía según el material (confirmado con
+ * datos reales: Mochilas/Chubasqueros usan un formato, Soportes otro).
  */
 export function ImportarStockModal({ material }: { material: StockMaterial }) {
   const { t, idioma } = useIdioma();
@@ -24,12 +37,16 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
   const [fase, setFase] = useState<Fase>('inicial');
   const [filasCrudas, setFilasCrudas] = useState<Record<string, unknown>[]>([]);
   const [columnas, setColumnas] = useState<string[]>([]);
-  const [columnaCentro, setColumnaCentro] = useState('');
-  const [columnaCantidad, setColumnaCantidad] = useState('');
-  const [columnaM, setColumnaM] = useState('');
-  const [columnaL, setColumnaL] = useState('');
-  const [columnaXl, setColumnaXl] = useState('');
-  const [columnaXxl, setColumnaXxl] = useState('');
+  const [colCentro, setColCentro] = useState('');
+  const [colCantidad, setColCantidad] = useState('');
+  const [colEnTransito, setColEnTransito] = useState('');
+  const [colEntregadas, setColEntregadas] = useState('');
+  const [colRotas, setColRotas] = useState('');
+  const [colNoRecuperadas, setColNoRecuperadas] = useState('');
+  const [colM, setColM] = useState('');
+  const [colL, setColL] = useState('');
+  const [colXl, setColXl] = useState('');
+  const [colXxl, setColXxl] = useState('');
   const [usarTallas, setUsarTallas] = useState(false);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacionStock | null>(null);
@@ -38,12 +55,16 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
     setFase('inicial');
     setFilasCrudas([]);
     setColumnas([]);
-    setColumnaCentro('');
-    setColumnaCantidad('');
-    setColumnaM('');
-    setColumnaL('');
-    setColumnaXl('');
-    setColumnaXxl('');
+    setColCentro('');
+    setColCantidad('');
+    setColEnTransito('');
+    setColEntregadas('');
+    setColRotas('');
+    setColNoRecuperadas('');
+    setColM('');
+    setColL('');
+    setColXl('');
+    setColXxl('');
     setUsarTallas(false);
     setErrorArchivo(null);
     setResultado(null);
@@ -52,6 +73,10 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
   function cerrar() {
     setOpen(false);
     reset();
+  }
+
+  function adivinar(cols: string[], patron: RegExp): string {
+    return cols.find((c) => patron.test(c)) ?? '';
   }
 
   async function handleFile(file: File) {
@@ -66,10 +91,15 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
       setColumnas(cols);
       setFilasCrudas(filas);
 
-      // Adivina la columna de centro/ciudad por nombre, para no obligar
-      // a elegirla siempre a mano cuando el CSV ya trae un nombre obvio.
-      const posibleCentro = cols.find((c) => /centro|ciudad/i.test(c));
-      if (posibleCentro) setColumnaCentro(posibleCentro);
+      // Auto-detección: reduce a cero el trabajo manual en el caso
+      // común (los 3 CSV reales usados para migrar encajan con estos
+      // patrones); el usuario solo ajusta si algo no coincide.
+      setColCentro(adivinar(cols, PATRONES.centro));
+      setColCantidad(adivinar(cols, PATRONES.cantidad));
+      setColEnTransito(adivinar(cols, PATRONES.enTransito));
+      setColEntregadas(adivinar(cols, PATRONES.entregadas));
+      setColRotas(adivinar(cols, PATRONES.rotas));
+      setColNoRecuperadas(adivinar(cols, PATRONES.noRecuperadas));
 
       setFase('previsualizando');
     } catch {
@@ -85,12 +115,16 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
   async function confirmarImportacion() {
     setFase('importando');
     const filas = filasCrudas.map((f) => ({
-      centroNombre: String(f[columnaCentro] ?? '').trim(),
-      cantidad: usarTallas ? 0 : num(f[columnaCantidad]),
-      tallaM: usarTallas ? num(f[columnaM]) : 0,
-      tallaL: usarTallas ? num(f[columnaL]) : 0,
-      tallaXl: usarTallas ? num(f[columnaXl]) : 0,
-      tallaXxl: usarTallas ? num(f[columnaXxl]) : 0,
+      centroNombre: String(f[colCentro] ?? '').trim(),
+      cantidad: usarTallas ? 0 : num(f[colCantidad]),
+      tallaM: usarTallas ? num(f[colM]) : 0,
+      tallaL: usarTallas ? num(f[colL]) : 0,
+      tallaXl: usarTallas ? num(f[colXl]) : 0,
+      tallaXxl: usarTallas ? num(f[colXxl]) : 0,
+      enTransito: colEnTransito ? num(f[colEnTransito]) : 0,
+      entregadas: colEntregadas ? num(f[colEntregadas]) : 0,
+      rotas: colRotas ? num(f[colRotas]) : 0,
+      noRecuperadas: colNoRecuperadas ? num(f[colNoRecuperadas]) : 0,
     }));
     const res = await importarStockInicial(material.id, filas);
     setResultado(res);
@@ -98,8 +132,26 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
   }
 
   const listoParaImportar = usarTallas
-    ? columnaCentro && (columnaM || columnaL || columnaXl || columnaXxl)
-    : columnaCentro && columnaCantidad;
+    ? colCentro && (colM || colL || colXl || colXxl)
+    : colCentro && colCantidad;
+
+  function SelectorColumna({ label, valor, set, opcional }: { label: string; valor: string; set: (v: string) => void; opcional?: boolean }) {
+    return (
+      <div>
+        <label className="mb-1 block text-xs font-semibold text-ink-muted">
+          {label} {opcional && <span className="font-normal opacity-70">({t('stockImport.opcional')})</span>}
+        </label>
+        <select value={valor} onChange={(e) => set(e.target.value)} className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none">
+          <option value="">{opcional ? t('stockImport.noImportarEsteDato') : t('stock.selecciona')}</option>
+          {columnas.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -133,21 +185,7 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
 
             {fase === 'previsualizando' && (
               <div className="flex flex-col gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stockImport.columnaCentroLabel')}</label>
-                  <select
-                    value={columnaCentro}
-                    onChange={(e) => setColumnaCentro(e.target.value)}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                  >
-                    <option value="">{t('stock.selecciona')}</option>
-                    {columnas.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SelectorColumna label={t('stockImport.columnaCentroLabel')} valor={colCentro} set={setColCentro} />
 
                 {material.tiene_tallas && (
                   <label className="flex items-center gap-2 text-xs text-ink">
@@ -158,46 +196,22 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
 
                 {usarTallas ? (
                   <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { label: 'M', valor: columnaM, set: setColumnaM },
-                      { label: 'L', valor: columnaL, set: setColumnaL },
-                      { label: 'XL', valor: columnaXl, set: setColumnaXl },
-                      { label: 'XXL', valor: columnaXxl, set: setColumnaXxl },
-                    ].map((t2) => (
-                      <div key={t2.label}>
-                        <label className="mb-1 block text-xs font-semibold text-ink-muted">{t2.label}</label>
-                        <select
-                          value={t2.valor}
-                          onChange={(e) => t2.set(e.target.value)}
-                          className="w-full rounded-lg border border-border px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
-                        >
-                          <option value="">—</option>
-                          {columnas.map((c) => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
+                    <SelectorColumna label="M" valor={colM} set={setColM} />
+                    <SelectorColumna label="L" valor={colL} set={setColL} />
+                    <SelectorColumna label="XL" valor={colXl} set={setColXl} />
+                    <SelectorColumna label="XXL" valor={colXxl} set={setColXxl} />
                   </div>
                 ) : (
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stockImport.columnaCantidadLabel')}</label>
-                    <select
-                      value={columnaCantidad}
-                      onChange={(e) => setColumnaCantidad(e.target.value)}
-                      className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                    >
-                      <option value="">{t('stock.selecciona')}</option>
-                      {columnas.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <SelectorColumna label={t('stockImport.columnaCantidadLabel')} valor={colCantidad} set={setColCantidad} />
                 )}
+
+                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-ink-muted">{t('stockImport.otrosDatos')}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <SelectorColumna label={t('stock.colEnCamino')} valor={colEnTransito} set={setColEnTransito} opcional />
+                  <SelectorColumna label={t('stock.colEnCalle')} valor={colEntregadas} set={setColEntregadas} opcional />
+                  <SelectorColumna label={t('stock.colMerma')} valor={colRotas} set={setColRotas} opcional />
+                  <SelectorColumna label={t('stock.colPerdida')} valor={colNoRecuperadas} set={setColNoRecuperadas} opcional />
+                </div>
 
                 <p className="text-xs text-ink-muted">
                   {filasCrudas.length} {t('stockImport.filasListas')}

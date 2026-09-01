@@ -22,7 +22,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <IdiomaProvider idioma={idioma}>
       <div className="flex min-h-screen">
-        <Sidebar rol={admin.rol} pendientesCount={pendientesCount ?? 0} ausenciasPendientesCount={ausenciasPendientesCount ?? 0} />
+        <Sidebar rol={admin.rol} email={admin.email} pendientesCount={pendientesCount ?? 0} ausenciasPendientesCount={ausenciasPendientesCount ?? 0} />
         <div className="flex flex-1 flex-col">
           <Topbar adminId={admin.id} usuario={admin.usuario} rol={admin.rol} misCiudades={misCiudadesNombres} idioma={idioma} />
           <AnnouncementBanner />

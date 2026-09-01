@@ -77,7 +77,7 @@ export const getAdminActual = cache(async () => {
   if (!user) return null;
   const supabase = createClient();
   const { data: admin } = await supabase.from('admins').select('id, usuario, rol, activo').eq('auth_user_id', user.id).maybeSingle();
-  return admin;
+  return admin ? { ...admin, email: user.email ?? null } : null;
 });
 
 /** Fila de `riders` del usuario autenticado actual (o null). Cacheado por petición, igual que getAdminActual. */

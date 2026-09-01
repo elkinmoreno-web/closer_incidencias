@@ -41,8 +41,10 @@ export function Sidebar({
   const [abierto, setAbierto] = useState(false);
   const { t } = useIdioma();
 
-  const items = NAV.filter((item) => (item.roles as readonly string[]).includes(rol));
-
+    const items = NAV.filter((item) => {
+        if (item.href === '/dashboard/stock' && email !== 'elkin.moreno@closerlogistics.com') return false;
+        return (item.roles as readonly string[]).includes(rol);
+    });
   const enlaces = (
     <>
       <div className="mb-4 flex items-center justify-between px-2">

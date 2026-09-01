@@ -100,7 +100,7 @@ async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<st
   return creadaData.id;
 }
 
-async function carpetaDelMes(categoria: 'Incidencias' | 'Ausencias' | 'Conexiones' | 'Fichas'): Promise<string> {
+async function carpetaDelMes(categoria: 'Incidencias' | 'Ausencias' | 'Conexiones'): Promise<string> {
   const raizId = process.env.GOOGLE_DRIVE_FOLDER_ID;
   if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FOLDER_ID');
 
@@ -112,7 +112,7 @@ async function carpetaDelMes(categoria: 'Incidencias' | 'Ausencias' | 'Conexione
 
 /** Sube un archivo a la carpeta del mes actual de la categoría. Devuelve el ID del archivo en Drive. */
 export async function subirArchivoDrive(
-  categoria: 'Incidencias' | 'Ausencias' | 'Conexiones' | 'Fichas',
+  categoria: 'Incidencias' | 'Ausencias' | 'Conexiones',
   nombreArchivo: string,
   contenido: Buffer,
   mimeType: string

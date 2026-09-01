@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
-import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity, Package } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity } from 'lucide-react';
 import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
@@ -17,7 +17,6 @@ const NAV = [
   { href: '/dashboard/incidencias', clave: 'nav.incidencias' as ClaveTraduccion, icon: AlertTriangle, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/ausencias', clave: 'nav.ausencias' as ClaveTraduccion, icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/riders', clave: 'nav.riders' as ClaveTraduccion, icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/stock', clave: 'nav.stock' as ClaveTraduccion, icon: Package, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/conexiones', clave: 'nav.conexiones' as ClaveTraduccion, icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/overtime', clave: 'nav.horasExtra' as ClaveTraduccion, icon: Clock, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/ch-vs-wh', clave: 'nav.chVsWh' as ClaveTraduccion, icon: Scale, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },

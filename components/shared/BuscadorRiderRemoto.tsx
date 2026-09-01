@@ -21,12 +21,9 @@ const MAX_SUGERENCIAS = 15;
 export function BuscadorRiderRemoto({
   nombreCampo = 'riderDni',
   requerido = true,
-  onSeleccionar,
 }: {
   nombreCampo?: string;
   requerido?: boolean;
-  /** Opcional: además de escribir el DNI en el input oculto (modo formulario HTML clásico), notifica el rider elegido completo — para componentes que manejan su propio estado en vez de leer un FormData. */
-  onSeleccionar?: (rider: RiderResultado | null) => void;
 }) {
   const [texto, setTexto] = useState('');
   const [resultados, setResultados] = useState<RiderResultado[]>([]);
@@ -39,7 +36,6 @@ export function BuscadorRiderRemoto({
     setTexto(v);
     setAbierto(true);
     setElegido(null);
-    onSeleccionar?.(null);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = v.trim();
@@ -60,7 +56,6 @@ export function BuscadorRiderRemoto({
     setElegido(r);
     setTexto(`${r.nombre} — ${r.dni}`);
     setAbierto(false);
-    onSeleccionar?.(r);
   }
 
   useEffect(

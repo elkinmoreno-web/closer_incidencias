@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { StockPanel } from '@/components/stock/StockPanel';
 import { listarMaterialesStock } from '@/app/dashboard/stock/actions';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
@@ -8,7 +9,7 @@ import { getAdminActual } from '@/lib/supabase/server';
 export default async function StockPage() {
     const admin = await getAdminActual();
     if (admin?.email !== 'elkin.moreno@closerlogistics.com') redirect('/dashboard');
-  const t = crearTraductor(await resolverIdioma());
+    const t = crearTraductor(await resolverIdioma());
   const [materiales, zona] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona()]);
 
   return (

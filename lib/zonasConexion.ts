@@ -10,7 +10,7 @@ const NOMBRE_ARCHIVO_MAPA = 'CLOSERLOGISTICS_areas.html';
 // por este ID directo — Drive normalmente lo conserva cuando solo se
 // edita el CONTENIDO del archivo — y si deja de ser válido, se cae a
 // la búsqueda por nombre (ya corregida para incluir compartidos).
-const FILE_ID_CONOCIDO = '14Exdx9pGPmG9uyywTSRTfooPjuB4sqXr';
+const FILE_ID_CONOCIDO = '1rmR5Q8O99D5Q2hHSdkKgJwQ-BqpSknie';
 
 export interface ZonaParseada {
   nombre: string; // tal cual el mapa, en mayúsculas (ej. "MADRID ALCORCÓN MÓSTOLES")

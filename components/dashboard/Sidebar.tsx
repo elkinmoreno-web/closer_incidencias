@@ -29,13 +29,15 @@ const NAV = [
 ] as const;
 
 export function Sidebar({
-  rol,
-  pendientesCount,
-  ausenciasPendientesCount,
-}: {
-  rol: RolAdmin;
-  pendientesCount: number;
-  ausenciasPendientesCount: number;
+                            rol,
+                            email,
+                            pendientesCount,
+                            ausenciasPendientesCount,
+                        }: {
+    rol: RolAdmin;
+    email: string | null;
+    pendientesCount: number;
+    ausenciasPendientesCount: number;
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);

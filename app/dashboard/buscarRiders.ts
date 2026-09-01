@@ -6,6 +6,8 @@ export interface RiderResultado {
   id: string;
   nombre: string;
   dni: string;
+  centroId: number | null;
+  centroNombre: string | null;
 }
 
 /**
@@ -32,11 +34,17 @@ export async function buscarRiders(texto: string): Promise<RiderResultado[]> {
 
   const { data } = await supabase
     .from('riders')
-    .select('id, nombre, dni')
+    .select('id, nombre, dni, centro_id, centros(nombre)')
     .eq('activo', true)
     .or(`dni.ilike.%${q}%,nombre.ilike.%${q}%`)
     .order('nombre')
     .limit(15);
 
-  return (data ?? []).map((r) => ({ id: r.id, nombre: r.nombre, dni: r.dni }));
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    nombre: r.nombre,
+    dni: r.dni,
+    centroId: r.centro_id,
+    centroNombre: (r.centros as unknown as { nombre: string } | null)?.nombre ?? null,
+  }));
 }

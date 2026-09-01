@@ -151,6 +151,139 @@ export interface ConexionFueraZona {
   admins?: Pick<Admin, 'usuario'> | null;
 }
 
+// ============================================================
+// Gestión de Stock (Fase 1 — núcleo mínimo)
+// ============================================================
+
+export interface StockMaterial {
+  id: number;
+  clave: string; // 'MOCHILAS' | 'SOPORTES' | 'CHUBASQUEROS' — identificador estable
+  titulo: string;
+  titulo_en: string | null;
+  icono: string;
+  unidad: string;
+  uds_por_caja: number;
+  tiene_tallas: boolean;
+  activo: boolean;
+  orden: number;
+}
+
+export interface StockTalla {
+  id: number;
+  material_id: number;
+  talla: string; // 'M' | 'L' | 'XL' | 'XXL'
+  orden: number;
+}
+
+export type StockClaseMovimiento = 'entrada' | 'traslado' | 'salida' | 'merma' | 'perdida' | 'ajuste' | 'neutro';
+
+export interface StockTipoMovimiento {
+  clave: string;
+  etiqueta: string;
+  etiqueta_en: string | null;
+  clase: StockClaseMovimiento;
+  resta_origen: boolean | null; // null = depende de un parámetro que se resuelve en fases siguientes
+  suma_destino: boolean;
+  requiere_origen: boolean;
+  requiere_destino: boolean;
+  orden: number;
+}
+
+export type StockEstadoTransito = 'en_transito' | 'recibido' | 'anulado';
+
+export interface StockMovimiento {
+  id: number;
+  material_id: number;
+  tipo_clave: string;
+  centro_origen_id: number | null;
+  centro_destino_id: number | null;
+  cajas: number;
+  unidades: number;
+  talla_m: number;
+  talla_l: number;
+  talla_xl: number;
+  talla_xxl: number;
+  rider_id: string | null;
+  rider_nombre_libre: string | null;
+  notas: string | null;
+  admin_id: string;
+  created_at: string;
+  estado_transito: StockEstadoTransito | null;
+  unidades_recibidas: number | null;
+  recibido_por: string | null;
+  recibido_en: string | null;
+}
+
+/** Fila de stock disponible por centro y material, ya calculada (suma del ledger). */
+export type StockSemaforo = 'NEGATIVO' | 'ROTURA' | 'CRITICO' | 'BAJO' | 'MUERTO' | 'SOBRE' | 'OK';
+
+/** Fila de stock por centro y material, con todas las métricas ya calculadas (equivalente a una fila de STOCK MOCHILAS/SOPORTES/CHUBASQ + su semáforo). */
+export interface StockDisponible {
+  material_id: number;
+  centro_id: number;
+  centro_nombre: string;
+  gestores: string[]; // usuarios de admins/moderadores con la ciudad de este centro asignada en admin_ciudades — puede ser más de uno
+  disponible: number;
+  transito_entrante: number;
+  transito_saliente: number;
+  en_calle: number; // unidades en manos de riders
+  merma: number;
+  perdida: number;
+  talla_m: number;
+  talla_l: number;
+  talla_xl: number;
+  talla_xxl: number;
+  consumo_ventana: number; // unidades salidas a rider dentro de la ventana de consumo (paramétrica)
+  dias_sin_movimiento: number | null; // null = nunca ha tenido movimiento
+  // Campos derivados del semáforo (se calculan en el cliente con lib/stockSemaforo.ts, no vienen de la BD)
+  consumo_dia?: number;
+  consumo_semana?: number;
+  cobertura_dias?: number | null; // null = cobertura indefinida (sin consumo)
+  punto_reposicion?: number;
+  objetivo?: number;
+  sugerido?: number;
+  semaforo?: StockSemaforo;
+}
+
+export interface StockParametros {
+  lead_time_dias: number;
+  cobertura_objetivo_dias: number;
+  stock_seguridad_dias: number;
+  ventana_consumo_dias: number;
+  dias_stock_muerto: number;
+  minimo_absoluto: number;
+}
+
+export type StockEstadoFicha = 'Asignación' | 'Devolución buen estado' | 'Devolución mal estado';
+
+export interface StockMaterialFicha {
+  materialId: number;
+  materialClave: string;
+  materialTitulo: string; // se guarda tal cual se mostró en el PDF, para que el histórico no cambie si el catálogo se traduce/renombra después
+  cantidad: number;
+  tallaM?: number;
+  tallaL?: number;
+  tallaXl?: number;
+  tallaXxl?: number;
+  observaciones?: string;
+}
+
+export interface StockFicha {
+  id: number;
+  centro_id: number;
+  rider_id: string | null;
+  rider_nombre: string;
+  rider_dni: string;
+  fecha: string;
+  hora: string;
+  estado: StockEstadoFicha;
+  materiales: StockMaterialFicha[];
+  firma_url: string | null;
+  pdf_url: string | null;
+  admin_id: string;
+  created_at: string;
+}
+
 // Tipo mínimo requerido por @supabase/ssr; se puede reemplazar por el
 // tipo `Database` generado automáticamente por la CLI de Supabase.
 export type Database = any;

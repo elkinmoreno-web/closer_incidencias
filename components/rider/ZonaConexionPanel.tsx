@@ -1,14 +1,22 @@
 'use client';
 
-import { MapPin, ExternalLink } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { MapPin } from 'lucide-react';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
+// Leaflet usa `window` — debe cargarse solo en cliente, nunca en SSR.
+const MapaZonaConexion = dynamic(() => import('@/components/rider/MapaZonaConexion').then((m) => m.MapaZonaConexion), {
+  ssr: false,
+  loading: () => <div className="h-72 w-full animate-pulse rounded-xl border border-border bg-bg" />,
+});
+
 /**
- * Muestra el mapa de zona de conexión del centro del rider. La imagen
- * la sube el Super Admin desde Configuración → Centros (una por
- * centro); aquí solo se lee y se muestra.
+ * Muestra el mapa real de la zona de conexión del centro del rider —
+ * el polígono viene sincronizado semanalmente (cada lunes) desde el
+ * mapa oficial en Drive, ver lib/zonasConexion.ts. Reemplaza al
+ * sistema anterior de imagen estática subida a mano por centro.
  */
-export function ZonaConexionPanel({ imagenUrl, nombreCentro }: { imagenUrl: string | null; nombreCentro: string | null }) {
+export function ZonaConexionPanel({ poligonos, nombreZona, nombreCentro }: { poligonos: [number, number][][] | null; nombreZona: string | null; nombreCentro: string | null }) {
   const { t } = useIdioma();
 
   return (
@@ -21,15 +29,11 @@ export function ZonaConexionPanel({ imagenUrl, nombreCentro }: { imagenUrl: stri
         </h2>
       </div>
 
-      {imagenUrl ? (
-        <a href={imagenUrl} target="_blank" rel="noopener noreferrer" className="group relative block overflow-hidden rounded-xl border border-border">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imagenUrl} alt={t('zonaConexion.titulo')} className="w-full object-contain" />
-          <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white opacity-0 transition group-hover:opacity-100">
-            <ExternalLink size={12} />
-            {t('zonaConexion.verEnGrande')}
-          </span>
-        </a>
+      {poligonos && poligonos.length > 0 ? (
+        <>
+          <MapaZonaConexion poligonos={poligonos} />
+          {nombreZona && <p className="text-center text-xs text-ink-muted">{nombreZona}</p>}
+        </>
       ) : (
         <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border py-14 text-center text-ink-muted">
           <MapPin size={20} className="mb-1 opacity-40" />

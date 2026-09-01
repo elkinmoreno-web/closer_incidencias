@@ -247,3 +247,21 @@ export function registrarError(contexto: string, e: unknown, mensajeUsuario = 'O
 export function canonicalEmail(email: string): string {
   return email.trim().toLowerCase().replace(/\+[^@]*(@)/, '$1');
 }
+
+/**
+ * Normaliza un nombre de centro/ciudad/zona para comparar sin que
+ * diferencias de tildes, mayúsculas o espacios repetidos hagan fallar
+ * el emparejamiento (ej. "La  Coruña " y "la coruna" deben matchear).
+ * No toca abreviaturas o alias (ej. "MCD X") — eso sigue exigiendo
+ * coincidencia real de nombre, para no inventar relaciones. Usada
+ * tanto por la importación de stock como por el matching de zonas de
+ * conexión (lib/zonasConexion.ts).
+ */
+export function normalizarNombreCentro(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}

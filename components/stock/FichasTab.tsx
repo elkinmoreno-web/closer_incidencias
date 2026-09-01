@@ -1,16 +1,31 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Plus } from 'lucide-react';
 import type { StockFicha } from '@/lib/types';
+import { ITEMS_FICHA_FIJOS } from '@/lib/types';
 import { ThFiltro, cumpleFiltroTexto, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { formatFecha } from '@/lib/utils';
 import { urlArchivoDrive } from '@/lib/driveUrl';
+import { NuevaFichaModal } from '@/components/stock/NuevaFichaModal';
 
 type FichaConNombres = StockFicha & { centro_nombre: string; admin_usuario: string | null };
 
-export function FichasTab({ fichas }: { fichas: FichaConNombres[] }) {
+const ETIQUETA_MARCA: Record<string, string> = { asignacion: 'Asignación', devolucion_ok: 'Dev. OK', devolucion_mal: 'Dev. mal estado' };
+
+function resumenItems(f: FichaConNombres): string {
+  return (f.items ?? [])
+    .filter((it) => it.marca)
+    .map((it) => {
+      const def = ITEMS_FICHA_FIJOS.find((d) => d.clave === it.itemClave);
+      return `${def?.etiqueta ?? it.itemClave} (${ETIQUETA_MARCA[it.marca!] ?? it.marca})`;
+    })
+    .join(', ');
+}
+
+export function FichasTab({ fichas, onFichaGenerada }: { fichas: FichaConNombres[]; onFichaGenerada: () => void }) {
+  const [modalAbierto, setModalAbierto] = useState(false);
   const { t } = useIdioma();
 
   const [filtrosFichas, setFiltrosFichas] = useState<Record<string, FiltroColumna>>({});
@@ -31,7 +46,7 @@ export function FichasTab({ fichas }: { fichas: FichaConNombres[] }) {
     let filas = fichas.filter((f) => {
       if (!cumpleFiltroTexto(f.rider_nombre, filtrosFichas.rider)) return false;
       if (!cumpleFiltroTexto(f.centro_nombre, filtrosFichas.centro)) return false;
-      if (!cumpleFiltroTexto(f.estado, filtrosFichas.estado)) return false;
+      if (!cumpleFiltroTexto(resumenItems(f), filtrosFichas.items)) return false;
       if (!cumpleFiltroTexto(f.admin_usuario ?? '', filtrosFichas.registradaPor)) return false;
       return true;
     });
@@ -50,7 +65,16 @@ export function FichasTab({ fichas }: { fichas: FichaConNombres[] }) {
 
   return (
     <div className="rounded-card border border-border bg-surface p-5">
-      <h2 className="mb-3 font-semibold text-ink">{t('stockFichas.titulo')}</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-semibold text-ink">{t('stockFichas.titulo')}</h2>
+        <button
+          onClick={() => setModalAbierto(true)}
+          className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark"
+        >
+          <Plus size={16} />
+          {t('stockFicha.boton')}
+        </button>
+      </div>
       {fichas.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-muted">{t('stockFichas.sinFichas')}</p>
       ) : fichasFiltradas.length === 0 ? (
@@ -63,8 +87,7 @@ export function FichasTab({ fichas }: { fichas: FichaConNombres[] }) {
                 <th className="px-3 py-2">{t('stockFichas.colFecha')}</th>
                 <ThFiltro label={t('stockFichas.colRider')} ordenActivo={ordenFichas?.campo === 'rider_nombre' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('rider_nombre', d)} filtro={filtrosFichas.rider} onFiltrar={(f) => filtrarFichasPor('rider', f)} />
                 <ThFiltro label={t('stockFichas.colCentro')} ordenActivo={ordenFichas?.campo === 'centro_nombre' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('centro_nombre', d)} filtro={filtrosFichas.centro} onFiltrar={(f) => filtrarFichasPor('centro', f)} />
-                <ThFiltro label={t('stockFichas.colEstado')} ordenActivo={ordenFichas?.campo === 'estado' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('estado', d)} filtro={filtrosFichas.estado} onFiltrar={(f) => filtrarFichasPor('estado', f)} />
-                <th className="px-3 py-2">{t('stockFichas.colMateriales')}</th>
+                <ThFiltro label={t('stockFichas.colMateriales')} ordenActivo={ordenFichas?.campo === 'items' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('items', d)} filtro={filtrosFichas.items} onFiltrar={(f) => filtrarFichasPor('items', f)} />
                 <ThFiltro label={t('stockFichas.colRegistradaPor')} ordenActivo={ordenFichas?.campo === 'admin_usuario' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('admin_usuario', d)} filtro={filtrosFichas.registradaPor} onFiltrar={(f) => filtrarFichasPor('registradaPor', f)} />
                 <th className="px-3 py-2">{t('stockFichas.colPdf')}</th>
               </tr>
@@ -77,8 +100,7 @@ export function FichasTab({ fichas }: { fichas: FichaConNombres[] }) {
                     <td className="px-3 py-2 text-xs text-ink-muted">{formatFecha(f.created_at)}</td>
                     <td className="px-3 py-2 text-xs text-ink">{f.rider_nombre}</td>
                     <td className="px-3 py-2 text-xs text-ink-muted">{f.centro_nombre}</td>
-                    <td className="px-3 py-2 text-xs text-ink-muted">{f.estado}</td>
-                    <td className="px-3 py-2 text-xs text-ink-muted">{f.materiales.map((m) => `${m.materialTitulo} (${m.cantidad})`).join(', ')}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{resumenItems(f)}</td>
                     <td className="px-3 py-2 text-xs text-ink-muted">{f.admin_usuario ?? '—'}</td>
                     <td className="px-3 py-2 text-xs">
                       {url ? (
@@ -96,6 +118,16 @@ export function FichasTab({ fichas }: { fichas: FichaConNombres[] }) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {modalAbierto && (
+        <NuevaFichaModal
+          onCerrar={() => setModalAbierto(false)}
+          onGenerada={() => {
+            setModalAbierto(false);
+            onFichaGenerada();
+          }}
+        />
       )}
     </div>
   );

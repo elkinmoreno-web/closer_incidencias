@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import { Plus, FileText, Package, Truck, Clock3, ClipboardList, Settings2 } from 'lucide-react';
+import { Plus, Package, Truck, Clock3, ClipboardList, Settings2 } from 'lucide-react';
 import {
   obtenerStockDisponible,
   listarMovimientosRecientes,
@@ -12,8 +12,7 @@ import {
 import type { StockMaterial, StockDisponible, StockMovimiento, StockTipoMovimiento, StockParametros, StockFicha, Centro } from '@/lib/types';
 import { NuevoMovimientoModal } from '@/components/stock/NuevoMovimientoModal';
 import { ImportarStockModal } from '@/components/stock/ImportarStockModal';
-import { NuevaFichaModal } from '@/components/stock/NuevaFichaModal';
-import { ParametrosStockPanel } from '@/components/stock/ParametrosStockPanel';
+import { ParametrosStockModal } from '@/components/stock/ParametrosStockModal';
 import { StockResumenTab } from '@/components/stock/StockResumenTab';
 import { SolicitudesTab } from '@/components/stock/SolicitudesTab';
 import { HistorialTab } from '@/components/stock/HistorialTab';
@@ -29,15 +28,16 @@ type MovimientoConNombres = StockMovimiento & {
   tipo_etiqueta: string;
 };
 
-type Pestana = 'stock' | 'solicitudes' | 'historial' | 'fichas' | 'configuracion';
+type Pestana = 'stock' | 'solicitudes' | 'historial' | 'fichas';
 
 /**
- * Panel de Stock, organizado en pestañas de nivel superior — mismo
- * espíritu que la barra de navegación "Stock / Solicitudes / Registrar
- * / Historial / Plantilla / Historial Fichas / Configuración" del
- * sistema de Sheets, adaptado: "Registrar" y "Plantilla" quedan como
- * botones/modales flotantes (son acciones puntuales, no vistas), y el
- * resto se agrupa en 5 pestañas.
+ * Panel de Stock, organizado en 4 pestañas de contenido (Stock,
+ * Solicitudes, Historial, Fichas) + 2 acciones puntuales fuera de la
+ * navegación: "Registrar movimiento" (botón) y "Configuración de
+ * parámetros" (modal, no pestaña — es algo que se toca de vez en
+ * cuando, no algo que se consulte a diario). "Nueva ficha con firma"
+ * vive dentro de la propia pestaña Fichas (listado + botón), no como
+ * acción global.
  */
 export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: StockMaterial[]; centros: Centro[]; esSuperAdmin: boolean }) {
   const { t, idioma } = useIdioma();
@@ -49,7 +49,7 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
   const [tipos, setTipos] = useState<StockTipoMovimiento[]>([]);
   const [cargando, startCarga] = useTransition();
   const [modalAbierto, setModalAbierto] = useState(false);
-  const [fichaModalAbierto, setFichaModalAbierto] = useState(false);
+  const [parametrosModalAbierto, setParametrosModalAbierto] = useState(false);
   const [fichasGeneradas, setFichasGeneradas] = useState<(StockFicha & { centro_nombre: string; admin_usuario: string | null })[]>([]);
 
   function recargar(materialId: number) {
@@ -85,7 +85,6 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
     { clave: 'solicitudes', label: t('stockTab.solicitudes'), icono: Truck },
     { clave: 'historial', label: t('stockTab.historial'), icono: Clock3 },
     { clave: 'fichas', label: t('stockTab.fichas'), icono: ClipboardList },
-    { clave: 'configuracion', label: t('stockTab.configuracion'), icono: Settings2 },
   ];
 
   return (
@@ -109,11 +108,11 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
         <div className="flex items-center gap-2">
           {material && <ImportarStockModal material={material} />}
           <button
-            onClick={() => setFichaModalAbierto(true)}
-            className="flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-semibold text-ink transition hover:bg-bg"
+            onClick={() => setParametrosModalAbierto(true)}
+            title={t('stock.parametrosSemaforo')}
+            className="flex items-center gap-1.5 rounded-full border border-border px-3 py-2 text-sm font-semibold text-ink-muted transition hover:bg-bg"
           >
-            <FileText size={16} />
-            {t('stockFicha.boton')}
+            <Settings2 size={16} />
           </button>
           <button
             onClick={() => setModalAbierto(true)}
@@ -147,10 +146,14 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
 
       {material && pestana === 'historial' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <HistorialTab movimientos={movimientos} />)}
 
-      {pestana === 'fichas' && <FichasTab fichas={fichasGeneradas} />}
-
-      {pestana === 'configuracion' && parametros && (
-        <ParametrosStockPanel parametros={parametros} esSuperAdmin={esSuperAdmin} onGuardado={(p) => setParametros(p)} siempreAbierto />
+      {pestana === 'fichas' && (
+        <FichasTab
+          fichas={fichasGeneradas}
+          onFichaGenerada={() => {
+            recargarFichas();
+            if (materialActivo !== null) recargar(materialActivo);
+          }}
+        />
       )}
 
       {modalAbierto && material && (
@@ -167,14 +170,12 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
         />
       )}
 
-      {fichaModalAbierto && (
-        <NuevaFichaModal
-          materiales={materiales}
-          onCerrar={() => setFichaModalAbierto(false)}
-          onGenerada={() => {
-            recargarFichas();
-            if (materialActivo !== null) recargar(materialActivo);
-          }}
+      {parametrosModalAbierto && parametros && (
+        <ParametrosStockModal
+          parametros={parametros}
+          esSuperAdmin={esSuperAdmin}
+          onGuardado={(p: StockParametros) => setParametros(p)}
+          onCerrar={() => setParametrosModalAbierto(false)}
         />
       )}
     </div>

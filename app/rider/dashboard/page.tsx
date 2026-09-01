@@ -8,7 +8,6 @@ import { AusenciasSemanaList } from '@/components/rider/AusenciasSemanaList';
 import { MetricasPanel } from '@/components/rider/MetricasPanel';
 import { ZonaConexionPanel } from '@/components/rider/ZonaConexionPanel';
 import { inicioSemanaActualISO } from '@/lib/utils';
-import { urlArchivoDrive } from '@/lib/driveUrl';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
 
@@ -37,11 +36,11 @@ export default async function RiderDashboardPage() {
         .eq('rider_id', rider.id)
         .gte('created_at', inicioSemana)
         .order('created_at', { ascending: false }),
-      supabase.from('riders').select('centros(nombre, imagen_zona_conexion_url)').eq('id', rider.id).maybeSingle(),
+      supabase.from('riders').select('centros(nombre, zonas_conexion(nombre, poligonos))').eq('id', rider.id).maybeSingle(),
     ]);
 
-  const centroRider = riderConCentro?.centros as unknown as { nombre: string; imagen_zona_conexion_url: string | null } | null;
-  const imagenZonaUrl = urlArchivoDrive(centroRider?.imagen_zona_conexion_url);
+  const centroRider = riderConCentro?.centros as unknown as { nombre: string; zonas_conexion: { nombre: string; poligonos: [number, number][][] } | null } | null;
+  const zona = centroRider?.zonas_conexion ?? null;
 
   return (
     <div className="rounded-card bg-surface p-6 shadow-sm">
@@ -65,7 +64,7 @@ export default async function RiderDashboardPage() {
           </div>
         }
         metricasPanel={<MetricasPanel />}
-        zonaPanel={<ZonaConexionPanel imagenUrl={imagenZonaUrl} nombreCentro={centroRider?.nombre ?? null} />}
+        zonaPanel={<ZonaConexionPanel poligonos={zona?.poligonos ?? null} nombreZona={zona?.nombre ?? null} nombreCentro={centroRider?.nombre ?? null} />}
       />
     </div>
   );

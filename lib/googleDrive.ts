@@ -184,3 +184,23 @@ export async function borrarArchivoDrive(fileId: string): Promise<void> {
     // No bloquea la operación principal si falla el borrado.
   }
 }
+
+/**
+ * Busca un archivo por NOMBRE exacto en toda la unidad de Drive
+ * (Google Drive: My Drive) accesible con estas credenciales — sin
+ * cachear el ID, a propósito: el archivo se re-sube/reescribe
+ * periódicamente con un ID nuevo cada vez, así que cachear el ID
+ * antiguo rompería la búsqueda la semana siguiente. Se usa para el
+ * mapa de zonas de conexión (ver lib/zonasConexion.ts), que se busca
+ * por nombre en vez de por ID fijo.
+ *
+ * Si hay varias coincidencias (ej. una copia vieja sin borrar), toma
+ * la de modificación más reciente.
+ */
+export async function buscarArchivoPorNombre(nombreExacto: string): Promise<string | null> {
+  const q = `name = '${nombreExacto.replace(/'/g, "\\'")}' and trashed = false`;
+  const resp = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&spaces=drive`);
+  if (!resp.ok) throw new Error(`No se pudo buscar el archivo "${nombreExacto}" en Drive (HTTP ${resp.status})`);
+  const data = await resp.json();
+  return data.files && data.files.length > 0 ? data.files[0].id : null;
+}

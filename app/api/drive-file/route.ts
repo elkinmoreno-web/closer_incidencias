@@ -23,8 +23,13 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
 
-  const { data: admin } = await supabase.from('admins').select('id, activo').eq('auth_user_id', user.id).maybeSingle();
-  if (!admin || !admin.activo) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
+  const [{ data: admin }, { data: rider }] = await Promise.all([
+    supabase.from('admins').select('id, activo').eq('auth_user_id', user.id).maybeSingle(),
+    supabase.from('riders').select('id, activo').eq('auth_user_id', user.id).maybeSingle(),
+  ]);
+  const esAdminActivo = !!admin?.activo;
+  const esRiderActivo = !!rider?.activo;
+  if (!esAdminActivo && !esRiderActivo) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
 
   // Nota: la restricción de ZONA (que un moderador de Madrid no vea un
   // archivo de un registro de Barcelona) ya la garantiza RLS en la

@@ -14,7 +14,7 @@ export default async function StockPage() {
         <h1 className="text-2xl font-semibold text-ink">{t('stock.titulo')}</h1>
         <p className="text-sm text-ink-muted">{t('stock.subtitulo')}</p>
       </div>
-      <StockPanel materiales={materiales} centros={zona.centros} />
+      <StockPanel materiales={materiales} centros={zona.centros} esSuperAdmin={zona.esSuperAdmin} />
     </div>
   );
 }

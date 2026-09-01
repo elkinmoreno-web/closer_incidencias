@@ -6,6 +6,8 @@ import { registrarMovimientoStock } from '@/app/dashboard/stock/actions';
 import type { StockMaterial, StockTipoMovimiento, Centro } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
+import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
+import type { RiderResultado } from '@/app/dashboard/buscarRiders';
 
 export function NuevoMovimientoModal({
   material,
@@ -36,6 +38,7 @@ export function NuevoMovimientoModal({
   const [tallaXl, setTallaXl] = useState('');
   const [tallaXxl, setTallaXxl] = useState('');
   const [riderNombreLibre, setRiderNombreLibre] = useState('');
+  const [riderElegido, setRiderElegido] = useState<RiderResultado | null>(null);
   const [notas, setNotas] = useState('');
 
   const materialSeleccionado = materiales.find((m) => m.id === materialId) ?? material;
@@ -58,7 +61,8 @@ export function NuevoMovimientoModal({
         tallaL: tallaL ? Number(tallaL) : 0,
         tallaXl: tallaXl ? Number(tallaXl) : 0,
         tallaXxl: tallaXxl ? Number(tallaXxl) : 0,
-        riderNombreLibre,
+        riderId: riderElegido?.id ?? null,
+        riderNombreLibre: riderElegido ? riderElegido.nombre : riderNombreLibre,
         notas,
       });
       if (res && 'error' in res) {
@@ -172,12 +176,15 @@ export function NuevoMovimientoModal({
 
           <div>
             <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stock.riderOpcional')}</label>
-            <input
-              value={riderNombreLibre}
-              onChange={(e) => setRiderNombreLibre(e.target.value)}
-              placeholder={t('stock.riderPlaceholder')}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            />
+            <BuscadorRiderRemoto requerido={false} onSeleccionar={setRiderElegido} />
+            {!riderElegido && (
+              <input
+                value={riderNombreLibre}
+                onChange={(e) => setRiderNombreLibre(e.target.value)}
+                placeholder={t('stock.riderPlaceholderLibre')}
+                className="mt-1.5 w-full rounded-lg border border-border px-3 py-2 text-xs focus:border-primary focus:outline-none"
+              />
+            )}
           </div>
 
           <div>

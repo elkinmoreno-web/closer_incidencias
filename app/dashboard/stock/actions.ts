@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient, getAdminActual } from '@/lib/supabase/server';
 import { registrarError } from '@/lib/utils';
-import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento } from '@/lib/types';
+import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros } from '@/lib/types';
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -33,36 +33,90 @@ export async function listarTiposMovimiento(): Promise<StockTipoMovimiento[]> {
  * sistema de Sheets: no se guarda "el stock actual", se calcula.
  * Se lleva por CENTRO, no por ciudad — dos centros de la misma ciudad
  * pueden tener stock muy distinto (confirmado con los datos reales).
+ *
+ * Devuelve también los campos que alimentan el semáforo de reposición
+ * (consumo en la ventana configurada, días sin movimiento) — el
+ * cálculo final del semáforo en sí (CRÍTICO/BAJO/OK/...) se hace en
+ * el cliente con lib/stockSemaforo.ts, aplicando los parámetros
+ * configurables, para no tener que volver a consultar la base cada
+ * vez que alguien cambia un parámetro en la pantalla.
  */
 export async function obtenerStockDisponible(materialId: number): Promise<StockDisponible[]> {
   const { supabase } = await assertAdmin();
 
   const { data: movimientos } = await supabase
     .from('stock_movimientos')
-    .select('centro_origen_id, centro_destino_id, unidades, talla_m, talla_l, talla_xl, talla_xxl, tipo_clave, stock_tipos_movimiento(resta_origen, suma_destino)')
+    .select('centro_origen_id, centro_destino_id, unidades, talla_m, talla_l, talla_xl, talla_xxl, tipo_clave, created_at, stock_tipos_movimiento(resta_origen, suma_destino, clase)')
     .eq('material_id', materialId);
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre').order('nombre');
+  const { data: centros } = await supabase.from('centros').select('id, nombre, ciudad_id').order('nombre');
   const nombrePorCentro = new Map((centros ?? []).map((c) => [c.id, c.nombre]));
+
+  // "El gestor de un centro" es quien tiene esa CIUDAD asignada en
+  // admin_ciudades — el mismo dato que ya rige los permisos por zona
+  // en el resto del CRM, no un catálogo aparte. Un centro puede tener
+  // más de un admin/moderador asignado a su ciudad, así que se listan
+  // todos juntos (mismo espíritu que el "Marta / Nati" del CSV original).
+  const { data: asignaciones } = await supabase.from('admin_ciudades').select('ciudad_id, admins(usuario)');
+  const gestoresPorCiudad = new Map<number, string[]>();
+  for (const a of asignaciones ?? []) {
+    const usuario = (a.admins as unknown as { usuario: string } | null)?.usuario;
+    if (!usuario) continue;
+    const lista = gestoresPorCiudad.get(a.ciudad_id) ?? [];
+    lista.push(usuario);
+    gestoresPorCiudad.set(a.ciudad_id, lista);
+  }
+  const gestorPorCentro = new Map(
+    (centros ?? []).map((c) => [c.id, c.ciudad_id ? (gestoresPorCiudad.get(c.ciudad_id)?.join(' / ') ?? null) : null])
+  );
+
+  const { data: parametrosRow } = await supabase.from('stock_parametros').select('*').eq('id', 1).maybeSingle();
+  const ventanaConsumoDias = parametrosRow?.ventana_consumo_dias ?? 28;
+  const inicioVentana = Date.now() - ventanaConsumoDias * 86400000;
 
   const mapa = new Map<number, StockDisponible>();
   function celda(centroId: number): StockDisponible {
     let c = mapa.get(centroId);
     if (!c) {
-      c = { material_id: materialId, centro_id: centroId, centro_nombre: nombrePorCentro.get(centroId) ?? '—', disponible: 0, talla_m: 0, talla_l: 0, talla_xl: 0, talla_xxl: 0 };
+      c = {
+        material_id: materialId,
+        centro_id: centroId,
+        centro_nombre: nombrePorCentro.get(centroId) ?? '—',
+        gestor: gestorPorCentro.get(centroId) ?? null,
+        disponible: 0,
+        transito_entrante: 0,
+        transito_saliente: 0,
+        en_calle: 0,
+        merma: 0,
+        perdida: 0,
+        talla_m: 0,
+        talla_l: 0,
+        talla_xl: 0,
+        talla_xxl: 0,
+        consumo_ventana: 0,
+        dias_sin_movimiento: null,
+      };
       mapa.set(centroId, c);
     }
     return c;
   }
 
+  // Último movimiento por centro (para "días sin movimiento" del semáforo, igual que diasSinMov del sistema de Sheets).
+  const ultimoMovimientoPorCentro = new Map<number, number>();
+
   for (const m of movimientos ?? []) {
-    const regla = m.stock_tipos_movimiento as unknown as { resta_origen: boolean | null; suma_destino: boolean } | null;
+    const regla = m.stock_tipos_movimiento as unknown as { resta_origen: boolean | null; suma_destino: boolean; clase: string } | null;
     if (!regla) continue;
 
-    // resta_origen puede ser null en el catálogo (depende de un parámetro
-    // de fases siguientes); en esta fase mínima, null se trata como "no resta"
-    // — solo importa para DEVOLUCION_ROTA/NO_RECUPERADA, que en la Fase 1
-    // todavía no se ofrecen desde la UI (ver listarTiposMovimiento).
+    const marcaTiempo = new Date(m.created_at).getTime();
+    if (m.centro_origen_id) ultimoMovimientoPorCentro.set(m.centro_origen_id, Math.max(ultimoMovimientoPorCentro.get(m.centro_origen_id) ?? 0, marcaTiempo));
+    if (m.centro_destino_id) ultimoMovimientoPorCentro.set(m.centro_destino_id, Math.max(ultimoMovimientoPorCentro.get(m.centro_destino_id) ?? 0, marcaTiempo));
+
+    // resta_origen puede ser null en el catálogo para DEVOLUCION_ROTA/NO_RECUPERADA
+    // — el sistema de Sheets lo hacía configurable (rotaDescuentaAlmacen/
+    // perdidaDescuentaAlmacen); aquí se mantiene el mismo default seguro
+    // (false: la merma/pérdida no vuelve a descontarse del almacén,
+    // porque ya salió del almacén cuando se entregó al rider).
     const restaOrigen = regla.resta_origen === true;
 
     if (restaOrigen && m.centro_origen_id) {
@@ -81,11 +135,70 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
       c.talla_xl += m.talla_xl;
       c.talla_xxl += m.talla_xxl;
     }
+
+    // Tránsito: movimientos de traslado que salen de un centro suman a
+    // "saliente" de ese centro y a "entrante" del destino, mientras el
+    // movimiento en sí ya se contabilizó arriba como resta/suma de
+    // disponible (en esta fase no se modela un estado "en camino" aparte
+    // — todo movimiento se considera recibido al instante, simplificación
+    // consciente frente al sistema viejo que sí distinguía tránsito real).
+    if (regla.clase === 'traslado') {
+      if (m.centro_origen_id) celda(m.centro_origen_id).transito_saliente += m.unidades;
+      if (m.centro_destino_id) celda(m.centro_destino_id).transito_entrante += m.unidades;
+    }
+
+    if (m.tipo_clave === 'ENTREGA_RIDER' && m.centro_origen_id) {
+      celda(m.centro_origen_id).en_calle += m.unidades;
+      if (marcaTiempo >= inicioVentana) celda(m.centro_origen_id).consumo_ventana += m.unidades;
+    }
+    if (m.tipo_clave === 'DEVOLUCION_OK' && m.centro_destino_id) celda(m.centro_destino_id).en_calle -= m.unidades;
+    if (m.tipo_clave === 'DEVOLUCION_ROTA' && m.centro_origen_id) {
+      celda(m.centro_origen_id).en_calle -= m.unidades;
+      celda(m.centro_origen_id).merma += m.unidades;
+    }
+    if (m.tipo_clave === 'NO_RECUPERADA' && m.centro_origen_id) {
+      celda(m.centro_origen_id).en_calle -= m.unidades;
+      celda(m.centro_origen_id).perdida += m.unidades;
+    }
+  }
+
+  const ahora = Date.now();
+  for (const c of mapa.values()) {
+    const ultimo = ultimoMovimientoPorCentro.get(c.centro_id);
+    c.dias_sin_movimiento = ultimo ? Math.floor((ahora - ultimo) / 86400000) : null;
   }
 
   return Array.from(mapa.values())
-    .filter((c) => c.disponible !== 0 || c.talla_m || c.talla_l || c.talla_xl || c.talla_xxl)
+    .filter((c) => c.disponible !== 0 || c.talla_m || c.talla_l || c.talla_xl || c.talla_xxl || c.en_calle !== 0 || c.consumo_ventana > 0)
     .sort((a, b) => a.centro_nombre.localeCompare(b.centro_nombre));
+}
+
+/** Parámetros del semáforo de reposición (una sola fila global). */
+export async function obtenerParametrosStock(): Promise<StockParametros> {
+  const { supabase } = await assertAdmin();
+  const { data } = await supabase.from('stock_parametros').select('*').eq('id', 1).maybeSingle();
+  return {
+    lead_time_dias: data?.lead_time_dias ?? 5,
+    cobertura_objetivo_dias: data?.cobertura_objetivo_dias ?? 21,
+    stock_seguridad_dias: data?.stock_seguridad_dias ?? 7,
+    ventana_consumo_dias: data?.ventana_consumo_dias ?? 28,
+    dias_stock_muerto: data?.dias_stock_muerto ?? 45,
+    minimo_absoluto: data?.minimo_absoluto ?? 4,
+  };
+}
+
+export type ActualizarParametrosStockState = { error: string } | { success: true } | undefined;
+
+/** Solo super_admin: ajustar los parámetros del semáforo (RLS ya lo exige también, esto solo da un mensaje claro). */
+export async function actualizarParametrosStock(parametros: StockParametros): Promise<ActualizarParametrosStockState> {
+  const { supabase, yo } = await assertAdmin();
+  if (yo!.rol !== 'super_admin') return { error: 'Solo un Super Admin puede cambiar estos parámetros.' };
+
+  const { error } = await supabase.from('stock_parametros').update(parametros).eq('id', 1);
+  if (error) return { error: error.message };
+
+  revalidatePath('/dashboard/stock');
+  return { success: true };
 }
 
 export interface RegistrarMovimientoInput {

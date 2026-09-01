@@ -5,11 +5,11 @@ import { registrarError } from '@/lib/utils';
 
 /**
  * Sirve un archivo guardado en Google Drive, verificando primero que
- * quien lo pide es un admin activo. El archivo en Drive NUNCA se
- * comparte con un enlace público — este endpoint es la única puerta de
- * entrada, y exige sesión válida cada vez, igual que antes exigíamos una
- * URL firmada de Supabase (pero aquí, en vez de caducar a los 5
- * minutos, la barrera es la sesión misma).
+ * quien lo pide es un admin activo O un rider activo. El archivo en
+ * Drive NUNCA se comparte con un enlace público — este endpoint es la
+ * única puerta de entrada, y exige sesión válida cada vez, igual que
+ * antes exigíamos una URL firmada de Supabase (pero aquí, en vez de
+ * caducar a los 5 minutos, la barrera es la sesión misma).
  *
  * Uso: /api/drive-file?id=<fileId>
  */
@@ -32,10 +32,10 @@ const esRiderActivo = !!rider?.activo;
 if (!esAdminActivo && !esRiderActivo) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 });
 
   // Nota: la restricción de ZONA (que un moderador de Madrid no vea un
-  // archivo de un registro de Barcelona) ya la garantiza RLS en la
-  // consulta que trajo el fileId hasta la página — si no podía ver la
-  // fila de la incidencia/ausencia, nunca habría llegado a tener este
-  // fileId para pedirlo aquí.
+  // archivo de un registro de Barcelona, o que un rider no vea el de
+  // otro centro) ya la garantiza RLS en la consulta que trajo el
+  // fileId hasta la página — si no podía ver esa fila, nunca habría
+  // llegado a tener este fileId para pedirlo aquí.
 
   let archivo;
   try {

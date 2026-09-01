@@ -164,8 +164,8 @@ async function subirBufferACarpeta(carpetaId: string, nombreArchivo: string, con
 /** Descarga un archivo por su ID. Devuelve null solo si Drive confirma un 404 real. */
 export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
   const [contenidoResp, metaResp] = await Promise.all([
-    driveFetch(`${DRIVE_API}/files/${fileId}?alt=media`),
-    driveFetch(`${DRIVE_API}/files/${fileId}?fields=mimeType`),
+    driveFetch(`${DRIVE_API}/files/${fileId}?alt=media&supportsAllDrives=true`),
+    driveFetch(`${DRIVE_API}/files/${fileId}?fields=mimeType&supportsAllDrives=true`),
   ]);
 
   if (contenidoResp.status === 404 || metaResp.status === 404) return null;
@@ -199,8 +199,35 @@ export async function borrarArchivoDrive(fileId: string): Promise<void> {
  */
 export async function buscarArchivoPorNombre(nombreExacto: string): Promise<string | null> {
   const q = `name = '${nombreExacto.replace(/'/g, "\\'")}' and trashed = false`;
-  const resp = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&spaces=drive`);
+  // includeItemsFromAllDrives + supportsAllDrives: sin esto, la
+  // búsqueda por defecto de la API de Drive SOLO mira "Mi unidad" de
+  // la cuenta autenticada — un archivo que solo está en "Compartido
+  // conmigo" (compartido por otra cuenta, ej. una cuenta de servicio
+  // externa) no aparece aunque la cuenta autenticada sí pueda verlo
+  // y abrirlo desde el navegador. Confirmado como causa real: el mapa
+  // de zonas de conexión es editado por una cuenta de servicio
+  // distinta y vive en "Compartido conmigo".
+  const url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&spaces=drive&includeItemsFromAllDrives=true&supportsAllDrives=true&corpora=allDrives`;
+  const resp = await driveFetch(url);
   if (!resp.ok) throw new Error(`No se pudo buscar el archivo "${nombreExacto}" en Drive (HTTP ${resp.status})`);
   const data = await resp.json();
   return data.files && data.files.length > 0 ? data.files[0].id : null;
+}
+
+/**
+ * Confirma que un fileId concreto sigue siendo válido y accesible —
+ * usado como intento rápido antes de recurrir a buscarArchivoPorNombre,
+ * porque Drive normalmente CONSERVA el ID de un archivo cuando solo se
+ * edita su contenido (solo cambia si se borra y se vuelve a subir).
+ * Devuelve null si el archivo no existe o no es accesible con estas
+ * credenciales (404/403), sin lanzar error — es una comprobación, no
+ * una operación que deba interrumpir el flujo si falla.
+ */
+export async function archivoExisteYEsAccesible(fileId: string): Promise<boolean> {
+  try {
+    const resp = await driveFetch(`${DRIVE_API}/files/${fileId}?fields=id&supportsAllDrives=true`);
+    return resp.ok;
+  } catch {
+    return false;
+  }
 }

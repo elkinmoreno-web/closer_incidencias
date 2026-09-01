@@ -1,8 +1,16 @@
 import { createAdminClient } from '@/lib/supabase/server';
-import { buscarArchivoPorNombre, descargarArchivoDrive } from '@/lib/googleDrive';
+import { buscarArchivoPorNombre, descargarArchivoDrive, archivoExisteYEsAccesible } from '@/lib/googleDrive';
 import { normalizarNombreCentro } from '@/lib/utils';
 
 const NOMBRE_ARCHIVO_MAPA = 'CLOSERLOGISTICS_areas.html';
+// ID confirmado manualmente por el usuario (el archivo vive en
+// "Compartido conmigo", editado por una cuenta de servicio externa —
+// no aparecía en la búsqueda por nombre porque esa búsqueda, antes de
+// este cambio, no incluía archivos compartidos). Se intenta primero
+// por este ID directo — Drive normalmente lo conserva cuando solo se
+// edita el CONTENIDO del archivo — y si deja de ser válido, se cae a
+// la búsqueda por nombre (ya corregida para incluir compartidos).
+const FILE_ID_CONOCIDO = '14Exdx9pGPmG9uyywTSRTfooPjuB4sqXr';
 
 export interface ZonaParseada {
   nombre: string; // tal cual el mapa, en mayúsculas (ej. "MADRID ALCORCÓN MÓSTOLES")
@@ -77,14 +85,16 @@ export async function sincronizarZonasConexion(): Promise<ResultadoSincronizacio
   const supabase = createAdminClient();
 
   try {
-    const fileId = await buscarArchivoPorNombre(NOMBRE_ARCHIVO_MAPA);
+    let fileId: string | null = (await archivoExisteYEsAccesible(FILE_ID_CONOCIDO)) ? FILE_ID_CONOCIDO : null;
+    if (!fileId) fileId = await buscarArchivoPorNombre(NOMBRE_ARCHIVO_MAPA);
+
     if (!fileId) {
       const resultado: ResultadoSincronizacionZonas = {
         exito: false,
         zonasProcesadas: 0,
         zonasSinCentro: [],
         centrosSinZona: [],
-        error: `No se encontró el archivo "${NOMBRE_ARCHIVO_MAPA}" en Drive.`,
+        error: `No se encontró el archivo "${NOMBRE_ARCHIVO_MAPA}" en Drive (ni por el ID conocido ni por búsqueda de nombre). Puede que el token de Google no tenga permiso para ver archivos "Compartido conmigo" — revisar el scope de GOOGLE_DRIVE_REFRESH_TOKEN.`,
       };
       await registrarLog(supabase, resultado);
       return resultado;

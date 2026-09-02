@@ -59,7 +59,7 @@ function playBeep() {
     osc.type = 'sine';
     osc.frequency.value = 660;
     gain.gain.setValueAtTime(0.95, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.85);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();

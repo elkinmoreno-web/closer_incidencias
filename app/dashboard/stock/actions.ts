@@ -2,10 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient, getAdminActual } from '@/lib/supabase/server';
-import { registrarError } from '@/lib/utils';
-import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockMaterialFicha, StockEstadoFicha } from '@/lib/types';
-import { generarFichaPdf } from '@/lib/stockFichaPdf';
-import { subirArchivoDrive } from '@/lib/googleDrive';
+import { registrarError, normalizarNombreCentro } from '@/lib/utils';
+import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockItemFicha } from '@/lib/types';
+import { ITEMS_FICHA_FIJOS } from '@/lib/types';
+import { generarFichaDesdeGoogleDocs } from '@/lib/googleDocs';
+import { carpetaFichaPorGestor } from '@/lib/googleDrive';
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -223,17 +224,34 @@ export interface RegistrarMovimientoInput {
   tipoClave: string;
   centroOrigenId?: number | null;
   centroDestinoId?: number | null;
-  cantidad?: number; // materiales sin tallas
+  cantidad?: number; // materiales sin tallas, cuando el tipo NO usa cajas (modo simple)
+  cajas?: number; // solo para tipos con esCajas (Entrada de proveedor, Envío a centro) — se multiplica por uds_por_caja del material
+  sueltas?: number; // unidades sueltas adicionales, junto a las cajas, mismo tipo
   tallaM?: number;
   tallaL?: number;
   tallaXl?: number;
   tallaXxl?: number;
+  // Con tallas + modo cajas: cajas y sueltas van desglosados por talla (mismo criterio que _stkRegistrar del sistema anterior).
+  cajaTallaM?: number;
+  cajaTallaL?: number;
+  cajaTallaXl?: number;
+  cajaTallaXxl?: number;
+  sueltaTallaM?: number;
+  sueltaTallaL?: number;
+  sueltaTallaXl?: number;
+  sueltaTallaXxl?: number;
   riderId?: string | null;
   riderNombreLibre?: string | null;
   notas?: string;
 }
 
 export type RegistrarMovimientoState = { error: string } | { success: true } | undefined;
+
+// Solo estos dos tipos manejan "cajas + unidades sueltas" — portado
+// literal de esCajas en _stkRegistrar() del sistema de Sheets. El
+// resto de movimientos (entrega a rider, devoluciones, traspasos...)
+// sigue usando cantidad simple en unidades.
+const TIPOS_CON_CAJAS = new Set(['ENTRADA_PROVEEDOR', 'ENVIO_SUCURSAL']);
 
 /**
  * Registra un movimiento nuevo en el ledger. Reglas mínimas portadas
@@ -259,23 +277,56 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
     const { data: material } = await supabase.from('stock_materiales').select('*').eq('id', input.materialId).maybeSingle();
     if (!material) return { error: 'Material no reconocido.' };
 
+    const esModoCajas = TIPOS_CON_CAJAS.has(input.tipoClave);
+
     let unidades = 0;
+    let cajasTotales = 0;
     let tallaM = 0;
     let tallaL = 0;
     let tallaXl = 0;
     let tallaXxl = 0;
 
     if (material.tiene_tallas) {
-      tallaM = Math.max(0, input.tallaM ?? 0);
-      tallaL = Math.max(0, input.tallaL ?? 0);
-      tallaXl = Math.max(0, input.tallaXl ?? 0);
-      tallaXxl = Math.max(0, input.tallaXxl ?? 0);
+      if (esModoCajas) {
+        // Cada talla puede llegar en cajas completas + sueltas, igual que _stkRegistrar: uds = cajas * udsPorCaja + sueltas, por cada talla.
+        const cajaM = Math.max(0, input.cajaTallaM ?? 0);
+        const cajaL = Math.max(0, input.cajaTallaL ?? 0);
+        const cajaXl = Math.max(0, input.cajaTallaXl ?? 0);
+        const cajaXxl = Math.max(0, input.cajaTallaXxl ?? 0);
+        const sueltaM = Math.max(0, input.sueltaTallaM ?? 0);
+        const sueltaL = Math.max(0, input.sueltaTallaL ?? 0);
+        const sueltaXl = Math.max(0, input.sueltaTallaXl ?? 0);
+        const sueltaXxl = Math.max(0, input.sueltaTallaXxl ?? 0);
+        cajasTotales = cajaM + cajaL + cajaXl + cajaXxl;
+        tallaM = cajaM * material.uds_por_caja + sueltaM;
+        tallaL = cajaL * material.uds_por_caja + sueltaL;
+        tallaXl = cajaXl * material.uds_por_caja + sueltaXl;
+        tallaXxl = cajaXxl * material.uds_por_caja + sueltaXxl;
+      } else {
+        tallaM = Math.max(0, input.tallaM ?? 0);
+        tallaL = Math.max(0, input.tallaL ?? 0);
+        tallaXl = Math.max(0, input.tallaXl ?? 0);
+        tallaXxl = Math.max(0, input.tallaXxl ?? 0);
+      }
       unidades = tallaM + tallaL + tallaXl + tallaXxl;
+    } else if (esModoCajas) {
+      cajasTotales = Math.max(0, input.cajas ?? 0);
+      const sueltas = Math.max(0, input.sueltas ?? 0);
+      unidades = cajasTotales * material.uds_por_caja + sueltas;
     } else {
-      unidades = Math.max(0, input.cantidad ?? 0);
+      // AJUSTE_MANUAL permite valores NEGATIVOS a propósito — es el
+      // único tipo pensado para corregir un descuadre "quitando"
+      // stock, no solo añadiendo (portado literal de
+      // _stkRegistrar: unidades = _stkNum(p.cantidad), sin forzar
+      // mínimo 0). El resto de tipos simples sí exige cantidad positiva.
+      unidades = tipo.clase === 'ajuste' ? Number(input.cantidad ?? 0) : Math.max(0, input.cantidad ?? 0);
     }
 
-    if (unidades === 0) return { error: 'La cantidad no puede ser 0.' };
+    // Los tipos "neutro" (ej. RIDER_YA_TIENE_SOPORTE) son puramente
+    // informativos — no mueven stock, así que no tiene sentido
+    // exigirles una cantidad distinta de 0. Portado literal de
+    // _stkRegistrar: "if (regla.clase !== 'neutro' && ... && unidades === 0)".
+    if (tipo.clase !== 'neutro' && unidades === 0) return { error: 'La cantidad no puede ser 0.' };
 
     // Los traslados entre centros no se dan por recibidos al instante
     // — quedan "en tránsito" (restan del origen, no suman al destino
@@ -290,6 +341,7 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
       tipo_clave: input.tipoClave,
       centro_origen_id: input.centroOrigenId ?? null,
       centro_destino_id: input.centroDestinoId ?? null,
+      cajas: cajasTotales,
       unidades,
       talla_m: tallaM,
       talla_l: tallaL,
@@ -340,15 +392,8 @@ export async function listarMovimientosRecientes(materialId: number, limite = 30
  * el emparejamiento (ej. "La  Coruña " y "la coruna" deben matchear).
  * No toca abreviaturas o alias (ej. "MCD X") — eso sigue exigiendo
  * coincidencia real de nombre, para no inventar relaciones.
+ * (función compartida: ver normalizarNombreCentro en lib/utils.ts)
  */
-function normalizarNombreCentro(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // quita tildes/diacríticos
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 export interface FilaImportacionStock {
   centroNombre: string; // tal cual viene en la columna "Ciudad"/"Centro" del CSV
@@ -498,65 +543,90 @@ export interface CrearFichaInput {
   riderId: string | null;
   riderNombre: string;
   riderDni: string;
-  estado: StockEstadoFicha;
-  materiales: StockMaterialFicha[]; // uno o más materiales en la misma ficha
+  items: StockItemFicha[]; // las 8 filas del justificante, cada una con su marca (o sin marcar)
   firmaBase64: string | null; // dataURL "data:image/png;base64,...." capturada del lienzo, o null si no se firmó
 }
 
 export type CrearFichaState = { error: string } | { success: true; pdfUrl: string | null } | undefined;
 
-// Cada estado de ficha corresponde a un tipo de movimiento de stock —
-// mismo mapeo que _pltEstadoElegido()/STK_PLT.MOVER_STOCK del sistema
-// anterior: la ficha con firma no solo documenta la entrega, también
-// mueve el stock automáticamente.
-const TIPO_MOVIMIENTO_POR_ESTADO: Record<StockEstadoFicha, string> = {
-  Asignación: 'ENTREGA_RIDER',
-  'Devolución buen estado': 'DEVOLUCION_OK',
-  'Devolución mal estado': 'DEVOLUCION_ROTA',
+// Cada marca corresponde a un tipo de movimiento de stock — mismo
+// mapeo que _pltEstadoElegido()/STK_PLT.MOVER_STOCK del sistema
+// anterior, aplicado ahora por ÍTEM en vez de a la ficha entera.
+const TIPO_MOVIMIENTO_POR_MARCA: Record<NonNullable<StockItemFicha['marca']>, string> = {
+  asignacion: 'ENTREGA_RIDER',
+  devolucion_ok: 'DEVOLUCION_OK',
+  devolucion_mal: 'DEVOLUCION_ROTA',
 };
 
 /**
- * Genera la ficha de entrega/devolución completa: crea el PDF con
- * pdf-lib (tabla de materiales + firma), lo sube a Drive, guarda el
- * registro en stock_fichas, y registra un movimiento de stock por
- * cada material incluido — todo en un solo paso, como hacía
- * api_stk_guardar_plantilla() en el sistema de Sheets.
+ * Genera el justificante de entrega/devolución completo: crea el PDF
+ * con pdf-lib (réplica de la plantilla legal oficial, con los 8 ítems
+ * fijos y la firma), lo sube a Drive, guarda el registro en
+ * stock_fichas, y registra un movimiento de stock por cada ítem
+ * marcado que SÍ corresponda a un material controlado como inventario
+ * (mochila, chubasquero, soporte de bici) — los otros 5 ítems (funda
+ * de lluvia, soporte móvil, móvil, chaleco, tarjeta) quedan
+ * documentados en el PDF pero no mueven cantidades de stock, porque
+ * no forman parte del catálogo de materiales controlados.
  */
+
+/**
+ * Nombre de archivo — portado literal de _pltNombreArchivo() del
+ * sistema de Sheets, para que los PDFs generados aquí sean
+ * reconocibles con el mismo patrón que los archivos ya existentes en
+ * Drive de antes: "Plantilla_{Nombre}-{DNI}-{Estado}-{Fecha}.pdf".
+ */
+function nombreArchivoFicha(riderNombre: string, riderDni: string, estado: string, fechaISO: string): string {
+  const limpia = (s: string) => s.replace(/[\\/:*?"<>|[\]#%]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const nombre = limpia(riderNombre).replace(/ /g, '_');
+  const dni = limpia(riderDni).replace(/ /g, '').toUpperCase();
+  const est = limpia(estado);
+  return `Plantilla_${nombre}-${dni}-${est}-${fechaISO}`;
+}
+
 export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFichaState> {
   try {
     const { supabase, yo } = await assertAdmin();
 
-    if (input.materiales.length === 0) return { error: 'Añade al menos un material a la ficha.' };
+    const itemsMarcados = input.items.filter((it) => it.marca !== null);
+    if (itemsMarcados.length === 0) return { error: 'Marca al menos un ítem en el justificante.' };
 
-    const { data: centro } = await supabase.from('centros').select('nombre').eq('id', input.centroId).maybeSingle();
+    const { data: centro } = await supabase.from('centros').select('nombre, gestor_carpeta').eq('id', input.centroId).maybeSingle();
     if (!centro) return { error: 'Centro no reconocido.' };
 
     const ahora = new Date();
+    const fechaISO = ahora.toISOString().split('T')[0];
     const fecha = ahora.toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' });
     const hora = ahora.toLocaleTimeString('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' });
 
+    // El "estado" del nombre de archivo refleja el conjunto de marcas
+    // usadas en la ficha (puede haber varias distintas en la misma
+    // ficha, a diferencia del sistema viejo que tenía un único estado
+    // por documento) — se usa la más frecuente para no generar un
+    // nombre kilométrico.
+    const conteoMarca: Record<string, number> = {};
+    for (const it of itemsMarcados) conteoMarca[it.marca!] = (conteoMarca[it.marca!] ?? 0) + 1;
+    const marcaPrincipal = Object.entries(conteoMarca).sort((a, b) => b[1] - a[1])[0][0];
+    const ETIQUETA_ESTADO_ARCHIVO: Record<string, string> = { asignacion: 'Asignación', devolucion_ok: 'Devolución buen estado', devolucion_mal: 'Devolución mal estado' };
+
+    // La firma se inserta como imagen DENTRO del PDF (marcador
+    // {{FIRMA DEL TRABAJADOR}} de la plantilla real, ver
+    // lib/googleDocs.ts) — no se sube por separado como PNG suelto,
+    // porque eso duplicaba el archivo sin necesidad: solo interesa el
+    // justificante completo, un único archivo por ficha.
     let firmaPngBytes: Uint8Array | null = null;
-    let firmaFileId: string | null = null;
     if (input.firmaBase64 && input.firmaBase64.includes('base64,')) {
       const base64 = input.firmaBase64.split('base64,')[1];
       firmaPngBytes = new Uint8Array(Buffer.from(base64, 'base64'));
-      const nombreFirma = `firma_${input.riderDni}_${Date.now()}.png`;
-      firmaFileId = await subirArchivoDrive('Fichas', nombreFirma, Buffer.from(firmaPngBytes), 'image/png');
     }
 
-    const pdfBytes = await generarFichaPdf({
-      centroNombre: centro.nombre,
-      riderNombre: input.riderNombre,
-      riderDni: input.riderDni,
-      fecha,
-      hora,
-      estado: input.estado,
-      materiales: input.materiales,
-      firmaPngBytes,
-    });
-
-    const nombreArchivo = `ficha_${input.riderDni}_${ahora.toISOString().split('T')[0]}_${Date.now()}.pdf`;
-    const pdfFileId = await subirArchivoDrive('Fichas', nombreArchivo, Buffer.from(pdfBytes), 'application/pdf');
+    const nombreArchivo = nombreArchivoFicha(input.riderNombre, input.riderDni, ETIQUETA_ESTADO_ARCHIVO[marcaPrincipal], fechaISO);
+    const carpetaDestinoId = await carpetaFichaPorGestor(centro.gestor_carpeta);
+    const pdfFileId = await generarFichaDesdeGoogleDocs(
+      { riderNombre: input.riderNombre, riderDni: input.riderDni, fecha, hora, items: input.items, firmaPngBytes },
+      carpetaDestinoId,
+      nombreArchivo
+    );
 
     const { error: errorFicha } = await supabase.from('stock_fichas').insert({
       centro_id: input.centroId,
@@ -565,32 +635,43 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
       rider_dni: input.riderDni,
       fecha: ahora.toISOString().split('T')[0],
       hora: ahora.toTimeString().split(' ')[0],
-      estado: input.estado,
-      materiales: input.materiales,
-      firma_url: firmaFileId,
+      items: input.items,
+      firma_url: null,
       pdf_url: pdfFileId,
       admin_id: yo!.id,
     });
     if (errorFicha) return { error: errorFicha.message };
 
-    const tipoClave = TIPO_MOVIMIENTO_POR_ESTADO[input.estado];
-    const registrosMovimiento = input.materiales.map((m) => ({
-      material_id: m.materialId,
-      tipo_clave: tipoClave,
-      centro_origen_id: input.estado === 'Asignación' ? input.centroId : null,
-      centro_destino_id: input.estado !== 'Asignación' ? input.centroId : null,
-      unidades: m.cantidad,
-      talla_m: m.tallaM ?? 0,
-      talla_l: m.tallaL ?? 0,
-      talla_xl: m.tallaXl ?? 0,
-      talla_xxl: m.tallaXxl ?? 0,
-      rider_id: input.riderId,
-      rider_nombre_libre: input.riderNombre,
-      notas: `Ficha de ${input.estado.toLowerCase()} firmada por el rider`,
-      admin_id: yo!.id,
-    }));
-    const { error: errorMovimientos } = await supabase.from('stock_movimientos').insert(registrosMovimiento);
-    if (errorMovimientos) return { error: `La ficha se guardó, pero no se pudo actualizar el stock: ${errorMovimientos.message}` };
+    // Solo los ítems marcados que coinciden con un material del
+    // catálogo de stock generan movimiento — el resto queda solo en
+    // el PDF, tal como se decidió mantener el control de inventario
+    // acotado a Mochilas/Soportes/Chubasqueros.
+    const { data: materialesStock } = await supabase.from('stock_materiales').select('id, clave');
+    const idPorClaveMaterial = new Map((materialesStock ?? []).map((m) => [m.clave, m.id]));
+
+    const registrosMovimiento = itemsMarcados
+      .map((it) => {
+        const def = ITEMS_FICHA_FIJOS.find((d) => d.clave === it.itemClave);
+        const materialId = def?.materialClaveStock ? idPorClaveMaterial.get(def.materialClaveStock) : undefined;
+        if (!materialId || !it.marca) return null;
+        return {
+          material_id: materialId,
+          tipo_clave: TIPO_MOVIMIENTO_POR_MARCA[it.marca],
+          centro_origen_id: it.marca === 'asignacion' ? input.centroId : null,
+          centro_destino_id: it.marca !== 'asignacion' ? input.centroId : null,
+          unidades: 1, // el justificante es un checkbox por ítem (una unidad), no captura cantidad
+          rider_id: input.riderId,
+          rider_nombre_libre: input.riderNombre,
+          notas: `Justificante de entrega firmado por el rider (${def!.etiqueta})`,
+          admin_id: yo!.id,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    if (registrosMovimiento.length > 0) {
+      const { error: errorMovimientos } = await supabase.from('stock_movimientos').insert(registrosMovimiento);
+      if (errorMovimientos) return { error: `La ficha se guardó, pero no se pudo actualizar el stock: ${errorMovimientos.message}` };
+    }
 
     revalidatePath('/dashboard/stock');
     return { success: true, pdfUrl: pdfFileId };

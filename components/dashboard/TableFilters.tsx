@@ -54,6 +54,25 @@ export function TableFilters({
     [pathname, router, searchParams]
   );
 
+  // Igual que setParam, pero para cuando hace falta cambiar VARIOS
+  // parámetros a la vez (ej. ciudad + limpiar centro): dos llamadas
+  // seguidas a setParam pisaban una a la otra, porque cada una
+  // construye su URL desde el mismo searchParams "viejo" — la segunda
+  // ganaba y la primera se perdía (bug real: el filtro de ciudad
+  // nunca llegaba a aplicarse en Riders).
+  const setParams = useCallback(
+    (cambios: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(cambios)) {
+        if (value) params.set(key, value);
+        else params.delete(key);
+      }
+      params.set('page', '1');
+      startTransition(() => router.push(`${pathname}?${params.toString()}`));
+    },
+    [pathname, router, searchParams]
+  );
+
   const centrosFiltrados = useMemo(() => {
     if (!centros) return [];
     if (!ciudadSeleccionada) return centros;
@@ -108,8 +127,7 @@ export function TableFilters({
           value={ciudadSeleccionada}
           onChange={(e) => {
             setCiudadSeleccionada(e.target.value);
-            setParam('ciudad', e.target.value);
-            setParam('centro', ''); // al cambiar de ciudad, no arrastramos un centro de otra ciudad
+            setParams({ ciudad: e.target.value, centro: '' }); // al cambiar de ciudad, no arrastramos un centro de otra ciudad
           }}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         >

@@ -8,6 +8,7 @@ import { FichaCentroModal } from '@/components/stock/FichaCentroModal';
 import { ThFiltro, cumpleFiltroTexto, cumpleFiltroNumero, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { ETIQUETA_SEMAFORO, ORDEN_URGENCIA_SEMAFORO } from '@/lib/stockSemaforo';
+import { ExportarCsvButton } from '@/components/stock/ExportarCsvButton';
 
 export function StockResumenTab({ stock, material }: { stock: StockDisponible[]; material: StockMaterial }) {
   const { t, idioma } = useIdioma();
@@ -72,7 +73,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
     return filas;
   }, [stock, busqueda, gestorFiltro, stockMenorQue, filtrosStock, ordenStock]);
 
-  const hayFiltrosActivos = busqueda || gestorFiltro || stockMenorQue;
+  const hayFiltrosActivos = busqueda || gestorFiltro || stockMenorQue || Object.keys(filtrosStock).length > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,19 +82,35 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
       <div className="rounded-card border border-border bg-surface p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-ink">{t('stock.stockPorCentro')}</h2>
-          {hayFiltrosActivos && (
-            <button
-              onClick={() => {
-                setBusqueda('');
-                setGestorFiltro('');
-                setStockMenorQue('');
-              }}
-              className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-primary"
-            >
-              <X size={12} />
-              {t('stock.limpiarFiltros')}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {hayFiltrosActivos && (
+              <button
+                onClick={() => {
+                  setBusqueda('');
+                  setGestorFiltro('');
+                  setStockMenorQue('');
+                  setFiltrosStock({});
+                }}
+                className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-primary"
+              >
+                <X size={12} />
+                {t('stock.limpiarFiltros')}
+              </button>
+            )}
+            <ExportarCsvButton
+              nombreArchivo="stock_por_centro"
+              filas={stockFiltrado.map((s) => ({
+                Centro: s.centro_nombre,
+                Gestores: s.gestores.join(' / '),
+                Disponible: s.disponible,
+                'En camino': s.transito_entrante,
+                'Con riders': s.en_calle,
+                Rotas: s.merma,
+                Perdidas: s.perdida,
+                Estado: s.semaforo ?? '',
+              }))}
+            />
+          </div>
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">

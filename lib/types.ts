@@ -23,7 +23,16 @@ export interface Centro {
   activo: boolean;
   ciudad_id: number | null;
   imagen_zona_conexion_url: string | null;
+  zona_conexion_id: number | null;
+  gestor_carpeta: string | null; // texto libre del CSV original, solo para organizar la subcarpeta de Drive de las fichas — NO es admin_ciudades
   ciudades?: Pick<Ciudad, 'id' | 'nombre'> | null;
+}
+
+export interface ZonaConexion {
+  id: number;
+  nombre: string;
+  poligonos: [number, number][][]; // uno o más polígonos [lat, lng][] — una zona puede cubrir varias áreas separadas en el mapa
+  actualizado_en: string;
 }
 
 export interface Vehiculo {
@@ -256,15 +265,31 @@ export interface StockParametros {
 
 export type StockEstadoFicha = 'Asignación' | 'Devolución buen estado' | 'Devolución mal estado';
 
-export interface StockMaterialFicha {
-  materialId: number;
-  materialClave: string;
-  materialTitulo: string; // se guarda tal cual se mostró en el PDF, para que el histórico no cambie si el catálogo se traduce/renombra después
-  cantidad: number;
-  tallaM?: number;
-  tallaL?: number;
-  tallaXl?: number;
-  tallaXxl?: number;
+/**
+ * Los 8 ítems del justificante legal (JUSTIFICANTE_DE_ENTREGA_DE_EQUIPOS),
+ * tal cual la plantilla oficial de Closer Logistics — fijos, no
+ * editables desde el panel. Solo 3 de estos 8 corresponden a materiales
+ * que también se controlan como inventario (mochilaId/soporteId/
+ * chubasqueroId en stock_materiales); los otros 5 quedan documentados
+ * en el PDF pero no mueven cantidades de stock.
+ */
+export const ITEMS_FICHA_FIJOS = [
+  { clave: 'MOCHILA_TERMICA', etiqueta: 'Mochila térmica', materialClaveStock: 'MOCHILAS' as string | null },
+  { clave: 'FUNDA_LLUVIA_MOCHILA', etiqueta: 'Funda de lluvia mochila', materialClaveStock: null },
+  { clave: 'TRAJE_CHUBASQUERO', etiqueta: 'Traje chubasquero', materialClaveStock: 'CHUBASQUEROS' as string | null },
+  { clave: 'SOPORTE_MOVIL', etiqueta: 'Soporte Móvil', materialClaveStock: null },
+  { clave: 'MOVIL', etiqueta: 'Móvil', materialClaveStock: null },
+  { clave: 'CHALECO_REFLECTANTE', etiqueta: 'Chaleco Reflectante', materialClaveStock: 'CHALECOS' as string | null },
+  { clave: 'SOPORTE_BICI', etiqueta: 'Soporte de Bici', materialClaveStock: 'SOPORTES' as string | null },
+  { clave: 'TARJETA_REPOSTAJE', etiqueta: 'Tarjeta Repostaje', materialClaveStock: null },
+] as const;
+
+export type ItemFichaClave = (typeof ITEMS_FICHA_FIJOS)[number]['clave'];
+
+/** Una fila del justificante: qué ítem, y cuál de las 3 casillas se marcó (o ninguna). */
+export interface StockItemFicha {
+  itemClave: ItemFichaClave;
+  marca: 'asignacion' | 'devolucion_ok' | 'devolucion_mal' | null;
   observaciones?: string;
 }
 
@@ -276,8 +301,7 @@ export interface StockFicha {
   rider_dni: string;
   fecha: string;
   hora: string;
-  estado: StockEstadoFicha;
-  materiales: StockMaterialFicha[];
+  items: StockItemFicha[]; // las 8 filas del justificante, cada una con su propia marca
   firma_url: string | null;
   pdf_url: string | null;
   admin_id: string;

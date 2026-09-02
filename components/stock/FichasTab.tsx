@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { FileText, Plus } from 'lucide-react';
+import { FileText, Plus, X } from 'lucide-react';
 import type { StockFicha, Centro } from '@/lib/types';
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
 import { ThFiltro, cumpleFiltroTexto, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
@@ -105,7 +105,13 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
       {fichas.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-muted">{t('stockFichas.sinFichas')}</p>
       ) : fichasFiltradas.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-muted">{t('stock.sinCoincidencias')}</p>
+        <div className="flex flex-col items-center gap-2 py-6 text-center text-sm text-ink-muted">
+          <p>{t('stock.sinCoincidencias')}</p>
+          <button onClick={() => setFiltrosFichas({})} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+            <X size={12} />
+            {t('stock.limpiarFiltros')}
+          </button>
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">

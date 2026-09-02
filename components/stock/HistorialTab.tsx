@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { X } from 'lucide-react';
 import type { StockMovimiento } from '@/lib/types';
 import { ThFiltro, cumpleFiltroTexto, cumpleFiltroNumero, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
@@ -74,7 +75,13 @@ export function HistorialTab({ movimientos }: { movimientos: MovimientoConNombre
       {movimientos.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-muted">{t('stock.sinMovimientos')}</p>
       ) : movimientosFiltrados.length === 0 ? (
-        <p className="py-6 text-center text-sm text-ink-muted">{t('stock.sinCoincidencias')}</p>
+        <div className="flex flex-col items-center gap-2 py-6 text-center text-sm text-ink-muted">
+          <p>{t('stock.sinCoincidencias')}</p>
+          <button onClick={() => setFiltrosMov({})} className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+            <X size={12} />
+            {t('stock.limpiarFiltros')}
+          </button>
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">

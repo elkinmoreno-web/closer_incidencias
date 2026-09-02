@@ -20,7 +20,7 @@ const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
 let tokenCache: { token: string; expira: number } | null = null;
 
-async function obtenerAccessToken(): Promise<string> {
+export async function obtenerAccessToken(): Promise<string> {
   if (tokenCache && tokenCache.expira > Date.now()) return tokenCache.token;
 
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
@@ -188,7 +188,7 @@ function normalizarClaveGestor(s: string): string {
   return s.trim().toLowerCase().replace(/\s*\/\s*/g, '/');
 }
 
-async function carpetaFichaPorGestor(gestorCarpeta: string | null): Promise<string> {
+export async function carpetaFichaPorGestor(gestorCarpeta: string | null): Promise<string> {
   const raizId = process.env.GOOGLE_DRIVE_FICHAS_FOLDER_ID;
   if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FICHAS_FOLDER_ID');
 
@@ -209,7 +209,7 @@ export async function subirFichaStock(gestorCarpeta: string | null, nombreArchiv
   return subirBufferACarpeta(carpetaId, nombreArchivo, contenido, mimeType);
 }
 
-async function subirBufferACarpeta(carpetaId: string, nombreArchivo: string, contenido: Buffer, mimeType: string): Promise<string> {
+export async function subirBufferACarpeta(carpetaId: string, nombreArchivo: string, contenido: Buffer, mimeType: string): Promise<string> {
 
   const boundary = `closer_crm_${Date.now()}`;
   const metadata = JSON.stringify({ name: nombreArchivo, parents: [carpetaId] });
@@ -300,4 +300,55 @@ export async function archivoExisteYEsAccesible(fileId: string): Promise<boolean
   } catch {
     return false;
   }
+}
+
+/**
+ * Copia un archivo de Drive (ej. la plantilla de Google Docs del
+ * justificante) a un nuevo archivo con el nombre dado, dentro de la
+ * carpeta indicada. Equivalente a Drive.Files.copy() del sistema de
+ * Apps Script anterior.
+ */
+export async function copiarArchivoDrive(fileId: string, nuevoNombre: string, carpetaDestinoId: string): Promise<string> {
+  const resp = await driveFetch(`${DRIVE_API}/files/${fileId}/copy?supportsAllDrives=true&fields=id`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: nuevoNombre, parents: [carpetaDestinoId] }),
+  });
+  if (!resp.ok) throw new Error(`No se pudo copiar el archivo (HTTP ${resp.status}): ${await resp.text()}`);
+  const data = await resp.json();
+  if (!data.id) throw new Error('No se pudo copiar el archivo: Drive no devolvió un ID');
+  return data.id;
+}
+
+/** Exporta un Google Doc a PDF y devuelve los bytes — equivalente a "Descargar como PDF" desde la interfaz de Drive. */
+export async function exportarDocGoogleAPdf(fileId: string): Promise<Buffer> {
+  const resp = await driveFetch(`${DRIVE_API}/files/${fileId}/export?mimeType=application/pdf`);
+  if (!resp.ok) throw new Error(`No se pudo exportar el documento a PDF (HTTP ${resp.status}): ${await resp.text()}`);
+  return Buffer.from(await resp.arrayBuffer());
+}
+
+/**
+ * Da permiso de lectura pública ("cualquiera con el enlace") a un
+ * archivo — necesario porque Google Docs API exige una URL accesible
+ * sin autenticación para insertInlineImage (no acepta subir un
+ * binario directo en la petición). Se usa solo para la firma
+ * temporal, que se borra justo después de insertarse (ver
+ * lib/googleDocs.ts) — la ventana de exposición pública es de
+ * segundos, no queda permanente.
+ */
+export async function hacerPublicoTemporal(fileId: string): Promise<string> {
+  const resp = await driveFetch(`${DRIVE_API}/files/${fileId}/permissions?supportsAllDrives=true`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' }),
+  });
+  if (!resp.ok) throw new Error(`No se pudo hacer público el archivo temporal (HTTP ${resp.status}): ${await resp.text()}`);
+  return `https://drive.google.com/uc?id=${fileId}`;
+}
+
+/** Carpeta "Temp" dentro de la raíz de fichas, para copias de trabajo de la plantilla y firmas temporales — se borran apenas se usan, esto es solo para que el proceso tenga dónde escribir mientras dura la generación. */
+export async function carpetaTemporalFichas(): Promise<string> {
+  const raizId = process.env.GOOGLE_DRIVE_FICHAS_FOLDER_ID;
+  if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FICHAS_FOLDER_ID');
+  return obtenerOCrearCarpeta('Temp', raizId);
 }

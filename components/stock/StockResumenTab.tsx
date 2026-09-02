@@ -73,7 +73,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
     return filas;
   }, [stock, busqueda, gestorFiltro, stockMenorQue, filtrosStock, ordenStock]);
 
-  const hayFiltrosActivos = busqueda || gestorFiltro || stockMenorQue;
+  const hayFiltrosActivos = busqueda || gestorFiltro || stockMenorQue || Object.keys(filtrosStock).length > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -89,6 +89,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
                   setBusqueda('');
                   setGestorFiltro('');
                   setStockMenorQue('');
+                  setFiltrosStock({});
                 }}
                 className="flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-primary"
               >

@@ -5,8 +5,8 @@ import { createClient, getAdminActual } from '@/lib/supabase/server';
 import { registrarError, normalizarNombreCentro } from '@/lib/utils';
 import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockItemFicha } from '@/lib/types';
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
-import { generarFichaPdf } from '@/lib/stockFichaPdf';
-import { subirFichaStock } from '@/lib/googleDrive';
+import { generarFichaDesdeGoogleDocs } from '@/lib/googleDocs';
+import { carpetaFichaPorGestor } from '@/lib/googleDrive';
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -558,27 +558,24 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
     const marcaPrincipal = Object.entries(conteoMarca).sort((a, b) => b[1] - a[1])[0][0];
     const ETIQUETA_ESTADO_ARCHIVO: Record<string, string> = { asignacion: 'Asignación', devolucion_ok: 'Devolución buen estado', devolucion_mal: 'Devolución mal estado' };
 
+    // La firma se inserta como imagen DENTRO del PDF (marcador
+    // {{FIRMA DEL TRABAJADOR}} de la plantilla real, ver
+    // lib/googleDocs.ts) — no se sube por separado como PNG suelto,
+    // porque eso duplicaba el archivo sin necesidad: solo interesa el
+    // justificante completo, un único archivo por ficha.
     let firmaPngBytes: Uint8Array | null = null;
-    let firmaFileId: string | null = null;
     if (input.firmaBase64 && input.firmaBase64.includes('base64,')) {
       const base64 = input.firmaBase64.split('base64,')[1];
       firmaPngBytes = new Uint8Array(Buffer.from(base64, 'base64'));
-      const nombreFirma = `${nombreArchivoFicha(input.riderNombre, input.riderDni, ETIQUETA_ESTADO_ARCHIVO[marcaPrincipal], fechaISO)}_firma.png`;
-      firmaFileId = await subirFichaStock(centro.gestor_carpeta, nombreFirma, Buffer.from(firmaPngBytes), 'image/png');
     }
 
-    const pdfBytes = await generarFichaPdf({
-      centroNombre: centro.nombre,
-      riderNombre: input.riderNombre,
-      riderDni: input.riderDni,
-      fecha,
-      hora,
-      items: input.items,
-      firmaPngBytes,
-    });
-
-    const nombreArchivo = `${nombreArchivoFicha(input.riderNombre, input.riderDni, ETIQUETA_ESTADO_ARCHIVO[marcaPrincipal], fechaISO)}.pdf`;
-    const pdfFileId = await subirFichaStock(centro.gestor_carpeta, nombreArchivo, Buffer.from(pdfBytes), 'application/pdf');
+    const nombreArchivo = nombreArchivoFicha(input.riderNombre, input.riderDni, ETIQUETA_ESTADO_ARCHIVO[marcaPrincipal], fechaISO);
+    const carpetaDestinoId = await carpetaFichaPorGestor(centro.gestor_carpeta);
+    const pdfFileId = await generarFichaDesdeGoogleDocs(
+      { riderNombre: input.riderNombre, riderDni: input.riderDni, fecha, hora, items: input.items, firmaPngBytes },
+      carpetaDestinoId,
+      nombreArchivo
+    );
 
     const { error: errorFicha } = await supabase.from('stock_fichas').insert({
       centro_id: input.centroId,
@@ -588,7 +585,7 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
       fecha: ahora.toISOString().split('T')[0],
       hora: ahora.toTimeString().split(' ')[0],
       items: input.items,
-      firma_url: firmaFileId,
+      firma_url: null,
       pdf_url: pdfFileId,
       admin_id: yo!.id,
     });

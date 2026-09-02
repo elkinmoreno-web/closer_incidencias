@@ -4,6 +4,13 @@ import { join } from 'path';
 import { ITEMS_FICHA_FIJOS, type StockItemFicha } from '@/lib/types';
 
 /**
+ * ⚠️ YA NO ESTÁ EN USO — reemplazado por lib/googleDocs.ts, que
+ * rellena la plantilla REAL de Google Docs en vez de generar el PDF
+ * por código. Se deja este archivo sin borrar como referencia/respaldo
+ * (por si algún día se quiere volver a generación por código, sin
+ * depender de la API de Docs), pero crearFichaEntrega() en
+ * app/dashboard/stock/actions.ts ya no lo llama.
+ *
  * Genera el "JUSTIFICANTE DE ENTREGA DE EQUIPOS O MATERIALES DE
  * EMPRESA" — réplica del documento real de Word compartido por el
  * usuario (Copia_de_Planilla_de_asignacion_de_Materiales_2025.docx),

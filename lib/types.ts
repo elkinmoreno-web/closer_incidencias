@@ -279,7 +279,7 @@ export const ITEMS_FICHA_FIJOS = [
   { clave: 'TRAJE_CHUBASQUERO', etiqueta: 'Traje chubasquero', materialClaveStock: 'CHUBASQUEROS' as string | null },
   { clave: 'SOPORTE_MOVIL', etiqueta: 'Soporte Móvil', materialClaveStock: null },
   { clave: 'MOVIL', etiqueta: 'Móvil', materialClaveStock: null },
-  { clave: 'CHALECO_REFLECTANTE', etiqueta: 'Chaleco Reflectante', materialClaveStock: null },
+  { clave: 'CHALECO_REFLECTANTE', etiqueta: 'Chaleco Reflectante', materialClaveStock: 'CHALECOS' as string | null },
   { clave: 'SOPORTE_BICI', etiqueta: 'Soporte de Bici', materialClaveStock: 'SOPORTES' as string | null },
   { clave: 'TARJETA_REPOSTAJE', etiqueta: 'Tarjeta Repostaje', materialClaveStock: null },
 ] as const;

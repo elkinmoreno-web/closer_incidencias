@@ -78,8 +78,13 @@ async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<st
   const { data: enCache } = await admin.from('google_drive_folder_cache').select('folder_id').eq('clave', clave).maybeSingle();
   if (enCache) return enCache.folder_id;
 
+  // supportsAllDrives/includeItemsFromAllDrives: sin esto, ni la
+  // búsqueda ni la creación funcionan cuando la carpeta padre está en
+  // "Compartido conmigo" (compartida por otra cuenta) en vez de "Mi
+  // unidad" — mismo defecto real ya confirmado y corregido antes en
+  // buscarArchivoPorNombre() para el mapa de zonas de conexión.
   const q = `name = '${nombre.replace(/'/g, "\\'")}' and '${padreId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-  const resp = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive`);
+  const resp = await driveFetch(`${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&spaces=drive&includeItemsFromAllDrives=true&supportsAllDrives=true&corpora=allDrives`);
   if (!resp.ok) throw new Error(`No se pudo buscar la carpeta "${nombre}" en Drive (HTTP ${resp.status})`);
   const data = await resp.json();
 
@@ -88,7 +93,7 @@ async function obtenerOCrearCarpeta(nombre: string, padreId: string): Promise<st
     return data.files[0].id;
   }
 
-  const creada = await driveFetch(`${DRIVE_API}/files?fields=id`, {
+  const creada = await driveFetch(`${DRIVE_API}/files?fields=id&supportsAllDrives=true`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: nombre, mimeType: 'application/vnd.google-apps.folder', parents: [padreId] }),
@@ -152,7 +157,14 @@ export async function subirImagenZonaConexion(nombreArchivo: string, contenido: 
 async function carpetaFichaPorGestor(gestorCarpeta: string | null): Promise<string> {
   const raizId = process.env.GOOGLE_DRIVE_FICHAS_FOLDER_ID;
   if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FICHAS_FOLDER_ID');
-  const nombreCarpeta = gestorCarpeta?.trim() || 'Sin gestor asignado';
+  // Las carpetas de gestor YA EXISTEN en Drive con nombres tipo
+  // "Paty/Didier" (sin espacios alrededor de la barra) — el dato
+  // migrado del CSV traía "Paty / Didier" (con espacios), lo que
+  // generaba una carpeta NUEVA y distinta en vez de usar la real.
+  // Se normaliza aquí en el código (no solo en los datos) para que
+  // cualquier gestor futuro con "/" también coincida sin depender de
+  // que la migración quede perfecta.
+  const nombreCarpeta = gestorCarpeta?.trim().replace(/\s*\/\s*/g, '/') || 'Sin gestor asignado';
   return obtenerOCrearCarpeta(nombreCarpeta, raizId);
 }
 

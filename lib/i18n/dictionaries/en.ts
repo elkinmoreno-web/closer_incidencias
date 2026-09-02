@@ -217,6 +217,7 @@ const en: Record<ClaveTraduccion, string> = {
   // Exportar (compartido)
   'exportar.aExcel': 'Export to Excel',
   'exportar.sinFilas': 'There are no rows to export with these filters',
+  'exportar.botonCsv': 'Export CSV',
   'exportar.colFecha': 'Date',
   'exportar.colRider': 'Rider',
   'exportar.colDni': 'ID number',
@@ -792,7 +793,10 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFicha.quitarMaterial': 'Remove',
   'stockFicha.observacionesMaterial': 'Notes (optional)',
   'stockFicha.firmaDelRider': "Rider's signature",
-  'stockFicha.faltaRider': 'Choose a rider.',
+  'stockFicha.faltaRider': 'Choose a rider or type their name and ID number.',
+  'stockFicha.nombreManualPlaceholder': 'Full name',
+  'stockFicha.dniManualPlaceholder': 'ID / passport number',
+  'stockFicha.ayudaRiderNoExiste': "If the rider isn't registered in the system yet, type their name and ID number by hand.",
   'stockFicha.faltaCentro': 'Choose a center.',
   'stockFicha.faltaMaterial': 'Add at least one material with a quantity.',
   'stockFicha.generando': 'Generating slip...',
@@ -815,6 +819,7 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFiltro.mayorQue': 'Greater than',
   'stockFiltro.menorQue': 'Less than',
   'stockFiltro.igualA': 'Equal to',
+  'stockFiltro.todos': 'All',
   'stockFiltro.limpiar': 'Clear',
   'stockFiltro.aplicar': 'Apply',
 

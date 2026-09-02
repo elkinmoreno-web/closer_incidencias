@@ -29,24 +29,30 @@ const NAV = [
 ] as const;
 
 export function Sidebar({
-                            rol,
-                            email,
-                            pendientesCount,
-                            ausenciasPendientesCount,
-                        }: {
-    rol: RolAdmin;
-    email: string | null;
-    pendientesCount: number;
-    ausenciasPendientesCount: number;
+  rol,
+  email,
+  pendientesCount,
+  ausenciasPendientesCount,
+}: {
+  rol: RolAdmin;
+  email: string | null;
+  pendientesCount: number;
+  ausenciasPendientesCount: number;
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
   const { t } = useIdioma();
 
-    const items = NAV.filter((item) => {
-        if (item.href === '/dashboard/stock' && email !== 'elkin.moreno@closerlogistics.com') return false;
-        return (item.roles as readonly string[]).includes(rol);
-    });
+  // TEMPORAL: el módulo de Stock sigue en pruebas — se oculta del
+  // menú para todos salvo este correo, mientras se termina de
+  // validar en producción. Quitar esta condición (dejando solo el
+  // filtro por rol de siempre) cuando Stock esté listo para todo el
+  // equipo.
+  const items = NAV.filter((item) => {
+    if (item.href === '/dashboard/stock' && email !== 'elkin.moreno@closerlogistics.com') return false;
+    return (item.roles as readonly string[]).includes(rol);
+  });
+
   const enlaces = (
     <>
       <div className="mb-4 flex items-center justify-between px-2">

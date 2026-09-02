@@ -24,6 +24,7 @@ export interface Centro {
   ciudad_id: number | null;
   imagen_zona_conexion_url: string | null;
   zona_conexion_id: number | null;
+  gestor_carpeta: string | null; // texto libre del CSV original, solo para organizar la subcarpeta de Drive de las fichas — NO es admin_ciudades
   ciudades?: Pick<Ciudad, 'id' | 'nombre'> | null;
 }
 

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { X } from 'lucide-react';
 import { crearFichaEntrega } from '@/app/dashboard/stock/actions';
-import { ITEMS_FICHA_FIJOS, type StockItemFicha } from '@/lib/types';
+import { ITEMS_FICHA_FIJOS, type StockItemFicha, type Centro } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 import type { RiderResultado } from '@/app/dashboard/buscarRiders';
@@ -20,21 +20,28 @@ type Marca = StockItemFicha['marca'];
  * observaciones libres por ítem. Genera el PDF y mueve el stock
  * automáticamente al guardar, solo para los 3 ítems que sí forman
  * parte del catálogo de inventario controlado.
+ *
+ * El rider puede NO existir todavía en el sistema (ej. recién
+ * contratado, aún sin alta) — en ese caso, el DNI/NIE y el nombre se
+ * escriben a mano y la ficha se genera igual, solo que sin riderId
+ * (queda como texto libre, igual que ya permitía el sistema anterior).
  */
-export function NuevaFichaModal({ onCerrar, onGenerada }: { onCerrar: () => void; onGenerada: () => void }) {
+export function NuevaFichaModal({ centros, onCerrar, onGenerada }: { centros: Centro[]; onCerrar: () => void; onGenerada: () => void }) {
   const { t } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
   const [riderElegido, setRiderElegido] = useState<RiderResultado | null>(null);
+  const [dniManual, setDniManual] = useState('');
+  const [nombreManual, setNombreManual] = useState('');
   const [centroId, setCentroId] = useState('');
   const [items, setItems] = useState<StockItemFicha[]>(ITEMS_FICHA_FIJOS.map((d) => ({ itemClave: d.clave, marca: null })));
   const [firmaDataUrl, setFirmaDataUrl] = useState<string | null>(null);
 
   function alElegirRider(r: RiderResultado | null) {
     setRiderElegido(r);
-    if (r?.centroId && !centroId) setCentroId(String(r.centroId));
+    if (r?.centroId) setCentroId(String(r.centroId));
   }
 
   function marcar(idx: number, marca: Marca) {
@@ -46,7 +53,10 @@ export function NuevaFichaModal({ onCerrar, onGenerada }: { onCerrar: () => void
   }
 
   function guardar() {
-    if (!riderElegido) {
+    const nombre = riderElegido ? riderElegido.nombre : nombreManual.trim();
+    const dni = riderElegido ? riderElegido.dni : dniManual.trim();
+
+    if (!nombre || !dni) {
       setError(t('stockFicha.faltaRider'));
       return;
     }
@@ -63,9 +73,9 @@ export function NuevaFichaModal({ onCerrar, onGenerada }: { onCerrar: () => void
     startTransition(async () => {
       const res = await crearFichaEntrega({
         centroId: Number(centroId),
-        riderId: riderElegido.id,
-        riderNombre: riderElegido.nombre,
-        riderDni: riderElegido.dni,
+        riderId: riderElegido?.id ?? null,
+        riderNombre: nombre,
+        riderDni: dni,
         items,
         firmaBase64: firmaDataUrl,
       });
@@ -110,15 +120,39 @@ export function NuevaFichaModal({ onCerrar, onGenerada }: { onCerrar: () => void
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stockFicha.rider')}</label>
               <BuscadorRiderRemoto requerido={false} onSeleccionar={alElegirRider} />
+              {!riderElegido && (
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <input
+                    value={nombreManual}
+                    onChange={(e) => setNombreManual(e.target.value)}
+                    placeholder={t('stockFicha.nombreManualPlaceholder')}
+                    className="rounded-lg border border-border px-3 py-2 text-xs focus:border-primary focus:outline-none"
+                  />
+                  <input
+                    value={dniManual}
+                    onChange={(e) => setDniManual(e.target.value)}
+                    placeholder={t('stockFicha.dniManualPlaceholder')}
+                    className="rounded-lg border border-border px-3 py-2 text-xs focus:border-primary focus:outline-none"
+                  />
+                </div>
+              )}
+              <p className="mt-1 text-[11px] text-ink-muted">{t('stockFicha.ayudaRiderNoExiste')}</p>
             </div>
 
             <div>
               <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stockFicha.centro')}</label>
-              <input
-                disabled
-                value={riderElegido?.centroNombre ?? ''}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink-muted"
-              />
+              <select
+                value={centroId}
+                onChange={(e) => setCentroId(e.target.value)}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              >
+                <option value="">{t('stock.selecciona')}</option>
+                {centros.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>

@@ -149,6 +149,7 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
       {pestana === 'fichas' && (
         <FichasTab
           fichas={fichasGeneradas}
+          centros={centros}
           onFichaGenerada={() => {
             recargarFichas();
             if (materialActivo !== null) recargar(materialActivo);

@@ -214,6 +214,7 @@ const es = {
   // Exportar (compartido)
   'exportar.aExcel': 'Exportar a Excel',
   'exportar.sinFilas': 'No hay filas que exportar con estos filtros',
+  'exportar.botonCsv': 'Exportar CSV',
   'exportar.colFecha': 'Fecha',
   'exportar.colRider': 'Rider',
   'exportar.colDni': 'DNI',
@@ -789,7 +790,10 @@ const es = {
   'stockFicha.quitarMaterial': 'Quitar',
   'stockFicha.observacionesMaterial': 'Observaciones (opcional)',
   'stockFicha.firmaDelRider': 'Firma del rider',
-  'stockFicha.faltaRider': 'Elige un rider.',
+  'stockFicha.faltaRider': 'Elige un rider o escribe su nombre y DNI/NIE.',
+  'stockFicha.nombreManualPlaceholder': 'Nombre completo',
+  'stockFicha.dniManualPlaceholder': 'DNI / NIE',
+  'stockFicha.ayudaRiderNoExiste': 'Si el rider aún no está dado de alta en el sistema, escribe su nombre y DNI/NIE a mano.',
   'stockFicha.faltaCentro': 'Elige un centro.',
   'stockFicha.faltaMaterial': 'Añade al menos un material con cantidad.',
   'stockFicha.generando': 'Generando ficha...',
@@ -812,6 +816,7 @@ const es = {
   'stockFiltro.mayorQue': 'Mayor que',
   'stockFiltro.menorQue': 'Menor que',
   'stockFiltro.igualA': 'Igual a',
+  'stockFiltro.todos': 'Todos',
   'stockFiltro.limpiar': 'Limpiar',
   'stockFiltro.aplicar': 'Aplicar',
 

@@ -139,6 +139,28 @@ export async function subirImagenZonaConexion(nombreArchivo: string, contenido: 
   return subirBufferACarpeta(carpetaId, nombreArchivo, contenido, mimeType);
 }
 
+/**
+ * Carpeta de fichas del módulo de Stock — tiene su PROPIA raíz
+ * (distinta de GOOGLE_DRIVE_FOLDER_ID que usa Incidencias/Ausencias/
+ * Conexiones), confirmada por el usuario, y se organiza por GESTOR
+ * (el texto libre de centros.gestor_carpeta, ej. "Marta / Nati"), no
+ * por mes — mismo espíritu de organización que ya tenían las
+ * plantillas en el sistema anterior. Si el centro no tiene gestor
+ * asignado, se archiva en una carpeta "Sin gestor asignado" en vez de
+ * perderse o fallar la subida.
+ */
+async function carpetaFichaPorGestor(gestorCarpeta: string | null): Promise<string> {
+  const raizId = process.env.GOOGLE_DRIVE_FICHAS_FOLDER_ID;
+  if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FICHAS_FOLDER_ID');
+  const nombreCarpeta = gestorCarpeta?.trim() || 'Sin gestor asignado';
+  return obtenerOCrearCarpeta(nombreCarpeta, raizId);
+}
+
+export async function subirFichaStock(gestorCarpeta: string | null, nombreArchivo: string, contenido: Buffer, mimeType: string): Promise<string> {
+  const carpetaId = await carpetaFichaPorGestor(gestorCarpeta);
+  return subirBufferACarpeta(carpetaId, nombreArchivo, contenido, mimeType);
+}
+
 async function subirBufferACarpeta(carpetaId: string, nombreArchivo: string, contenido: Buffer, mimeType: string): Promise<string> {
 
   const boundary = `closer_crm_${Date.now()}`;

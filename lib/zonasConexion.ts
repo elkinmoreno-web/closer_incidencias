@@ -10,6 +10,17 @@ const NOMBRE_ARCHIVO_MAPA = 'CLOSERLOGISTICS_areas.html';
 // por este ID directo — Drive normalmente lo conserva cuando solo se
 // edita el CONTENIDO del archivo — y si deja de ser válido, se cae a
 // la búsqueda por nombre (ya corregida para incluir compartidos).
+// ID de la COPIA automática del mapa vigente HOY (no el original) —
+// el archivo real vive en una carpeta compartida a la que la cuenta
+// OAuth del CRM no tiene acceso (comparten solo a cuentas
+// empresariales, no a la personal usada para el token). Un Apps
+// Script en la cuenta personal copia el archivo semanalmente a una
+// carpeta que el CRM sí puede leer, usando makeCopy() — lo cual
+// genera un ID NUEVO en cada ejecución, así que este valor solo es
+// válido hasta la próxima copia. Por eso es solo el primer intento,
+// rápido; si deja de ser válido, se cae automáticamente a
+// buscarArchivoPorNombre() más abajo, que encuentra la copia vigente
+// por su nombre fijo sin depender de este ID.
 const FILE_ID_CONOCIDO = '1rmR5Q8O99D5Q2hHSdkKgJwQ-BqpSknie';
 
 export interface ZonaParseada {

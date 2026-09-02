@@ -6,7 +6,7 @@ import { registrarError, normalizarNombreCentro } from '@/lib/utils';
 import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockItemFicha } from '@/lib/types';
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
 import { generarFichaPdf } from '@/lib/stockFichaPdf';
-import { subirArchivoDrive } from '@/lib/googleDrive';
+import { subirFichaStock } from '@/lib/googleDrive';
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -540,7 +540,7 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
     const itemsMarcados = input.items.filter((it) => it.marca !== null);
     if (itemsMarcados.length === 0) return { error: 'Marca al menos un ítem en el justificante.' };
 
-    const { data: centro } = await supabase.from('centros').select('nombre').eq('id', input.centroId).maybeSingle();
+    const { data: centro } = await supabase.from('centros').select('nombre, gestor_carpeta').eq('id', input.centroId).maybeSingle();
     if (!centro) return { error: 'Centro no reconocido.' };
 
     const ahora = new Date();
@@ -564,7 +564,7 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
       const base64 = input.firmaBase64.split('base64,')[1];
       firmaPngBytes = new Uint8Array(Buffer.from(base64, 'base64'));
       const nombreFirma = `${nombreArchivoFicha(input.riderNombre, input.riderDni, ETIQUETA_ESTADO_ARCHIVO[marcaPrincipal], fechaISO)}_firma.png`;
-      firmaFileId = await subirArchivoDrive('Fichas', nombreFirma, Buffer.from(firmaPngBytes), 'image/png');
+      firmaFileId = await subirFichaStock(centro.gestor_carpeta, nombreFirma, Buffer.from(firmaPngBytes), 'image/png');
     }
 
     const pdfBytes = await generarFichaPdf({
@@ -578,7 +578,7 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
     });
 
     const nombreArchivo = `${nombreArchivoFicha(input.riderNombre, input.riderDni, ETIQUETA_ESTADO_ARCHIVO[marcaPrincipal], fechaISO)}.pdf`;
-    const pdfFileId = await subirArchivoDrive('Fichas', nombreArchivo, Buffer.from(pdfBytes), 'application/pdf');
+    const pdfFileId = await subirFichaStock(centro.gestor_carpeta, nombreArchivo, Buffer.from(pdfBytes), 'application/pdf');
 
     const { error: errorFicha } = await supabase.from('stock_fichas').insert({
       centro_id: input.centroId,

@@ -5,6 +5,7 @@ import type { StockMovimiento } from '@/lib/types';
 import { ThFiltro, cumpleFiltroTexto, cumpleFiltroNumero, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { formatFecha } from '@/lib/utils';
+import { ExportarCsvButton } from '@/components/stock/ExportarCsvButton';
 
 type MovimientoConNombres = StockMovimiento & {
   centro_origen_nombre: string | null;
@@ -55,7 +56,21 @@ export function HistorialTab({ movimientos }: { movimientos: MovimientoConNombre
 
   return (
     <div className="rounded-card border border-border bg-surface p-5">
-      <h2 className="mb-3 font-semibold text-ink">{t('stock.historial')}</h2>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-semibold text-ink">{t('stock.historial')}</h2>
+        <ExportarCsvButton
+          nombreArchivo="historial_movimientos"
+          filas={movimientosFiltrados.map((mv) => ({
+            Fecha: formatFecha(mv.created_at),
+            Tipo: mv.tipo_etiqueta,
+            Origen: mv.centro_origen_nombre ?? '',
+            Destino: mv.centro_destino_nombre ?? '',
+            Cantidad: mv.unidades,
+            Rider: mv.rider_nombre_libre ?? '',
+            'Registrado por': mv.admin_usuario ?? '',
+          }))}
+        />
+      </div>
       {movimientos.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-muted">{t('stock.sinMovimientos')}</p>
       ) : movimientosFiltrados.length === 0 ? (

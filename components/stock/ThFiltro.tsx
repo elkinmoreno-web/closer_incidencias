@@ -24,6 +24,7 @@ export function ThFiltro({
   label,
   align = 'left',
   tipo = 'texto',
+  opciones,
   ordenActivo,
   onOrdenar,
   filtro,
@@ -31,7 +32,9 @@ export function ThFiltro({
 }: {
   label: string;
   align?: 'left' | 'right';
-  tipo?: 'texto' | 'numero';
+  tipo?: 'texto' | 'numero' | 'select';
+  /** Requerido cuando tipo='select' — pares [valor, etiqueta] a elegir. */
+  opciones?: [string, string][];
   ordenActivo: DireccionOrden;
   onOrdenar: (dir: DireccionOrden) => void;
   filtro: FiltroColumna | undefined;
@@ -42,6 +45,7 @@ export function ThFiltro({
   const [texto, setTexto] = useState(filtro?.texto ?? '');
   const [operador, setOperador] = useState<OperadorNumerico>(filtro?.operador ?? 'menor');
   const [valor, setValor] = useState(filtro?.valor ?? '');
+  const [seleccionado, setSeleccionado] = useState(filtro?.texto ?? '');
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,13 +56,15 @@ export function ThFiltro({
     return () => document.removeEventListener('mousedown', alClickFuera);
   }, []);
 
-  const filtroActivo = tipo === 'texto' ? !!filtro?.texto : !!filtro?.valor;
+  const filtroActivo = tipo === 'numero' ? !!filtro?.valor : !!filtro?.texto;
 
   function aplicar() {
-    if (tipo === 'texto') {
-      onFiltrar(texto.trim() ? { texto: texto.trim() } : undefined);
-    } else {
+    if (tipo === 'numero') {
       onFiltrar(valor.trim() ? { operador, valor: valor.trim() } : undefined);
+    } else if (tipo === 'select') {
+      onFiltrar(seleccionado ? { texto: seleccionado } : undefined);
+    } else {
+      onFiltrar(texto.trim() ? { texto: texto.trim() } : undefined);
     }
     setAbierto(false);
   }
@@ -66,6 +72,7 @@ export function ThFiltro({
   function limpiar() {
     setTexto('');
     setValor('');
+    setSeleccionado('');
     onFiltrar(undefined);
     setAbierto(false);
   }
@@ -103,6 +110,20 @@ export function ThFiltro({
                 placeholder={t('stockFiltro.contiene')}
                 className="w-full rounded-lg border border-border px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
               />
+            ) : tipo === 'select' ? (
+              <select
+                autoFocus
+                value={seleccionado}
+                onChange={(e) => setSeleccionado(e.target.value)}
+                className="w-full rounded-lg border border-border px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+              >
+                <option value="">{t('stockFiltro.todos')}</option>
+                {(opciones ?? []).map(([val, etiqueta]) => (
+                  <option key={val} value={val}>
+                    {etiqueta}
+                  </option>
+                ))}
+              </select>
             ) : (
               <div className="flex gap-1.5">
                 <select value={operador} onChange={(e) => setOperador(e.target.value as OperadorNumerico)} className="rounded-lg border border-border px-1.5 py-1.5 text-xs focus:border-primary focus:outline-none">

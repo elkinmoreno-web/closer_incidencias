@@ -220,7 +220,7 @@ async function subirBufferACarpeta(carpetaId: string, nombreArchivo: string, con
     Buffer.from(`\r\n--${boundary}--`),
   ]);
 
-  const resp = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id`, {
+  const resp = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id&supportsAllDrives=true`, {
     method: 'POST',
     headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
     body: cuerpo,
@@ -249,7 +249,7 @@ export async function descargarArchivoDrive(fileId: string): Promise<{ buffer: B
 
 export async function borrarArchivoDrive(fileId: string): Promise<void> {
   try {
-    await driveFetch(`${DRIVE_API}/files/${fileId}`, { method: 'DELETE' });
+    await driveFetch(`${DRIVE_API}/files/${fileId}?supportsAllDrives=true`, { method: 'DELETE' });
   } catch {
     // No bloquea la operación principal si falla el borrado.
   }

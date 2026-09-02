@@ -308,11 +308,26 @@ export async function archivoExisteYEsAccesible(fileId: string): Promise<boolean
  * carpeta indicada. Equivalente a Drive.Files.copy() del sistema de
  * Apps Script anterior.
  */
+/**
+ * Copia un archivo de Drive a un nuevo archivo con el nombre dado,
+ * dentro de la carpeta indicada. Si el archivo origen es un .docx (no
+ * un Google Doc nativo) — como es el caso de la plantilla real del
+ * justificante, subida como Word — se pide explícitamente que Drive
+ * lo CONVIERTA a Google Docs nativo durante la copia, especificando
+ * mimeType: 'application/vnd.google-apps.document' en el body.
+ *
+ * Sin esto, la copia conserva el formato .docx original, y la API de
+ * Google Docs lo rechaza después con "This operation is not supported
+ * for this document. The document must not be an Office file" —
+ * portado de _pltCopiarPlantilla() del sistema de Apps Script
+ * anterior, que ya contemplaba este mismo caso con el parámetro
+ * "convert: true" de la API v2 (aquí, v3, se pide con el mimeType).
+ */
 export async function copiarArchivoDrive(fileId: string, nuevoNombre: string, carpetaDestinoId: string): Promise<string> {
   const resp = await driveFetch(`${DRIVE_API}/files/${fileId}/copy?supportsAllDrives=true&fields=id`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: nuevoNombre, parents: [carpetaDestinoId] }),
+    body: JSON.stringify({ name: nuevoNombre, parents: [carpetaDestinoId], mimeType: 'application/vnd.google-apps.document' }),
   });
   if (!resp.ok) throw new Error(`No se pudo copiar el archivo (HTTP ${resp.status}): ${await resp.text()}`);
   const data = await resp.json();

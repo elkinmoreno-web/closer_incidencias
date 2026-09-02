@@ -12,7 +12,7 @@ export default async function StockPage() {
   // cuando esté listo para todo el equipo (el control de acceso por
   // rol de siempre ya lo aplica el layout/Sidebar aparte).
   const admin = await getAdminActual();
-  if (admin?.email !== 'elkin.moreno@closerlogistics.com' && admin?.email !== 'rodrigo.heredero@closerlogistics.com') redirect('/dashboard');
+  if (admin?.email !== 'elkin.moreno@closerlogistics.com') redirect('/dashboard');
 
   const t = crearTraductor(await resolverIdioma());
   const [materiales, zona] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona()]);

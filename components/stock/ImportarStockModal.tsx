@@ -50,6 +50,7 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
   const [usarTallas, setUsarTallas] = useState(false);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacionStock | null>(null);
+  const [errorImportacion, setErrorImportacion] = useState<string | null>(null);
 
   function reset() {
     setFase('inicial');
@@ -114,6 +115,7 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
 
   async function confirmarImportacion() {
     setFase('importando');
+    setErrorImportacion(null);
     const filas = filasCrudas.map((f) => ({
       centroNombre: String(f[colCentro] ?? '').trim(),
       cantidad: usarTallas ? 0 : num(f[colCantidad]),
@@ -126,9 +128,18 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
       rotas: colRotas ? num(f[colRotas]) : 0,
       noRecuperadas: colNoRecuperadas ? num(f[colNoRecuperadas]) : 0,
     }));
-    const res = await importarStockInicial(material.id, filas);
-    setResultado(res);
-    setFase('terminado');
+    try {
+      const res = await importarStockInicial(material.id, filas);
+      setResultado(res);
+      setFase('terminado');
+    } catch (e) {
+      // Sin esto, si la Server Action lanza una excepción (ej. un
+      // error 500 real de servidor), la fase se quedaba en
+      // "importando" para siempre, sin ningún mensaje — el modal
+      // parecía "colgado" sin dar pista de qué pasó.
+      setErrorImportacion(e instanceof Error ? e.message : 'No se pudo completar la importación. Inténtalo de nuevo.');
+      setFase('previsualizando');
+    }
   }
 
   const listoParaImportar = usarTallas
@@ -216,6 +227,8 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
                 <p className="text-xs text-ink-muted">
                   {filasCrudas.length} {t('stockImport.filasListas')}
                 </p>
+
+                {errorImportacion && <p className="text-sm font-medium text-danger">{errorImportacion}</p>}
 
                 <div className="flex justify-end gap-2">
                   <button onClick={reset} className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted">

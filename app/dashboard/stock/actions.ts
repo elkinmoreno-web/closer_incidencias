@@ -437,105 +437,124 @@ export interface ResultadoImportacionStock {
  * explícita: se corrigen después desde el panel con "Ajuste manual").
  */
 export async function importarStockInicial(materialId: number, filas: FilaImportacionStock[]): Promise<ResultadoImportacionStock> {
-  const { supabase, yo } = await assertAdmin();
+  try {
+    const { supabase, yo } = await assertAdmin();
+    if (!yo) throw new Error('No se pudo identificar tu sesión de administrador. Vuelve a iniciar sesión e inténtalo de nuevo.');
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre');
-  const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
+    const { data: centros } = await supabase.from('centros').select('id, nombre');
+    const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
 
-  const centrosNoEncontrados: string[] = [];
-  const registros: Record<string, unknown>[] = [];
-  let filasIgnoradas = 0;
-  const NOTA = 'Migración de stock inicial desde el sistema anterior (Google Sheets)';
+    const centrosNoEncontrados: string[] = [];
+    const registros: Record<string, unknown>[] = [];
+    let filasIgnoradas = 0;
+    const NOTA = 'Migración de stock inicial desde el sistema anterior (Google Sheets)';
 
-  for (const fila of filas) {
-    const centroId = idPorNombreCentro.get(normalizarNombreCentro(fila.centroNombre));
-    if (!centroId) {
-      centrosNoEncontrados.push(fila.centroNombre);
-      continue;
+    for (const fila of filas) {
+      const centroId = idPorNombreCentro.get(normalizarNombreCentro(fila.centroNombre));
+      if (!centroId) {
+        centrosNoEncontrados.push(fila.centroNombre);
+        continue;
+      }
+
+      const tallaM = fila.tallaM ?? 0;
+      const tallaL = fila.tallaL ?? 0;
+      const tallaXl = fila.tallaXl ?? 0;
+      const tallaXxl = fila.tallaXxl ?? 0;
+      const disponible = tallaM || tallaL || tallaXl || tallaXxl ? tallaM + tallaL + tallaXl + tallaXxl : fila.cantidad;
+      const enTransito = fila.enTransito ?? 0;
+      const entregadas = fila.entregadas ?? 0;
+      const rotas = fila.rotas ?? 0;
+      const noRecuperadas = fila.noRecuperadas ?? 0;
+
+      if (!disponible && !enTransito && !entregadas && !rotas && !noRecuperadas) {
+        filasIgnoradas++;
+        continue;
+      }
+
+      if (disponible) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'INV_INICIAL',
+          centro_destino_id: centroId,
+          unidades: disponible,
+          talla_m: tallaM,
+          talla_l: tallaL,
+          talla_xl: tallaXl,
+          talla_xxl: tallaXxl,
+          notas: NOTA,
+          admin_id: yo.id,
+        });
+      }
+      if (enTransito) {
+        // TRANSITO_MIGRADO: tipo neutro que no resta/suma disponible ni
+        // es un traslado real — solo deja constancia del volumen en
+        // tránsito heredado del sistema anterior, sin inventar un
+        // origen/destino que no se conoce.
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'TRANSITO_MIGRADO',
+          centro_destino_id: centroId,
+          unidades: enTransito,
+          notas: NOTA + ' (en tránsito)',
+          admin_id: yo.id,
+        });
+      }
+      if (entregadas) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'ENTREGA_RIDER',
+          centro_origen_id: centroId,
+          unidades: entregadas,
+          notas: NOTA + ' (entregado a riders)',
+          admin_id: yo.id,
+        });
+      }
+      if (rotas) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'DEVOLUCION_ROTA',
+          centro_origen_id: centroId,
+          unidades: rotas,
+          notas: NOTA + ' (roto)',
+          admin_id: yo.id,
+        });
+      }
+      if (noRecuperadas) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'NO_RECUPERADA',
+          centro_origen_id: centroId,
+          unidades: noRecuperadas,
+          notas: NOTA + ' (no recuperado)',
+          admin_id: yo.id,
+        });
+      }
     }
 
-    const tallaM = fila.tallaM ?? 0;
-    const tallaL = fila.tallaL ?? 0;
-    const tallaXl = fila.tallaXl ?? 0;
-    const tallaXxl = fila.tallaXxl ?? 0;
-    const disponible = tallaM || tallaL || tallaXl || tallaXxl ? tallaM + tallaL + tallaXl + tallaXxl : fila.cantidad;
-    const enTransito = fila.enTransito ?? 0;
-    const entregadas = fila.entregadas ?? 0;
-    const rotas = fila.rotas ?? 0;
-    const noRecuperadas = fila.noRecuperadas ?? 0;
-
-    if (!disponible && !enTransito && !entregadas && !rotas && !noRecuperadas) {
-      filasIgnoradas++;
-      continue;
+    if (registros.length > 0) {
+      const { error } = await supabase.from('stock_movimientos').insert(registros);
+      // Mensaje explícito si falla por un tipo de movimiento que aún
+      // no existe en stock_tipos_movimiento (ej. TRANSITO_MIGRADO/
+      // INV_INICIAL sin dar de alta con el SQL correspondiente) — sin
+      // esto, el error de clave foránea de Postgres es críptico para
+      // quien lo lee en el navegador.
+      if (error) {
+        if (error.message.includes('tipo_clave') || error.message.includes('foreign key')) {
+          throw new Error(`No se pudo guardar la importación: falta dar de alta un tipo de movimiento en la base de datos (${error.message}). Revisa que se hayan ejecutado todos los SQL del módulo de Stock.`);
+        }
+        throw new Error(error.message);
+      }
     }
 
-    if (disponible) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'INV_INICIAL',
-        centro_destino_id: centroId,
-        unidades: disponible,
-        talla_m: tallaM,
-        talla_l: tallaL,
-        talla_xl: tallaXl,
-        talla_xxl: tallaXxl,
-        notas: NOTA,
-        admin_id: yo!.id,
-      });
-    }
-    if (enTransito) {
-      // TRANSITO_MIGRADO: tipo neutro que no resta/suma disponible ni
-      // es un traslado real — solo deja constancia del volumen en
-      // tránsito heredado del sistema anterior, sin inventar un
-      // origen/destino que no se conoce.
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'TRANSITO_MIGRADO',
-        centro_destino_id: centroId,
-        unidades: enTransito,
-        notas: NOTA + ' (en tránsito)',
-        admin_id: yo!.id,
-      });
-    }
-    if (entregadas) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'ENTREGA_RIDER',
-        centro_origen_id: centroId,
-        unidades: entregadas,
-        notas: NOTA + ' (entregado a riders)',
-        admin_id: yo!.id,
-      });
-    }
-    if (rotas) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'DEVOLUCION_ROTA',
-        centro_origen_id: centroId,
-        unidades: rotas,
-        notas: NOTA + ' (roto)',
-        admin_id: yo!.id,
-      });
-    }
-    if (noRecuperadas) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'NO_RECUPERADA',
-        centro_origen_id: centroId,
-        unidades: noRecuperadas,
-        notas: NOTA + ' (no recuperado)',
-        admin_id: yo!.id,
-      });
-    }
+    revalidatePath('/dashboard/stock');
+    return { insertados: registros.length, centrosNoEncontrados, filasIgnoradas };
+  } catch (e) {
+    // Se relanza (no se traga el error) para que el modal SÍ vea el
+    // mensaje real en vez de quedarse "colgado" en Importando... —
+    // registrarError deja además una traza completa en los logs del
+    // servidor, no solo el mensaje resumido que llega al navegador.
+    throw new Error(registrarError('importarStockInicial', e, e instanceof Error ? e.message : 'No se pudo completar la importación.'));
   }
-
-  if (registros.length > 0) {
-    const { error } = await supabase.from('stock_movimientos').insert(registros);
-    if (error) throw new Error(error.message);
-  }
-
-  revalidatePath('/dashboard/stock');
-  return { insertados: registros.length, centrosNoEncontrados, filasIgnoradas };
 }
 
 export interface CrearFichaInput {

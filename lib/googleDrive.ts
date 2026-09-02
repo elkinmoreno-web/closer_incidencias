@@ -149,21 +149,57 @@ export async function subirImagenZonaConexion(nombreArchivo: string, contenido: 
  * (distinta de GOOGLE_DRIVE_FOLDER_ID que usa Incidencias/Ausencias/
  * Conexiones), confirmada por el usuario, y se organiza por GESTOR
  * (el texto libre de centros.gestor_carpeta, ej. "Marta / Nati"), no
- * por mes — mismo espíritu de organización que ya tenían las
- * plantillas en el sistema anterior. Si el centro no tiene gestor
- * asignado, se archiva en una carpeta "Sin gestor asignado" en vez de
- * perderse o fallar la subida.
+ * por mes.
+ *
+ * Las 10 carpetas de gestor YA EXISTEN, creadas a mano en Drive, con
+ * IDs confirmados directamente por el usuario — se usan esos IDs FIJOS
+ * en vez de buscar/crear por nombre. Se intentó primero con búsqueda
+ * por nombre (igual que el mapa de zonas), pero seguía dando 404
+ * incluso con supportsAllDrives, así que se optó por la vía más
+ * confiable: IDs directos, sin ambigüedad.
+ *
+ * Si el gestor del centro no coincide con ninguno de estos 10 (texto
+ * distinto, vacío, o centro sin gestor asignado), se cae a
+ * obtenerOCrearCarpeta() con el nombre tal cual, creando/buscando
+ * "Sin gestor asignado" (o el nombre que sea) dentro de la raíz — así
+ * nunca se pierde un PDF por no encontrar la carpeta exacta.
  */
+const IDS_CARPETA_GESTOR: Record<string, string> = {
+  vanessa: '12RLmg-Zi1U2kmnFwN_uBNsXGB6DV_Be-',
+  'tamara/javier': '1umNUEOR06q8wm-lQuoWISlsfgHwN3WhR',
+  'paty/didier': '13m2WKjMYVk-q_RIqpS1ij8vbf8_Ybdz6',
+  'marta/nati': '1_YRTKWTlielhXAiNIvX-I9ySCWSaHwVT',
+  'hector/ali': '1dZAA0a6Vnwjz2S23Oy-ujw8ZtSkAQ3c1',
+  // El dato migrado en centros.gestor_carpeta (viene del CSV original)
+  // dice "Hector/Ali Daniel", pero la carpeta real en Drive se llama
+  // solo "Hector/Ali" — se mapean ambas variantes al mismo ID, para
+  // que el nombre tal cual quedó guardado en la base siga
+  // encontrando la carpeta correcta.
+  'hector/ali daniel': '1dZAA0a6Vnwjz2S23Oy-ujw8ZtSkAQ3c1',
+  'ender/walter': '1wJOQhQtZceMVz4HZTVaT8RwxcPQzWZFR',
+  'cristina/glenmar': '19h0q3FD6CMzhhgB2BSDv1vtxIyfVN_4T',
+  carlos: '1MHl0sP-IVvp73Pk9WTAmgMI4-5MaZ37x',
+  madrid: '1TO7hIDVwcpUG7TxanPxOvZbZptoiNoTf',
+  alemania: '1Kofj6yaO-3cxvKhh3aOxFiZTnRfuRh8B',
+};
+
+/** Normaliza para comparar contra IDS_CARPETA_GESTOR: minúsculas, sin espacios alrededor de "/", sin espacios de sobra. */
+function normalizarClaveGestor(s: string): string {
+  return s.trim().toLowerCase().replace(/\s*\/\s*/g, '/');
+}
+
 async function carpetaFichaPorGestor(gestorCarpeta: string | null): Promise<string> {
   const raizId = process.env.GOOGLE_DRIVE_FICHAS_FOLDER_ID;
   if (!raizId) throw new Error('Falta la variable de entorno GOOGLE_DRIVE_FICHAS_FOLDER_ID');
-  // Las carpetas de gestor YA EXISTEN en Drive con nombres tipo
-  // "Paty/Didier" (sin espacios alrededor de la barra) — el dato
-  // migrado del CSV traía "Paty / Didier" (con espacios), lo que
-  // generaba una carpeta NUEVA y distinta en vez de usar la real.
-  // Se normaliza aquí en el código (no solo en los datos) para que
-  // cualquier gestor futuro con "/" también coincida sin depender de
-  // que la migración quede perfecta.
+
+  if (gestorCarpeta) {
+    const idConocido = IDS_CARPETA_GESTOR[normalizarClaveGestor(gestorCarpeta)];
+    if (idConocido) return idConocido;
+  }
+
+  // Respaldo: gestor sin ID conocido (nombre nuevo, o centro sin
+  // gestor) — se busca/crea por nombre dentro de la raíz, igual que
+  // antes, para no perder el archivo.
   const nombreCarpeta = gestorCarpeta?.trim().replace(/\s*\/\s*/g, '/') || 'Sin gestor asignado';
   return obtenerOCrearCarpeta(nombreCarpeta, raizId);
 }

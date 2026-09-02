@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUpDown, ArrowUp, ArrowDown, Filter } from 'lucide-react';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
@@ -13,12 +14,21 @@ export interface FiltroColumna {
   valor?: string;
 }
 
+const ANCHO_POPOVER = 224; // w-56
+
 /**
  * Cabecera de tabla con ordenamiento y filtro al hacer click — pensado
- * para las tablas del módulo de Stock (stock por centro, historial de
- * movimientos, fichas generadas), donde antes solo había un puñado de
- * filtros sueltos fuera de la tabla. Cada columna decide su propio
- * tipo de filtro: 'texto' (contiene) o 'numero' (mayor/menor/igual que).
+ * para las tablas del módulo de Stock. Cada columna decide su propio
+ * tipo de filtro: 'texto' (contiene), 'numero' (mayor/menor/igual que)
+ * o 'select' (categoría fija).
+ *
+ * El popover se renderiza en un PORTAL (document.body), no anidado en
+ * el <th> — las tablas de este proyecto viven dentro de un contenedor
+ * con overflow-x-auto (para el scroll horizontal en móvil), y un
+ * elemento position:absolute anidado ahí se recorta en cuanto se sale
+ * de ese contenedor, aunque el propio popover esté bien posicionado.
+ * El portal saca el popover de ese flujo, calculando su posición en
+ * píxeles reales de pantalla con getBoundingClientRect().
  */
 export function ThFiltro({
   label,
@@ -46,15 +56,33 @@ export function ThFiltro({
   const [operador, setOperador] = useState<OperadorNumerico>(filtro?.operador ?? 'menor');
   const [valor, setValor] = useState(filtro?.valor ?? '');
   const [seleccionado, setSeleccionado] = useState(filtro?.texto ?? '');
-  const ref = useRef<HTMLDivElement>(null);
+  const [posicion, setPosicion] = useState<{ top: number; left: number } | null>(null);
+  const botonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function alClickFuera(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
+      const t = e.target as Node;
+      if (botonRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setAbierto(false);
     }
     document.addEventListener('mousedown', alClickFuera);
     return () => document.removeEventListener('mousedown', alClickFuera);
   }, []);
+
+  function abrir() {
+    const rect = botonRef.current?.getBoundingClientRect();
+    if (rect) {
+      // Si abrir alineado a la derecha del botón se saldría de la
+      // pantalla, se ancla al borde derecho de la ventana en su lugar
+      // (con un pequeño margen) — mismo criterio para "align=right".
+      let left = align === 'right' ? rect.right - ANCHO_POPOVER : rect.left;
+      left = Math.max(8, Math.min(left, window.innerWidth - ANCHO_POPOVER - 8));
+      setPosicion({ top: rect.bottom + 4, left });
+    }
+    setAbierto(true);
+  }
 
   const filtroActivo = tipo === 'numero' ? !!filtro?.valor : !!filtro?.texto;
 
@@ -80,26 +108,32 @@ export function ThFiltro({
   const IconoOrden = ordenActivo === 'asc' ? ArrowUp : ordenActivo === 'desc' ? ArrowDown : ArrowUpDown;
 
   return (
-    <th className={`relative px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
-      <div ref={ref}>
-        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
-          <button
-            onClick={() => onOrdenar(ordenActivo === 'asc' ? 'desc' : ordenActivo === 'desc' ? null : 'asc')}
-            className="flex items-center gap-1 hover:text-primary"
-          >
-            {label}
-            <IconoOrden size={11} className={ordenActivo ? 'text-primary' : 'opacity-50'} />
-          </button>
-          <button onClick={() => setAbierto((v) => !v)} className={filtroActivo ? 'text-primary' : 'text-ink-muted opacity-60 hover:opacity-100'}>
-            <Filter size={11} />
-          </button>
-        </div>
+    <th className={`px-3 py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+        <button
+          onClick={() => onOrdenar(ordenActivo === 'asc' ? 'desc' : ordenActivo === 'desc' ? null : 'asc')}
+          className="flex items-center gap-1 hover:text-primary"
+        >
+          {label}
+          <IconoOrden size={11} className={ordenActivo ? 'text-primary' : 'opacity-50'} />
+        </button>
+        <button
+          ref={botonRef}
+          onClick={() => (abierto ? setAbierto(false) : abrir())}
+          className={filtroActivo ? 'text-primary' : 'text-ink-muted opacity-60 hover:opacity-100'}
+        >
+          <Filter size={11} />
+        </button>
+      </div>
 
-        {abierto && (
+      {abierto &&
+        posicion &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
-            className={`absolute top-full z-30 mt-1 w-56 rounded-lg border border-border bg-surface p-3 text-left normal-case tracking-normal text-ink shadow-lg ${
-              align === 'right' ? 'right-0' : 'left-0'
-            }`}
+            ref={popoverRef}
+            style={{ position: 'fixed', top: posicion.top, left: posicion.left, width: ANCHO_POPOVER }}
+            className="z-50 rounded-lg border border-border bg-surface p-3 text-left text-xs normal-case tracking-normal text-ink shadow-lg"
           >
             {tipo === 'texto' ? (
               <input
@@ -149,9 +183,9 @@ export function ThFiltro({
                 {t('stockFiltro.aplicar')}
               </button>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
-      </div>
     </th>
   );
 }

@@ -11,6 +11,7 @@ import { PendingBadge } from '@/components/dashboard/PendingBadge';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { SelectorIdioma } from '@/components/i18n/SelectorIdioma';
 import type { ClaveTraduccion } from '@/lib/i18n/dictionaries/es';
+import { CORREOS_ACCESO_STOCK_TEMPORAL } from '@/lib/utils';
 
 const NAV = [
   { href: '/dashboard', clave: 'nav.resumen' as ClaveTraduccion, icon: LayoutDashboard, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
@@ -49,7 +50,7 @@ export function Sidebar({
   // filtro por rol de siempre) cuando Stock esté listo para todo el
   // equipo.
   const items = NAV.filter((item) => {
-    if (item.href === '/dashboard/stock' && email !== 'elkin.moreno@closerlogistics.com') return false;
+    if (item.href === '/dashboard/stock' && (!email || !CORREOS_ACCESO_STOCK_TEMPORAL.includes(email))) return false;
     return (item.roles as readonly string[]).includes(rol);
   });
 

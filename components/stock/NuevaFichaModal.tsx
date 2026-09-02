@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { Fragment, useState, useTransition } from 'react';
 import { X } from 'lucide-react';
 import { crearFichaEntrega } from '@/app/dashboard/stock/actions';
-import { ITEMS_FICHA_FIJOS, type StockItemFicha, type Centro } from '@/lib/types';
+import { ITEMS_FICHA_FIJOS, ITEMS_CON_FOTO, type StockItemFicha, type Centro } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 import type { RiderResultado } from '@/app/dashboard/buscarRiders';
@@ -50,6 +50,10 @@ export function NuevaFichaModal({ centros, onCerrar, onGenerada }: { centros: Ce
 
   function actualizarObservaciones(idx: number, valor: string) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, observaciones: valor } : it)));
+  }
+
+  function marcarFoto(idx: number, foto: 'pendiente' | 'enviada') {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, foto: it.foto === foto ? null : foto } : it)));
   }
 
   function guardar() {
@@ -170,25 +174,55 @@ export function NuevaFichaModal({ centros, onCerrar, onGenerada }: { centros: Ce
                   </thead>
                   <tbody className="divide-y divide-border">
                     {ITEMS_FICHA_FIJOS.map((def, idx) => (
-                      <tr key={def.clave}>
-                        <td className="px-2 py-1.5 font-medium text-ink">{def.etiqueta}</td>
-                        <td className="px-1.5 py-1.5 text-center">
-                          <input type="checkbox" checked={items[idx].marca === 'asignacion'} onChange={() => marcar(idx, 'asignacion')} className="h-3.5 w-3.5 accent-primary" />
-                        </td>
-                        <td className="px-1.5 py-1.5 text-center">
-                          <input type="checkbox" checked={items[idx].marca === 'devolucion_ok'} onChange={() => marcar(idx, 'devolucion_ok')} className="h-3.5 w-3.5 accent-primary" />
-                        </td>
-                        <td className="px-1.5 py-1.5 text-center">
-                          <input type="checkbox" checked={items[idx].marca === 'devolucion_mal'} onChange={() => marcar(idx, 'devolucion_mal')} className="h-3.5 w-3.5 accent-primary" />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            value={items[idx].observaciones ?? ''}
-                            onChange={(e) => actualizarObservaciones(idx, e.target.value)}
-                            className="w-full rounded border border-border px-1.5 py-1 text-[11px] focus:border-primary focus:outline-none"
-                          />
-                        </td>
-                      </tr>
+                      <Fragment key={def.clave}>
+                        <tr>
+                          <td className="px-2 py-1.5 font-medium text-ink">{def.etiqueta}</td>
+                          <td className="px-1.5 py-1.5 text-center">
+                            <input type="checkbox" checked={items[idx].marca === 'asignacion'} onChange={() => marcar(idx, 'asignacion')} className="h-3.5 w-3.5 accent-primary" />
+                          </td>
+                          <td className="px-1.5 py-1.5 text-center">
+                            <input type="checkbox" checked={items[idx].marca === 'devolucion_ok'} onChange={() => marcar(idx, 'devolucion_ok')} className="h-3.5 w-3.5 accent-primary" />
+                          </td>
+                          <td className="px-1.5 py-1.5 text-center">
+                            <input type="checkbox" checked={items[idx].marca === 'devolucion_mal'} onChange={() => marcar(idx, 'devolucion_mal')} className="h-3.5 w-3.5 accent-primary" />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              value={items[idx].observaciones ?? ''}
+                              onChange={(e) => actualizarObservaciones(idx, e.target.value)}
+                              className="w-full rounded border border-border px-1.5 py-1 text-[11px] focus:border-primary focus:outline-none"
+                            />
+                          </td>
+                        </tr>
+                        {/* Confirmación de foto — solo Soporte de Bici (ITEMS_CON_FOTO), y solo cuando el ítem tiene alguna marca, igual que P_FOTO_MATS/pintarSit del sistema anterior. */}
+                        {ITEMS_CON_FOTO.includes(def.clave) && items[idx].marca && (
+                          <tr>
+                            <td colSpan={5} className="bg-bg px-2 py-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{t('stockFicha.foto')}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => marcarFoto(idx, 'pendiente')}
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                                    items[idx].foto === 'pendiente' ? 'border-ink-muted bg-bg text-ink' : 'border-border text-ink-muted'
+                                  }`}
+                                >
+                                  {t('stockFicha.fotoPendiente')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => marcarFoto(idx, 'enviada')}
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                                    items[idx].foto === 'enviada' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-ink-muted'
+                                  }`}
+                                >
+                                  {t('stockFicha.fotoEnviada')}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

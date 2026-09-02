@@ -231,7 +231,7 @@ export interface StockDisponible {
   material_id: number;
   centro_id: number;
   centro_nombre: string;
-  gestores: string[]; // usuarios de admins/moderadores con la ciudad de este centro asignada en admin_ciudades — puede ser más de uno
+  gestor: string | null; // texto tal cual del CSV de inventario original (ej. "Paty/Didier") — centros.gestor_carpeta, no relacionado con admin_ciudades
   disponible: number;
   transito_entrante: number;
   transito_saliente: number;
@@ -286,11 +286,20 @@ export const ITEMS_FICHA_FIJOS = [
 
 export type ItemFichaClave = (typeof ITEMS_FICHA_FIJOS)[number]['clave'];
 
+// Materiales que exigen confirmar si se envió foto — portado literal
+// de P_FOTO_MATS del sistema anterior (hoy solo Soporte de Bici, pero
+// se deja como lista por si se amplía).
+export const ITEMS_CON_FOTO: ItemFichaClave[] = ['SOPORTE_BICI'];
+
 /** Una fila del justificante: qué ítem, y cuál de las 3 casillas se marcó (o ninguna). */
 export interface StockItemFicha {
   itemClave: ItemFichaClave;
   marca: 'asignacion' | 'devolucion_ok' | 'devolucion_mal' | null;
   observaciones?: string;
+  // Solo aplica a Soporte de Bici — portado literal de P_FOTO_MATS
+  // del sistema anterior: se pide confirmar si se envió foto del
+  // soporte instalado, visible en cualquiera de las 3 marcas.
+  foto?: 'pendiente' | 'enviada' | null;
 }
 
 export interface StockFicha {

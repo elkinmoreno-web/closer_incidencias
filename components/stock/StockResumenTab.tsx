@@ -15,7 +15,6 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
   const [fichaAbierta, setFichaAbierta] = useState<StockDisponible | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
-  const [gestorFiltro, setGestorFiltro] = useState('');
   const [stockMenorQue, setStockMenorQue] = useState('');
 
   const [filtrosStock, setFiltrosStock] = useState<Record<string, FiltroColumna>>({});
@@ -33,7 +32,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
   }
 
   const gestoresDisponibles = useMemo(
-    () => Array.from(new Set(stock.flatMap((s) => s.gestores))).sort((a, b) => a.localeCompare(b)),
+    () => Array.from(new Set(stock.map((s) => s.gestor).filter((g): g is string => !!g))).sort((a, b) => a.localeCompare(b)),
     [stock]
   );
 
@@ -41,8 +40,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
     const q = busqueda.trim().toLowerCase();
     const umbral = stockMenorQue.trim() ? Number(stockMenorQue) : null;
     let filas = stock.filter((s) => {
-      if (q && !s.centro_nombre.toLowerCase().includes(q) && !s.gestores.some((g) => g.toLowerCase().includes(q))) return false;
-      if (gestorFiltro && !s.gestores.includes(gestorFiltro)) return false;
+      if (q && !s.centro_nombre.toLowerCase().includes(q) && !(s.gestor ?? '').toLowerCase().includes(q)) return false;
       if (umbral !== null && !(s.disponible < umbral)) return false;
       if (!cumpleFiltroTexto(s.centro_nombre, filtrosStock.centro)) return false;
       if (!cumpleFiltroNumero(s.disponible, filtrosStock.disponible)) return false;
@@ -50,6 +48,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
       if (!cumpleFiltroNumero(s.en_calle, filtrosStock.enCalle)) return false;
       if (!cumpleFiltroNumero(s.merma, filtrosStock.merma)) return false;
       if (!cumpleFiltroNumero(s.perdida, filtrosStock.perdida)) return false;
+      if (!cumpleFiltroTexto(s.gestor ?? '', filtrosStock.gestor)) return false;
       return true;
     });
 
@@ -57,8 +56,8 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
       const signo = ordenStock.dir === 'asc' ? 1 : -1;
       filas = [...filas].sort((a, b) => {
         const campo = ordenStock.campo;
-        const va = campo === 'centro' ? a.centro_nombre : (a as any)[campo] ?? 0;
-        const vb = campo === 'centro' ? b.centro_nombre : (b as any)[campo] ?? 0;
+        const va = campo === 'centro' ? a.centro_nombre : campo === 'gestor' ? a.gestor ?? '' : (a as any)[campo] ?? 0;
+        const vb = campo === 'centro' ? b.centro_nombre : campo === 'gestor' ? b.gestor ?? '' : (b as any)[campo] ?? 0;
         if (typeof va === 'string') return va.localeCompare(vb) * signo;
         return (va - vb) * signo;
       });
@@ -71,9 +70,9 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
       });
     }
     return filas;
-  }, [stock, busqueda, gestorFiltro, stockMenorQue, filtrosStock, ordenStock]);
+  }, [stock, busqueda, stockMenorQue, filtrosStock, ordenStock]);
 
-  const hayFiltrosActivos = busqueda || gestorFiltro || stockMenorQue || Object.keys(filtrosStock).length > 0;
+  const hayFiltrosActivos = busqueda || stockMenorQue || Object.keys(filtrosStock).length > 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,7 +86,6 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
               <button
                 onClick={() => {
                   setBusqueda('');
-                  setGestorFiltro('');
                   setStockMenorQue('');
                   setFiltrosStock({});
                 }}
@@ -101,7 +99,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
               nombreArchivo="stock_por_centro"
               filas={stockFiltrado.map((s) => ({
                 Centro: s.centro_nombre,
-                Gestores: s.gestores.join(' / '),
+                Gestor: s.gestor ?? '',
                 Disponible: s.disponible,
                 'En camino': s.transito_entrante,
                 'Con riders': s.en_calle,
@@ -124,18 +122,6 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
               className="w-full rounded-lg border border-border bg-surface py-2 pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
             />
           </div>
-          <select
-            value={gestorFiltro}
-            onChange={(e) => setGestorFiltro(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="">{t('stock.todosLosGestores')}</option>
-            {gestoresDisponibles.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
           <input
             type="number"
             value={stockMenorQue}
@@ -153,6 +139,15 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
               <thead className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
                 <tr>
                   <ThFiltro label={t('stock.colCentro')} ordenActivo={ordenStock?.campo === 'centro' ? ordenStock.dir : null} onOrdenar={(d) => ordenarStockPor('centro', d)} filtro={filtrosStock.centro} onFiltrar={(f) => filtrarStockPor('centro', f)} />
+                  <ThFiltro
+                    label={t('stock.colGestor')}
+                    tipo="select"
+                    opciones={gestoresDisponibles.map((g) => [g, g] as [string, string])}
+                    ordenActivo={ordenStock?.campo === 'gestor' ? ordenStock.dir : null}
+                    onOrdenar={(d) => ordenarStockPor('gestor', d)}
+                    filtro={filtrosStock.gestor}
+                    onFiltrar={(f) => filtrarStockPor('gestor', f)}
+                  />
                   <ThFiltro label={t('stock.colDisponible')} align="right" tipo="numero" ordenActivo={ordenStock?.campo === 'disponible' ? ordenStock.dir : null} onOrdenar={(d) => ordenarStockPor('disponible', d)} filtro={filtrosStock.disponible} onFiltrar={(f) => filtrarStockPor('disponible', f)} />
                   <ThFiltro label={t('stock.colEnCamino')} align="right" tipo="numero" ordenActivo={ordenStock?.campo === 'transito_entrante' ? ordenStock.dir : null} onOrdenar={(d) => ordenarStockPor('transito_entrante', d)} filtro={filtrosStock.transito} onFiltrar={(f) => filtrarStockPor('transito', f)} />
                   <ThFiltro label={t('stock.colEnCalle')} align="right" tipo="numero" ordenActivo={ordenStock?.campo === 'en_calle' ? ordenStock.dir : null} onOrdenar={(d) => ordenarStockPor('en_calle', d)} filtro={filtrosStock.enCalle} onFiltrar={(f) => filtrarStockPor('enCalle', f)} />
@@ -172,6 +167,7 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
                           {s.centro_nombre}
                         </button>
                       </td>
+                      <td className="px-3 py-2 text-xs text-ink-muted">{s.gestor ?? '—'}</td>
                       <td className={`px-3 py-2 text-right font-mono font-semibold ${s.disponible < 0 ? 'text-danger' : ''}`}>{s.disponible}</td>
                       <td className="px-3 py-2 text-right font-mono text-ink-muted">{s.transito_entrante || '—'}</td>
                       <td className="px-3 py-2 text-right font-mono text-ink-muted">{s.en_calle || '—'}</td>

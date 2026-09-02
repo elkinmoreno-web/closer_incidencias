@@ -5,14 +5,12 @@ import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
 import { getAdminActual } from '@/lib/supabase/server';
+import { CORREOS_ACCESO_STOCK_TEMPORAL } from '@/lib/utils';
 
 export default async function StockPage() {
-  // TEMPORAL: Stock sigue en pruebas — acceso restringido a este
-  // correo mientras se valida en producción. Quitar este bloque
-  // cuando esté listo para todo el equipo (el control de acceso por
-  // rol de siempre ya lo aplica el layout/Sidebar aparte).
+  // TEMPORAL: ver CORREOS_ACCESO_STOCK_TEMPORAL en lib/utils.ts.
   const admin = await getAdminActual();
-  if (admin?.email !== 'elkin.moreno@closerlogistics.com') redirect('/dashboard');
+  if (!admin?.email || !CORREOS_ACCESO_STOCK_TEMPORAL.includes(admin.email)) redirect('/dashboard');
 
   const t = crearTraductor(await resolverIdioma());
   const [materiales, zona] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona()]);

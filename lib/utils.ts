@@ -265,3 +265,14 @@ export function normalizarNombreCentro(s: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/**
+ * TEMPORAL: Stock sigue en pruebas — acceso restringido a estos
+ * correos mientras se valida en producción. Se usa desde
+ * components/dashboard/Sidebar.tsx (para ocultar el ítem del menú) y
+ * app/dashboard/stock/page.tsx (para bloquear la URL directa) — una
+ * sola lista, no duplicada en los dos archivos. Quitar/vaciar esta
+ * lista cuando Stock esté listo para todo el equipo (el control de
+ * acceso por rol de siempre lo sigue aplicando el layout/Sidebar aparte).
+ */
+export const CORREOS_ACCESO_STOCK_TEMPORAL = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com', 'nicolas.correa@closerlogistics.com'];

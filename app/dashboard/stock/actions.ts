@@ -52,24 +52,16 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
     .select('centro_origen_id, centro_destino_id, unidades, talla_m, talla_l, talla_xl, talla_xxl, tipo_clave, created_at, estado_transito, unidades_recibidas, stock_tipos_movimiento(resta_origen, suma_destino, clase)')
     .eq('material_id', materialId);
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre, ciudad_id').order('nombre');
+  const { data: centros } = await supabase.from('centros').select('id, nombre, ciudad_id, gestor_carpeta').order('nombre');
   const nombrePorCentro = new Map((centros ?? []).map((c) => [c.id, c.nombre]));
 
-  // Los gestores de un centro son los admins/moderadores que tienen la
-  // CIUDAD de ese centro asignada en admin_ciudades — el mismo dato
-  // que ya rige los permisos por zona en el resto del CRM. Se guardan
-  // como LISTA de usuarios individuales (no un texto combinado como
-  // "Paty / Didier"), para poder filtrar por cada uno por separado.
-  const { data: asignaciones } = await supabase.from('admin_ciudades').select('ciudad_id, admins(usuario)');
-  const gestoresPorCiudad = new Map<number, string[]>();
-  for (const a of asignaciones ?? []) {
-    const usuario = (a.admins as unknown as { usuario: string } | null)?.usuario;
-    if (!usuario) continue;
-    const lista = gestoresPorCiudad.get(a.ciudad_id) ?? [];
-    lista.push(usuario);
-    gestoresPorCiudad.set(a.ciudad_id, lista);
-  }
-  const gestoresPorCentro = new Map((centros ?? []).map((c) => [c.id, c.ciudad_id ? (gestoresPorCiudad.get(c.ciudad_id) ?? []) : []]));
+  // El "gestor" que se muestra/filtra en Stock es el texto tal cual
+  // vino del CSV de inventario original (ej. "Paty/Didier"), guardado
+  // en centros.gestor_carpeta — decisión explícita del usuario:
+  // mantenerlo así, distinto del admin real asignado por
+  // admin_ciudades (que sigue rigiendo los permisos de zona en el
+  // resto del CRM, pero no es lo que se ve aquí).
+  const gestorPorCentro = new Map((centros ?? []).map((c) => [c.id, c.gestor_carpeta]));
 
   const { data: parametrosRow } = await supabase.from('stock_parametros').select('*').eq('id', 1).maybeSingle();
   const ventanaConsumoDias = parametrosRow?.ventana_consumo_dias ?? 28;
@@ -83,7 +75,7 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
         material_id: materialId,
         centro_id: centroId,
         centro_nombre: nombrePorCentro.get(centroId) ?? '—',
-        gestores: gestoresPorCentro.get(centroId) ?? [],
+        gestor: gestorPorCentro.get(centroId) ?? null,
         disponible: 0,
         transito_entrante: 0,
         transito_saliente: 0,
@@ -461,10 +453,15 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
       const tallaXl = fila.tallaXl ?? 0;
       const tallaXxl = fila.tallaXxl ?? 0;
       const disponible = tallaM || tallaL || tallaXl || tallaXxl ? tallaM + tallaL + tallaXl + tallaXxl : fila.cantidad;
-      const enTransito = fila.enTransito ?? 0;
-      const entregadas = fila.entregadas ?? 0;
-      const rotas = fila.rotas ?? 0;
-      const noRecuperadas = fila.noRecuperadas ?? 0;
+      // Los 4 contadores del CSV se fuerzan a no-negativos: un valor
+      // negativo aquí (ej. "noRecuperadas: -1", visto en datos reales
+      // migrados) es un error de captura del sistema anterior, no un
+      // caso de negocio válido — a diferencia de un Ajuste manual
+      // hecho a propósito desde el panel, que sí puede ser negativo.
+      const enTransito = Math.max(0, fila.enTransito ?? 0);
+      const entregadas = Math.max(0, fila.entregadas ?? 0);
+      const rotas = Math.max(0, fila.rotas ?? 0);
+      const noRecuperadas = Math.max(0, fila.noRecuperadas ?? 0);
 
       if (!disponible && !enTransito && !entregadas && !rotas && !noRecuperadas) {
         filasIgnoradas++;
@@ -495,6 +492,10 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
           tipo_clave: 'TRANSITO_MIGRADO',
           centro_destino_id: centroId,
           unidades: enTransito,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
           notas: NOTA + ' (en tránsito)',
           admin_id: yo.id,
         });
@@ -505,6 +506,10 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
           tipo_clave: 'ENTREGA_RIDER',
           centro_origen_id: centroId,
           unidades: entregadas,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
           notas: NOTA + ' (entregado a riders)',
           admin_id: yo.id,
         });
@@ -515,6 +520,10 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
           tipo_clave: 'DEVOLUCION_ROTA',
           centro_origen_id: centroId,
           unidades: rotas,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
           notas: NOTA + ' (roto)',
           admin_id: yo.id,
         });
@@ -525,6 +534,10 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
           tipo_clave: 'NO_RECUPERADA',
           centro_origen_id: centroId,
           unidades: noRecuperadas,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
           notas: NOTA + ' (no recuperado)',
           admin_id: yo.id,
         });

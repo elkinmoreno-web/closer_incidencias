@@ -224,17 +224,34 @@ export interface RegistrarMovimientoInput {
   tipoClave: string;
   centroOrigenId?: number | null;
   centroDestinoId?: number | null;
-  cantidad?: number; // materiales sin tallas
+  cantidad?: number; // materiales sin tallas, cuando el tipo NO usa cajas (modo simple)
+  cajas?: number; // solo para tipos con esCajas (Entrada de proveedor, Envío a centro) — se multiplica por uds_por_caja del material
+  sueltas?: number; // unidades sueltas adicionales, junto a las cajas, mismo tipo
   tallaM?: number;
   tallaL?: number;
   tallaXl?: number;
   tallaXxl?: number;
+  // Con tallas + modo cajas: cajas y sueltas van desglosados por talla (mismo criterio que _stkRegistrar del sistema anterior).
+  cajaTallaM?: number;
+  cajaTallaL?: number;
+  cajaTallaXl?: number;
+  cajaTallaXxl?: number;
+  sueltaTallaM?: number;
+  sueltaTallaL?: number;
+  sueltaTallaXl?: number;
+  sueltaTallaXxl?: number;
   riderId?: string | null;
   riderNombreLibre?: string | null;
   notas?: string;
 }
 
 export type RegistrarMovimientoState = { error: string } | { success: true } | undefined;
+
+// Solo estos dos tipos manejan "cajas + unidades sueltas" — portado
+// literal de esCajas en _stkRegistrar() del sistema de Sheets. El
+// resto de movimientos (entrega a rider, devoluciones, traspasos...)
+// sigue usando cantidad simple en unidades.
+const TIPOS_CON_CAJAS = new Set(['ENTRADA_PROVEEDOR', 'ENVIO_SUCURSAL']);
 
 /**
  * Registra un movimiento nuevo en el ledger. Reglas mínimas portadas
@@ -260,23 +277,56 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
     const { data: material } = await supabase.from('stock_materiales').select('*').eq('id', input.materialId).maybeSingle();
     if (!material) return { error: 'Material no reconocido.' };
 
+    const esModoCajas = TIPOS_CON_CAJAS.has(input.tipoClave);
+
     let unidades = 0;
+    let cajasTotales = 0;
     let tallaM = 0;
     let tallaL = 0;
     let tallaXl = 0;
     let tallaXxl = 0;
 
     if (material.tiene_tallas) {
-      tallaM = Math.max(0, input.tallaM ?? 0);
-      tallaL = Math.max(0, input.tallaL ?? 0);
-      tallaXl = Math.max(0, input.tallaXl ?? 0);
-      tallaXxl = Math.max(0, input.tallaXxl ?? 0);
+      if (esModoCajas) {
+        // Cada talla puede llegar en cajas completas + sueltas, igual que _stkRegistrar: uds = cajas * udsPorCaja + sueltas, por cada talla.
+        const cajaM = Math.max(0, input.cajaTallaM ?? 0);
+        const cajaL = Math.max(0, input.cajaTallaL ?? 0);
+        const cajaXl = Math.max(0, input.cajaTallaXl ?? 0);
+        const cajaXxl = Math.max(0, input.cajaTallaXxl ?? 0);
+        const sueltaM = Math.max(0, input.sueltaTallaM ?? 0);
+        const sueltaL = Math.max(0, input.sueltaTallaL ?? 0);
+        const sueltaXl = Math.max(0, input.sueltaTallaXl ?? 0);
+        const sueltaXxl = Math.max(0, input.sueltaTallaXxl ?? 0);
+        cajasTotales = cajaM + cajaL + cajaXl + cajaXxl;
+        tallaM = cajaM * material.uds_por_caja + sueltaM;
+        tallaL = cajaL * material.uds_por_caja + sueltaL;
+        tallaXl = cajaXl * material.uds_por_caja + sueltaXl;
+        tallaXxl = cajaXxl * material.uds_por_caja + sueltaXxl;
+      } else {
+        tallaM = Math.max(0, input.tallaM ?? 0);
+        tallaL = Math.max(0, input.tallaL ?? 0);
+        tallaXl = Math.max(0, input.tallaXl ?? 0);
+        tallaXxl = Math.max(0, input.tallaXxl ?? 0);
+      }
       unidades = tallaM + tallaL + tallaXl + tallaXxl;
+    } else if (esModoCajas) {
+      cajasTotales = Math.max(0, input.cajas ?? 0);
+      const sueltas = Math.max(0, input.sueltas ?? 0);
+      unidades = cajasTotales * material.uds_por_caja + sueltas;
     } else {
-      unidades = Math.max(0, input.cantidad ?? 0);
+      // AJUSTE_MANUAL permite valores NEGATIVOS a propósito — es el
+      // único tipo pensado para corregir un descuadre "quitando"
+      // stock, no solo añadiendo (portado literal de
+      // _stkRegistrar: unidades = _stkNum(p.cantidad), sin forzar
+      // mínimo 0). El resto de tipos simples sí exige cantidad positiva.
+      unidades = tipo.clase === 'ajuste' ? Number(input.cantidad ?? 0) : Math.max(0, input.cantidad ?? 0);
     }
 
-    if (unidades === 0) return { error: 'La cantidad no puede ser 0.' };
+    // Los tipos "neutro" (ej. RIDER_YA_TIENE_SOPORTE) son puramente
+    // informativos — no mueven stock, así que no tiene sentido
+    // exigirles una cantidad distinta de 0. Portado literal de
+    // _stkRegistrar: "if (regla.clase !== 'neutro' && ... && unidades === 0)".
+    if (tipo.clase !== 'neutro' && unidades === 0) return { error: 'La cantidad no puede ser 0.' };
 
     // Los traslados entre centros no se dan por recibidos al instante
     // — quedan "en tránsito" (restan del origen, no suman al destino
@@ -291,6 +341,7 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
       tipo_clave: input.tipoClave,
       centro_origen_id: input.centroOrigenId ?? null,
       centro_destino_id: input.centroDestinoId ?? null,
+      cajas: cajasTotales,
       unidades,
       talla_m: tallaM,
       talla_l: tallaL,

@@ -49,7 +49,7 @@ export function Sidebar({
   // filtro por rol de siempre) cuando Stock esté listo para todo el
   // equipo.
   const items = NAV.filter((item) => {
-    if (item.href === '/dashboard/stock' && email !== 'elkin.moreno@closerlogistics.com') return false;
+    if (item.href === '/dashboard/stock' && email !== 'elkin.moreno@closerlogistics.com' && email !== 'rodrigo.heredero@closerlogistics.com') return false;
     return (item.roles as readonly string[]).includes(rol);
   });
 

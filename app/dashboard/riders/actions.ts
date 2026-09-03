@@ -256,13 +256,15 @@ async function conConcurrencia<T, R>(items: T[], limite: number, tarea: (item: T
  * cliente llama a esto varias veces en trozos, para no agotar el tiempo
  * máximo de una función serverless con el archivo completo de golpe.
  */
-export async function importarRidersLote(filas: FilaImportacion[]): Promise<ResultadoImportacionLote> {
-  try {
-    await assertAdmin();
-  } catch (e) {
-    return { creados: 0, actualizados: 0, errores: [mensajeError(e)], sinCentro: [] };
-  }
-
+/**
+ * Lógica real de importación por lote — SIN verificación de sesión,
+ * para poder reutilizarla también desde el cron de sincronización
+ * diaria de Riders (app/api/cron/riders-sheets/route.ts), que corre
+ * sin sesión de usuario (con service role). El uso normal desde el
+ * panel pasa por importarRidersLote() más abajo, que sí exige sesión
+ * antes de llamar a esta.
+ */
+async function importarRidersLoteInterno(filas: FilaImportacion[]): Promise<ResultadoImportacionLote> {
   const admin = createAdminClient();
   const errores: string[] = [];
   const sinCentro: string[] = [];
@@ -518,6 +520,18 @@ export async function importarRidersLote(filas: FilaImportacion[]): Promise<Resu
  * como "ya existentes" y nunca tocó su contraseña). Requiere super_admin
  * por lo disruptivo que es: cambia el acceso de todo el mundo de golpe.
  */
+export { importarRidersLoteInterno };
+
+/** Uso normal desde el panel — exige sesión de admin antes de delegar a la lógica real. */
+export async function importarRidersLote(filas: FilaImportacion[]): Promise<ResultadoImportacionLote> {
+  try {
+    await assertAdmin();
+  } catch (e) {
+    return { creados: 0, actualizados: 0, errores: [mensajeError(e)], sinCentro: [] };
+  }
+  return importarRidersLoteInterno(filas);
+}
+
 export async function recalcularTodasLasPasswords(): Promise<{ ok: boolean; actualizados: number; errores: string[] }> {
   const supabase = createClient();
   const {

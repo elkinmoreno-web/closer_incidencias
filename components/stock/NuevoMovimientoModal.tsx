@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { X, ChevronLeft, Package, ArrowRight, Check } from 'lucide-react';
 import { registrarMovimientoStock } from '@/app/dashboard/stock/actions';
 import type { StockMaterial, StockTipoMovimiento, Centro } from '@/lib/types';
@@ -70,6 +70,33 @@ export function NuevoMovimientoModal({
   const [riderElegido, setRiderElegido] = useState<RiderResultado | null>(null);
   const [notas, setNotas] = useState('');
   const [usaCorreos, setUsaCorreos] = useState(false);
+  const contenidoRef = useRef<HTMLDivElement>(null);
+
+  // Se llama al cambiar de material o de tipo de movimiento — sin
+  // esto, un valor escrito para un material CON tallas (ej.
+  // Chubasqueros) quedaba "pegado" en el estado aunque la UI ya
+  // mostrara el formulario de otro material SIN tallas (ej.
+  // Mochilas), y se enviaba igual en el payload aunque invisible —
+  // causa real confirmada del bug donde el movimiento no se
+  // registraba (el backend ignora esos campos fantasma porque decide
+  // por material.tiene_tallas real, así que la cantidad quedaba en 0).
+  function resetearCantidades() {
+    setCantidad('');
+    setCajas('');
+    setSueltas('');
+    setTallaM('');
+    setTallaL('');
+    setTallaXl('');
+    setTallaXxl('');
+    setCajaTallaM('');
+    setCajaTallaL('');
+    setCajaTallaXl('');
+    setCajaTallaXxl('');
+    setSueltaTallaM('');
+    setSueltaTallaL('');
+    setSueltaTallaXl('');
+    setSueltaTallaXxl('');
+  }
 
   const materialSeleccionado = materiales.find((m) => m.id === materialId) ?? material;
   const tipo = tipos.find((tp) => tp.clave === tipoClave);
@@ -167,7 +194,7 @@ export function NuevoMovimientoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={contenidoRef} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Cabecera con indicador de pasos */}
         <div className="border-b border-border px-6 py-4">
           <div className="mb-3 flex items-center justify-between">
@@ -205,7 +232,10 @@ export function NuevoMovimientoModal({
                   {materiales.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => setMaterialId(m.id)}
+                      onClick={() => {
+                        setMaterialId(m.id);
+                        resetearCantidades();
+                      }}
                       className={`flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-xs font-medium transition ${
                         materialId === m.id ? 'border-primary bg-primary/5 text-primary' : 'border-border text-ink-muted hover:border-primary/40'
                       }`}
@@ -223,7 +253,17 @@ export function NuevoMovimientoModal({
                   {tipos.map((tp) => (
                     <button
                       key={tp.clave}
-                      onClick={() => setTipoClave(tp.clave)}
+                      onClick={() => {
+                        setTipoClave(tp.clave);
+                        resetearCantidades();
+                        // Scroll automático al pie del modal — la lista
+                        // de tipos es larga (11 opciones) y sin esto el
+                        // usuario tenía que buscar manualmente el botón
+                        // "Detalle" más abajo después de elegir.
+                        requestAnimationFrame(() => {
+                          contenidoRef.current?.scrollTo({ top: contenidoRef.current.scrollHeight, behavior: 'smooth' });
+                        });
+                      }}
                       className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left text-sm font-medium transition ${
                         tipoClave === tp.clave ? 'border-primary bg-primary/5 text-primary' : 'border-border text-ink hover:border-primary/40'
                       }`}

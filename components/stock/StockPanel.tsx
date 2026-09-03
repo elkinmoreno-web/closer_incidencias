@@ -172,7 +172,7 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
 
           {material && pestana === 'stock' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <StockResumenTab stock={stock} material={material} />)}
 
-          {pestana === 'solicitudes' && <SolicitudesTab />}
+          {material && pestana === 'solicitudes' && <SolicitudesTab materialId={material.id} />}
 
           {material && pestana === 'historial' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <HistorialTab movimientos={movimientos} />)}
         </>
@@ -185,9 +185,16 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
           tipos={tipos}
           centros={centros}
           onCerrar={() => setModalAbierto(false)}
-          onRegistrado={() => {
+          onRegistrado={(materialIdUsado) => {
             setModalAbierto(false);
-            if (materialActivo !== null) recargar(materialActivo);
+            // Recarga el material REALMENTE usado en el registro, que
+            // puede ser distinto del que estaba activo en la pestaña
+            // principal si el usuario cambió de material dentro del
+            // propio modal (Paso 1) — sin esto, el historial se
+            // refrescaba del material equivocado y parecía que el
+            // movimiento nunca se había guardado.
+            setSeleccion(String(materialIdUsado));
+            recargar(materialIdUsado);
           }}
         />
       )}

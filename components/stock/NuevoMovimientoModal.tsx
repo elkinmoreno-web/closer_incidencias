@@ -40,11 +40,12 @@ export function NuevoMovimientoModal({
   tipos: StockTipoMovimiento[];
   centros: Centro[];
   onCerrar: () => void;
-  onRegistrado: () => void;
+  onRegistrado: (materialId: number) => void;
 }) {
   const { t, idioma } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [avisoNegativo, setAvisoNegativo] = useState<{ disponibleActual: number; quedariaEn: number } | null>(null);
   const [paso, setPaso] = useState<Paso>('tipo');
 
   const [materialId, setMaterialId] = useState(material.id);
@@ -154,7 +155,7 @@ export function NuevoMovimientoModal({
     return totalUnidades > 0;
   }
 
-  function guardar() {
+  function guardar(confirmarNegativo = false) {
     setError(null);
     startTransition(async () => {
       const res = await registrarMovimientoStock({
@@ -180,12 +181,17 @@ export function NuevoMovimientoModal({
         riderId: riderElegido?.id ?? null,
         riderNombreLibre: riderElegido ? riderElegido.nombre : riderNombreLibre,
         notas: tipo?.clave === 'ENVIO_MENSAJERIA' && usaCorreos ? `[Correos] ${notas}`.trim() : notas,
+        confirmarNegativo,
       });
       if (res && 'error' in res) {
         setError(res.error);
         return;
       }
-      onRegistrado();
+      if (res && 'requiereConfirmacion' in res) {
+        setAvisoNegativo({ disponibleActual: res.disponibleActual, quedariaEn: res.quedariaEn });
+        return;
+      }
+      onRegistrado(materialId);
     });
   }
 
@@ -435,6 +441,26 @@ export function NuevoMovimientoModal({
                   <div className="flex justify-between border-t border-border pt-2"><dt className="font-semibold text-ink">{t('stock.totalUnidades')}</dt><dd className="font-mono text-lg font-bold text-primary">{totalUnidades}</dd></div>
                 </dl>
               </div>
+              {avisoNegativo && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-semibold">{t('stock.avisoNegativoTitulo')}</p>
+                  <p className="mt-1">
+                    {t('stock.avisoNegativoDetalle')
+                      .replace('{actual}', String(avisoNegativo.disponibleActual))
+                      .replace('{final}', String(avisoNegativo.quedariaEn))}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setAvisoNegativo(null);
+                      guardar(true);
+                    }}
+                    disabled={pending}
+                    className="mt-2 rounded-full bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    {t('stock.confirmarIgualmente')}
+                  </button>
+                </div>
+              )}
               {error && <p className="text-sm font-medium text-danger">{error}</p>}
             </div>
           )}
@@ -471,7 +497,7 @@ export function NuevoMovimientoModal({
             </button>
           )}
           {paso === 'confirmar' && (
-            <button onClick={guardar} disabled={pending} className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            <button onClick={() => guardar()} disabled={pending} className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {pending ? t('stock.guardando') : t('stock.registrar')}
             </button>
           )}

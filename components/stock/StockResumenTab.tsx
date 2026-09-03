@@ -7,11 +7,11 @@ import { KpiCards } from '@/components/stock/KpiCards';
 import { FichaCentroModal } from '@/components/stock/FichaCentroModal';
 import { ThFiltro, cumpleFiltroTexto, cumpleFiltroNumero, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
-import { ETIQUETA_SEMAFORO, ORDEN_URGENCIA_SEMAFORO } from '@/lib/stockSemaforo';
+import { ORDEN_URGENCIA_SEMAFORO } from '@/lib/stockSemaforo';
 import { ExportarCsvButton } from '@/components/stock/ExportarCsvButton';
 
 export function StockResumenTab({ stock, material }: { stock: StockDisponible[]; material: StockMaterial }) {
-  const { t, idioma } = useIdioma();
+  const { t } = useIdioma();
   const [fichaAbierta, setFichaAbierta] = useState<StockDisponible | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
@@ -154,12 +154,10 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
                   <ThFiltro label={t('stock.colMerma')} align="right" tipo="numero" ordenActivo={ordenStock?.campo === 'merma' ? ordenStock.dir : null} onOrdenar={(d) => ordenarStockPor('merma', d)} filtro={filtrosStock.merma} onFiltrar={(f) => filtrarStockPor('merma', f)} />
                   <ThFiltro label={t('stock.colPerdida')} align="right" tipo="numero" ordenActivo={ordenStock?.campo === 'perdida' ? ordenStock.dir : null} onOrdenar={(d) => ordenarStockPor('perdida', d)} filtro={filtrosStock.perdida} onFiltrar={(f) => filtrarStockPor('perdida', f)} />
                   {material.tiene_tallas && <th className="px-3 py-2 text-right">{t('stock.colTallas')}</th>}
-                  <th className="px-3 py-2">{t('stock.colEstado')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {stockFiltrado.map((s) => {
-                  const et = s.semaforo ? ETIQUETA_SEMAFORO[s.semaforo] : null;
                   return (
                     <tr key={s.centro_id} className={s.semaforo === 'NEGATIVO' || s.semaforo === 'ROTURA' || s.semaforo === 'CRITICO' ? 'bg-red-50/40' : ''}>
                       <td className="px-3 py-2">
@@ -178,9 +176,6 @@ export function StockResumenTab({ stock, material }: { stock: StockDisponible[];
                           {s.talla_m} / {s.talla_l} / {s.talla_xl} / {s.talla_xxl}
                         </td>
                       )}
-                      <td className="px-3 py-2">
-                        {et && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${et.color}`}>{idioma === 'en' ? et.en : et.es}</span>}
-                      </td>
                     </tr>
                   );
                 })}

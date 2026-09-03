@@ -235,9 +235,20 @@ export interface RegistrarMovimientoInput {
   riderId?: string | null;
   riderNombreLibre?: string | null;
   notas?: string;
+  // Si la operación va a dejar el disponible del centro origen en
+  // negativo, el backend no bloquea (solo AJUSTE_MANUAL puede
+  // corregir descuadres, pero cualquier salida puede quedarse sin
+  // stock real en el centro) — en su lugar, devuelve
+  // "requiereConfirmacion" con el saldo actual, y solo continúa si
+  // esta bandera viene en true (el usuario ya confirmó en el frontend).
+  confirmarNegativo?: boolean;
 }
 
-export type RegistrarMovimientoState = { error: string } | { success: true } | undefined;
+export type RegistrarMovimientoState =
+  | { error: string }
+  | { success: true }
+  | { requiereConfirmacion: true; disponibleActual: number; quedariaEn: number }
+  | undefined;
 
 // Solo estos dos tipos manejan "cajas + unidades sueltas" — portado
 // literal de esCajas en _stkRegistrar() del sistema de Sheets. El
@@ -327,6 +338,37 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
     // (entrada de proveedor, entrega a rider, devolución...) sigue
     // siendo instantáneo, igual que antes.
     const esTraslado = tipo.clase === 'traslado';
+
+    // Aviso (no bloqueo) si la operación va a dejar el disponible del
+    // centro origen en negativo — confirmado explícitamente que el
+    // sistema debe avisar con una confirmación, no impedir el
+    // registro (hay casos reales donde se envía primero y se
+    // regulariza después). Solo aplica cuando el tipo REALMENTE resta
+    // del origen (regla.resta_origen true — se define un poco más abajo
+    // junto al resto de reglas, pero aquí se repite la comprobación
+    // mínima porque el catálogo completo se consulta después del insert
+    // en otras funciones; para evitar una consulta extra redundante,
+    // se usa directamente el tipo.clase, que ya distingue salida/traslado/entrada).
+    if (input.centroOrigenId && !input.confirmarNegativo && (tipo.clase === 'salida' || esTraslado)) {
+      const { data: movimientosOrigen } = await supabase
+        .from('stock_movimientos')
+        .select('unidades, centro_origen_id, centro_destino_id, tipo_clave, estado_transito, stock_tipos_movimiento(resta_origen, suma_destino)')
+        .eq('material_id', input.materialId)
+        .or(`centro_origen_id.eq.${input.centroOrigenId},centro_destino_id.eq.${input.centroOrigenId}`);
+
+      let disponibleActual = 0;
+      for (const m of movimientosOrigen ?? []) {
+        const regla = m.stock_tipos_movimiento as unknown as { resta_origen: boolean | null; suma_destino: boolean } | null;
+        if (!regla) continue;
+        if (regla.resta_origen === true && m.centro_origen_id === input.centroOrigenId) disponibleActual -= m.unidades;
+        if (regla.suma_destino && m.centro_destino_id === input.centroOrigenId && m.estado_transito !== 'en_transito') disponibleActual += m.unidades;
+      }
+
+      const quedariaEn = disponibleActual - unidades;
+      if (quedariaEn < 0) {
+        return { requiereConfirmacion: true, disponibleActual, quedariaEn };
+      }
+    }
 
     const { error } = await supabase.from('stock_movimientos').insert({
       material_id: input.materialId,
@@ -734,14 +776,15 @@ export async function listarFichasRecientes(limite = 30): Promise<(StockFicha & 
  * admin actual (por origen o destino), así que no hace falta volver a
  * filtrar aquí.
  */
-export async function listarTrasladosPendientes(): Promise<
-  (StockMovimiento & { material_titulo: string; material_titulo_en: string | null; centro_origen_nombre: string | null; centro_destino_nombre: string | null })[]
+export async function listarTrasladosPendientes(materialId: number): Promise<
+  (StockMovimiento & { material_titulo: string; material_titulo_en: string | null; centro_origen_nombre: string | null; centro_destino_nombre: string | null; admin_usuario: string | null })[]
 > {
   const { supabase } = await assertAdmin();
   const { data } = await supabase
     .from('stock_movimientos')
-    .select('*, stock_materiales(titulo, titulo_en), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre)')
+    .select('*, stock_materiales(titulo, titulo_en), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins(usuario)')
     .eq('estado_transito', 'en_transito')
+    .eq('material_id', materialId)
     .order('created_at', { ascending: false });
 
   return (data ?? []).map((m: any) => ({
@@ -750,6 +793,7 @@ export async function listarTrasladosPendientes(): Promise<
     material_titulo_en: m.stock_materiales?.titulo_en ?? null,
     centro_origen_nombre: m.origen?.nombre ?? null,
     centro_destino_nombre: m.destino?.nombre ?? null,
+    admin_usuario: m.admins?.usuario ?? null,
   }));
 }
 

@@ -796,12 +796,13 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFirma.limpiar': 'Clear signature',
 
   // Ficha de entrega/devolución con firma
-  'stockFicha.boton': 'New signed slip',
+  'stockFicha.boton': 'New slip',
   'stockFicha.tituloModal': 'Delivery / return slip',
   'stockFicha.rider': 'Rider',
   'stockFicha.centro': 'Center',
   'stockFicha.estadoFicha': 'Slip type',
   'stockFicha.asignacion': 'Assignment (delivery)',
+  'stockFicha.asignacionCorta': 'Assigned',
   'stockFicha.devolucionOk': 'Returned in good condition',
   'stockFicha.devolucionMal': 'Returned in bad condition',
   'stockFicha.itemLabel': 'Material',
@@ -814,7 +815,7 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFicha.anadirMaterial': 'Add material',
   'stockFicha.quitarMaterial': 'Remove',
   'stockFicha.observacionesMaterial': 'Notes (optional)',
-  'stockFicha.firmaDelRider': "Rider's signature",
+  'stockFicha.firmaDelRider': "Rider's signature (optional)",
   'stockFicha.faltaRider': 'Choose a rider or type their name and ID number.',
   'stockFicha.nombreManualPlaceholder': 'Full name',
   'stockFicha.dniManualPlaceholder': 'ID / passport number',

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { StockPanel } from '@/components/stock/StockPanel';
-import { listarMaterialesStock } from '@/app/dashboard/stock/actions';
+import { listarMaterialesStock, listarTodosLosCentros } from '@/app/dashboard/stock/actions';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
@@ -13,7 +13,7 @@ export default async function StockPage() {
   if (!admin?.email || !CORREOS_ACCESO_STOCK_TEMPORAL.includes(admin.email)) redirect('/dashboard');
 
   const t = crearTraductor(await resolverIdioma());
-  const [materiales, zona] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona()]);
+  const [materiales, zona, centrosTodos] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona(), listarTodosLosCentros()]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -21,7 +21,7 @@ export default async function StockPage() {
         <h1 className="text-2xl font-semibold text-ink">{t('stock.titulo')}</h1>
         <p className="text-sm text-ink-muted">{t('stock.subtitulo')}</p>
       </div>
-      <StockPanel materiales={materiales} centros={zona.centros} esSuperAdmin={zona.esSuperAdmin} />
+      <StockPanel materiales={materiales} centros={zona.centros} centrosTodos={centrosTodos} esSuperAdmin={zona.esSuperAdmin} />
     </div>
   );
 }

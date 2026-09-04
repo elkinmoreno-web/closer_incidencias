@@ -7,13 +7,22 @@ import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimien
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
 import { generarFichaDesdeGoogleDocs } from '@/lib/googleDocs';
 import { carpetaFichaPorGestor } from '@/lib/googleDrive';
-import { enviarCorreoGmail } from '@/lib/googleMail';
+import { enviarCorreoGmail, plantillaCorreoStock } from '@/lib/googleMail';
 
-// Mientras se valida el aviso de discrepancias (recién activado), solo
-// llega a este correo — cuando se confirme que funciona bien se suma
-// al resto del equipo (Rodrigo, Nicolás), igual que hacía el sistema
-// anterior mandándolo a STK_CFG.DEVS.
-const CORREOS_AVISO_DISCREPANCIA_RECEPCION = ['elkin.moreno@closerlogistics.com'];
+// TEMPORAL mientras Stock sigue en pruebas: todos los avisos llegan
+// solo a este correo. Cuando se confirme que el sistema funciona bien,
+// pasa a ser dinámico — a los admins/moderadores con la ciudad de
+// origen o destino asignada (admin_ciudades) + Rodrigo + Nicolás +
+// Elkin, igual que el correo llegaba a STK_CFG.DEVS en el sistema
+// anterior pero ahora por ciudad en vez de a un puñado fijo de gente.
+const CORREOS_AVISO_STOCK = ['elkin.moreno@closerlogistics.com'];
+
+// Tipos de movimiento cuyo registro dispara un aviso por correo —
+// pedido explícitamente: entradas/salidas "grandes" del almacén
+// (proveedor, envíos entre centros, mensajería) y recuperaciones de
+// robo. El resto (entrega a rider, devoluciones, ajustes menores) no
+// avisa para no saturar de correos por movimientos rutinarios.
+const TIPOS_NOTIFICABLES_AL_REGISTRAR = new Set(['ENTRADA_PROVEEDOR', 'ENVIO_SUCURSAL', 'TRASPASO_INTERNO', 'ENVIO_MENSAJERIA', 'RECUPERADA_ROBO']);
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -27,6 +36,23 @@ export async function listarMaterialesStock(): Promise<StockMaterial[]> {
   const { supabase } = await assertAdmin();
   const { data } = await supabase.from('stock_materiales').select('*').eq('activo', true).order('orden');
   return (data ?? []) as StockMaterial[];
+}
+
+/**
+ * Todos los centros activos, sin limitar a la zona del admin — a
+ * diferencia de ciudadesYCentrosDeMiZona() (usado para el resto del
+ * panel), el centro DESTINO de un movimiento de Stock puede ser
+ * cualquiera (ej. un envío de Madrid a Valencia), no solo los de tu
+ * propia zona. El centro ORIGEN sigue limitado a tu zona en el
+ * frontend (NuevoMovimientoModal) — RLS ya impide crear/ver
+ * movimientos donde ni origen ni destino sean tuyos, así que exponer
+ * aquí la lista completa de centros (solo id+nombre, sin datos
+ * sensibles) no abre ningún acceso nuevo.
+ */
+export async function listarTodosLosCentros(): Promise<{ id: number; nombre: string }[]> {
+  const { supabase } = await assertAdmin();
+  const { data } = await supabase.from('centros').select('id, nombre').eq('activo', true).order('nombre');
+  return data ?? [];
 }
 
 /** Catálogo de tipos de movimiento, para poblar el selector "Tipo de movimiento". */
@@ -405,6 +431,33 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
     });
 
     if (error) return { error: error.message };
+
+    // Aviso por correo para los tipos de movimiento "grandes" (entrada
+    // de proveedor, envíos entre centros, mensajería, recuperación de
+    // robo) — pedido explícito, para enterarse sin tener que estar
+    // mirando el panel. No debe romper el registro si el correo falla.
+    if (TIPOS_NOTIFICABLES_AL_REGISTRAR.has(input.tipoClave)) {
+      const [{ data: centroOrigen }, { data: centroDestino }] = await Promise.all([
+        input.centroOrigenId ? supabase.from('centros').select('nombre').eq('id', input.centroOrigenId).maybeSingle() : Promise.resolve({ data: null }),
+        input.centroDestinoId ? supabase.from('centros').select('nombre').eq('id', input.centroDestinoId).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const origenNombre = centroOrigen?.nombre ?? '—';
+      const destinoNombre = centroDestino?.nombre ?? '—';
+      enviarCorreoGmail(
+        CORREOS_AVISO_STOCK,
+        `📦 ${tipo.etiqueta} · ${material.titulo} · ${origenNombre} ➡️ ${destinoNombre}`,
+        plantillaCorreoStock({
+          titulo: `${tipo.etiqueta} registrado`,
+          filas: [
+            { etiqueta: 'Material', valor: material.titulo },
+            { etiqueta: 'Ruta', valor: `${origenNombre} ➡️ ${destinoNombre}` },
+            { etiqueta: 'Cantidad', valor: String(unidades) },
+            { etiqueta: 'Registrado por', valor: yo!.usuario },
+          ],
+          observaciones: input.notas?.trim() || null,
+        })
+      ).catch((e) => registrarError('registrarMovimientoStock:aviso', e));
+    }
 
     revalidatePath('/dashboard/stock');
     return { success: true };
@@ -914,19 +967,21 @@ export async function confirmarRecepcionTraslado(movimientoId: number, unidadesR
       const origenNombre = (mov as any).origen?.nombre ?? '—';
       const destinoNombre = (mov as any).destino?.nombre ?? '—';
       enviarCorreoGmail(
-        CORREOS_AVISO_DISCREPANCIA_RECEPCION,
+        CORREOS_AVISO_STOCK,
         `⚠️ Incidencia de recepción · ${materialTitulo} · ${origenNombre} ➡️ ${destinoNombre}`,
-        `<div style="font-family:sans-serif;padding:20px;color:#333;max-width:640px">
-          <h2 style="color:#D6402F;margin-top:0">⚠️ Diferencia al recepcionar ${materialTitulo}</h2>
-          <p>${yo!.usuario} ha recepcionado un envío con una cantidad distinta a la enviada.</p>
-          <div style="background:#FBE6E3;border-left:4px solid #D6402F;padding:12px;border-radius:4px">
-            <b>Ruta:</b> ${origenNombre} ➡️ ${destinoNombre}<br>
-            <b>Enviadas:</b> ${mov.unidades}<br><b>Contadas:</b> ${unidadesRecibidas}<br>
-            <b>Diferencia:</b> ${diferencia > 0 ? '+' : ''}${diferencia}
-          </div>
-          ${notasRecepcion ? `<p><b>Observaciones:</b> ${notasRecepcion.trim()}</p>` : ''}
-          <p style="font-size:11px;color:#888">Aviso automático del panel de stock.</p>
-        </div>`
+        plantillaCorreoStock({
+          titulo: `Diferencia al recepcionar ${materialTitulo}`,
+          colorAcento: '#E74C3C',
+          filas: [
+            { etiqueta: 'Ruta', valor: `${origenNombre} ➡️ ${destinoNombre}` },
+            { etiqueta: 'Recepcionado por', valor: yo!.usuario },
+            { etiqueta: 'Enviadas', valor: String(mov.unidades) },
+            { etiqueta: 'Contadas', valor: String(unidadesRecibidas) },
+          ],
+          notaDestacada: `Diferencia: ${diferencia > 0 ? '+' : ''}${diferencia} unidades`,
+          colorNotaDestacada: '#E74C3C',
+          observaciones: notasRecepcion?.trim() || null,
+        })
       ).catch((e) => registrarError('confirmarRecepcionTraslado:aviso', e));
     }
 

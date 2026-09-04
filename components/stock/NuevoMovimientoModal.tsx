@@ -37,13 +37,20 @@ export function NuevoMovimientoModal({
   materiales,
   tipos,
   centros,
+  centrosTodos,
   onCerrar,
   onRegistrado,
 }: {
   material: StockMaterial;
   materiales: StockMaterial[];
   tipos: StockTipoMovimiento[];
+  // Origen: limitado a los centros de tu zona (no puedes fingir que
+  // algo sale de un centro que no es tuyo). Destino: TODOS los centros
+  // activos — un traslado puede ir a cualquier ciudad (ej. Madrid →
+  // Valencia), y RLS ya permite ver/gestionar el movimiento a los
+  // admins de cualquiera de los dos extremos, no solo el origen.
   centros: Centro[];
+  centrosTodos: { id: number; nombre: string }[];
   onCerrar: () => void;
   onRegistrado: (materialId: number) => void;
 }) {
@@ -150,7 +157,7 @@ export function NuevoMovimientoModal({
     return num(sueltas);
   }, [modoCajas, materialSeleccionado, sueltas, sueltaTallaM, sueltaTallaL, sueltaTallaXl, sueltaTallaXxl]);
 
-  const nombreCentro = (id: string) => centros.find((c) => String(c.id) === id)?.nombre ?? '';
+  const nombreCentro = (id: string) => centrosTodos.find((c) => String(c.id) === id)?.nombre ?? centros.find((c) => String(c.id) === id)?.nombre ?? '';
 
   function puedeAvanzarDeDetalle(): boolean {
     if (tipo?.requiere_origen && !centroOrigenId) return false;
@@ -268,7 +275,7 @@ export function NuevoMovimientoModal({
                         setTipoClave(tp.clave);
                         resetearCantidades();
                         if (tp.clave === 'ENTRADA_PROVEEDOR' && !centroDestinoId) {
-                          const centroDefault = centros.find((c) => c.nombre === CENTRO_DEFAULT_ENTRADA_PROVEEDOR);
+                          const centroDefault = centrosTodos.find((c) => c.nombre === CENTRO_DEFAULT_ENTRADA_PROVEEDOR);
                           if (centroDefault) setCentroDestinoId(String(centroDefault.id));
                         }
                         // Scroll automático al pie del modal — la lista
@@ -320,7 +327,7 @@ export function NuevoMovimientoModal({
                       <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stock.centroDestino')}</label>
                       <select value={centroDestinoId} onChange={(e) => setCentroDestinoId(e.target.value)} className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none">
                         <option value="">{t('stock.selecciona')}</option>
-                        {centros.map((c) => (
+                        {centrosTodos.map((c) => (
                           <option key={c.id} value={c.id}>{c.nombre}</option>
                         ))}
                       </select>

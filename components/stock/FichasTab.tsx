@@ -13,14 +13,12 @@ import { ExportarCsvButton } from '@/components/stock/ExportarCsvButton';
 
 type FichaConNombres = StockFicha & { centro_nombre: string; admin_usuario: string | null };
 
-const ETIQUETA_MARCA: Record<string, string> = { asignacion: 'Asignación', devolucion_ok: 'Dev. OK', devolucion_mal: 'Dev. mal estado' };
-
-function resumenItems(f: FichaConNombres): string {
+function resumenItems(f: FichaConNombres, etiquetaMarca: Record<string, string>): string {
   return (f.items ?? [])
     .filter((it) => it.marca)
     .map((it) => {
       const def = ITEMS_FICHA_FIJOS.find((d) => d.clave === it.itemClave);
-      return `${def?.etiqueta ?? it.itemClave} (${ETIQUETA_MARCA[it.marca!] ?? it.marca})`;
+      return `${def?.etiqueta ?? it.itemClave} (${etiquetaMarca[it.marca!] ?? it.marca})`;
     })
     .join(', ');
 }
@@ -30,15 +28,25 @@ function marcasDeFicha(f: FichaConNombres): string[] {
   return Array.from(new Set((f.items ?? []).map((it) => it.marca).filter((m): m is NonNullable<typeof m> => !!m)));
 }
 
-const OPCIONES_ESTADO: [string, string][] = [
-  ['asignacion', 'Asignación'],
-  ['devolucion_ok', 'Devolución OK'],
-  ['devolucion_mal', 'Devolución rota'],
-];
-
 export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaConNombres[]; centros: Centro[]; onFichaGenerada: () => void }) {
   const [modalAbierto, setModalAbierto] = useState(false);
   const { t } = useIdioma();
+
+  // Traducidas (antes texto español fijo) — importante para Alemania,
+  // donde el panel se muestra en inglés.
+  const etiquetaMarca: Record<string, string> = useMemo(
+    () => ({
+      asignacion: t('stockFicha.asignacionCorta'),
+      devolucion_ok: t('stockFicha.devolucionOkCorta'),
+      devolucion_mal: t('stockFicha.devolucionMalCorta'),
+    }),
+    [t]
+  );
+  const opcionesEstado: [string, string][] = [
+    ['asignacion', t('stockFicha.asignacionCorta')],
+    ['devolucion_ok', t('stockFicha.devolucionOkCorta')],
+    ['devolucion_mal', t('stockFicha.devolucionMalCorta')],
+  ];
 
   const [filtrosFichas, setFiltrosFichas] = useState<Record<string, FiltroColumna>>({});
   const [ordenFichas, setOrdenFichas] = useState<{ campo: string; dir: DireccionOrden } | null>(null);
@@ -59,7 +67,7 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
       if (!cumpleFiltroTexto(f.rider_nombre, filtrosFichas.rider)) return false;
       if (!cumpleFiltroTexto(f.centro_nombre, filtrosFichas.centro)) return false;
       if (filtrosFichas.estado?.texto && !marcasDeFicha(f).includes(filtrosFichas.estado.texto)) return false;
-      if (!cumpleFiltroTexto(resumenItems(f), filtrosFichas.items)) return false;
+      if (!cumpleFiltroTexto(resumenItems(f, etiquetaMarca), filtrosFichas.items)) return false;
       if (!cumpleFiltroTexto(f.admin_usuario ?? '', filtrosFichas.registradaPor)) return false;
       return true;
     });
@@ -74,7 +82,7 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
       });
     }
     return filas;
-  }, [fichas, filtrosFichas, ordenFichas]);
+  }, [fichas, filtrosFichas, ordenFichas, etiquetaMarca]);
 
   return (
     <div className="rounded-card border border-border bg-surface p-5">
@@ -88,8 +96,8 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
               Rider: f.rider_nombre,
               DNI: f.rider_dni,
               Centro: f.centro_nombre,
-              Estado: marcasDeFicha(f).map((m) => ETIQUETA_MARCA[m]).join(' / '),
-              Materiales: resumenItems(f),
+              Estado: marcasDeFicha(f).map((m) => etiquetaMarca[m]).join(' / '),
+              Materiales: resumenItems(f, etiquetaMarca),
               'Registrada por': f.admin_usuario ?? '',
             }))}
           />
@@ -120,7 +128,7 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
                 <th className="px-3 py-2">{t('stockFichas.colFecha')}</th>
                 <ThFiltro label={t('stockFichas.colRider')} ordenActivo={ordenFichas?.campo === 'rider_nombre' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('rider_nombre', d)} filtro={filtrosFichas.rider} onFiltrar={(f) => filtrarFichasPor('rider', f)} />
                 <ThFiltro label={t('stockFichas.colCentro')} ordenActivo={ordenFichas?.campo === 'centro_nombre' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('centro_nombre', d)} filtro={filtrosFichas.centro} onFiltrar={(f) => filtrarFichasPor('centro', f)} />
-                <ThFiltro label={t('stockFichas.colEstado')} tipo="select" opciones={OPCIONES_ESTADO} ordenActivo={null} onOrdenar={() => {}} filtro={filtrosFichas.estado} onFiltrar={(f) => filtrarFichasPor('estado', f)} />
+                <ThFiltro label={t('stockFichas.colEstado')} tipo="select" opciones={opcionesEstado} ordenActivo={null} onOrdenar={() => {}} filtro={filtrosFichas.estado} onFiltrar={(f) => filtrarFichasPor('estado', f)} />
                 <ThFiltro label={t('stockFichas.colMateriales')} ordenActivo={ordenFichas?.campo === 'items' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('items', d)} filtro={filtrosFichas.items} onFiltrar={(f) => filtrarFichasPor('items', f)} />
                 <ThFiltro label={t('stockFichas.colRegistradaPor')} ordenActivo={ordenFichas?.campo === 'admin_usuario' ? ordenFichas.dir : null} onOrdenar={(d) => ordenarFichasPor('admin_usuario', d)} filtro={filtrosFichas.registradaPor} onFiltrar={(f) => filtrarFichasPor('registradaPor', f)} />
                 <th className="px-3 py-2">{t('stockFichas.colPdf')}</th>
@@ -134,8 +142,8 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
                     <td className="px-3 py-2 text-xs text-ink-muted">{formatFecha(f.created_at)}</td>
                     <td className="px-3 py-2 text-xs text-ink">{f.rider_nombre}</td>
                     <td className="px-3 py-2 text-xs text-ink-muted">{f.centro_nombre}</td>
-                    <td className="px-3 py-2 text-xs text-ink-muted">{marcasDeFicha(f).map((m) => ETIQUETA_MARCA[m]).join(' / ')}</td>
-                    <td className="px-3 py-2 text-xs text-ink-muted">{resumenItems(f)}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{marcasDeFicha(f).map((m) => etiquetaMarca[m]).join(' / ')}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{resumenItems(f, etiquetaMarca)}</td>
                     <td className="px-3 py-2 text-xs text-ink-muted">{f.admin_usuario ?? '—'}</td>
                     <td className="px-3 py-2 text-xs">
                       {url ? (

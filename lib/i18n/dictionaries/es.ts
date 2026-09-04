@@ -793,12 +793,13 @@ const es = {
   'stockFirma.limpiar': 'Borrar firma',
 
   // Ficha de entrega/devolución con firma
-  'stockFicha.boton': 'Nueva ficha con firma',
+  'stockFicha.boton': 'Nueva ficha',
   'stockFicha.tituloModal': 'Ficha de entrega / devolución',
   'stockFicha.rider': 'Rider',
   'stockFicha.centro': 'Centro',
   'stockFicha.estadoFicha': 'Tipo de ficha',
   'stockFicha.asignacion': 'Asignación (entrega)',
+  'stockFicha.asignacionCorta': 'Asignación',
   'stockFicha.devolucionOk': 'Devolución en buen estado',
   'stockFicha.devolucionMal': 'Devolución en mal estado',
   'stockFicha.itemLabel': 'Material',
@@ -811,7 +812,7 @@ const es = {
   'stockFicha.anadirMaterial': 'Añadir material',
   'stockFicha.quitarMaterial': 'Quitar',
   'stockFicha.observacionesMaterial': 'Observaciones (opcional)',
-  'stockFicha.firmaDelRider': 'Firma del rider',
+  'stockFicha.firmaDelRider': 'Firma del rider (opcional)',
   'stockFicha.faltaRider': 'Elige un rider o escribe su nombre y DNI/NIE.',
   'stockFicha.nombreManualPlaceholder': 'Nombre completo',
   'stockFicha.dniManualPlaceholder': 'DNI / NIE',

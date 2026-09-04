@@ -45,7 +45,17 @@ const CLAVE_FICHAS = '__fichas__';
  * se muestra directo su propio listado — no tiene esas 3 sub-pestañas
  * porque no es un material con stock por centro.
  */
-export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: StockMaterial[]; centros: Centro[]; esSuperAdmin: boolean }) {
+export function StockPanel({
+  materiales,
+  centros,
+  centrosTodos,
+  esSuperAdmin,
+}: {
+  materiales: StockMaterial[];
+  centros: Centro[];
+  centrosTodos: { id: number; nombre: string }[];
+  esSuperAdmin: boolean;
+}) {
   const { t, idioma } = useIdioma();
   const [seleccion, setSeleccion] = useState<string>(materiales[0] ? String(materiales[0].id) : CLAVE_FICHAS);
   const [pestana, setPestana] = useState<Pestana>('stock');
@@ -184,6 +194,7 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
           materiales={materiales}
           tipos={tipos}
           centros={centros}
+          centrosTodos={centrosTodos}
           onCerrar={() => setModalAbierto(false)}
           onRegistrado={(materialIdUsado) => {
             setModalAbierto(false);

@@ -677,6 +677,10 @@ const es = {
   'stock.colCantidad': 'Cantidad',
   'stock.colRider': 'Rider',
   'stock.colRegistradoPor': 'Registrado por',
+  'stock.colObservaciones': 'Observaciones',
+  'stock.estadoEnTransito': 'En tránsito',
+  'stock.estadoRecibido': 'Recibido',
+  'stock.estadoAnulado': 'Anulado',
   'stock.nuevoMovimiento': 'Nuevo movimiento',
   'stock.tipoMovimiento': 'Tipo de movimiento',
   'stock.material': 'Material',
@@ -864,6 +868,10 @@ const es = {
   'stockSolicitudes.recepcionGuardada': 'Recepción registrada correctamente.',
   'stockSolicitudes.cerrar': 'Cerrar',
   'stockSolicitudes.recibidoOk': 'Recepción confirmada.',
+  'stockSolicitudes.observacionesOpcional': 'Observaciones (opcional)',
+  'stockSolicitudes.observacionesPlaceholder': 'Ej: llegó una unidad rota, no llegó nada, etc.',
+  'stockSolicitudes.confirmarAnulacion': 'Confirmar anulación',
+  'stockSolicitudes.envio': 'Envío',
 } as const;
 
 export default es;

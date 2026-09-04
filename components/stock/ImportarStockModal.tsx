@@ -31,7 +31,7 @@ const PATRONES: Record<string, RegExp> = {
  * — el nombre de columna varía según el material (confirmado con
  * datos reales: Mochilas/Chubasqueros usan un formato, Soportes otro).
  */
-export function ImportarStockModal({ material }: { material: StockMaterial }) {
+export function ImportarStockModal({ material, onImportado }: { material: StockMaterial; onImportado?: () => void }) {
   const { t, idioma } = useIdioma();
   const [open, setOpen] = useState(false);
   const [fase, setFase] = useState<Fase>('inicial');
@@ -132,6 +132,12 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
       const res = await importarStockInicial(material.id, filas);
       setResultado(res);
       setFase('terminado');
+      // Sin esto, la tabla de Stock/Historial detrás del modal seguía
+      // mostrando los datos de antes de importar — parecía que "cerraba
+      // y no guardaba" aunque el resultado mostrado sí reportara
+      // movimientos creados (el problema era solo de refresco, no de
+      // guardado).
+      onImportado?.();
     } catch (e) {
       // Sin esto, si la Server Action lanza una excepción (ej. un
       // error 500 real de servidor), la fase se quedaba en

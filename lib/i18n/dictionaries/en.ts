@@ -680,6 +680,10 @@ const en: Record<ClaveTraduccion, string> = {
   'stock.colCantidad': 'Quantity',
   'stock.colRider': 'Rider',
   'stock.colRegistradoPor': 'Logged by',
+  'stock.colObservaciones': 'Notes',
+  'stock.estadoEnTransito': 'In transit',
+  'stock.estadoRecibido': 'Received',
+  'stock.estadoAnulado': 'Cancelled',
   'stock.nuevoMovimiento': 'New movement',
   'stock.tipoMovimiento': 'Movement type',
   'stock.material': 'Material',
@@ -867,6 +871,10 @@ const en: Record<ClaveTraduccion, string> = {
   'stockSolicitudes.recepcionGuardada': 'Arrival logged successfully.',
   'stockSolicitudes.cerrar': 'Close',
   'stockSolicitudes.recibidoOk': 'Arrival confirmed.',
+  'stockSolicitudes.observacionesOpcional': 'Notes (optional)',
+  'stockSolicitudes.observacionesPlaceholder': 'E.g: one unit arrived broken, nothing arrived, etc.',
+  'stockSolicitudes.confirmarAnulacion': 'Confirm cancellation',
+  'stockSolicitudes.envio': 'Shipment',
 };
 
 export default en;

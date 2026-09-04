@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import type { StockMovimiento } from '@/lib/types';
 import { ThFiltro, cumpleFiltroTexto, cumpleFiltroNumero, type DireccionOrden, type FiltroColumna } from '@/components/stock/ThFiltro';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
+import type { Traductor } from '@/lib/i18n/traducir';
 import { formatFecha } from '@/lib/utils';
 import { ExportarCsvButton } from '@/components/stock/ExportarCsvButton';
 
@@ -14,6 +15,23 @@ type MovimientoConNombres = StockMovimiento & {
   admin_usuario: string | null;
   tipo_etiqueta: string;
 };
+
+/** Texto de la columna Estado — solo los traslados tienen estado_transito; el resto de tipos queda en blanco (siempre "consumado" al registrarse). */
+function textoEstado(mv: MovimientoConNombres, t: Traductor): string | null {
+  if (mv.estado_transito === 'en_transito') return t('stock.estadoEnTransito');
+  if (mv.estado_transito === 'anulado') return t('stock.estadoAnulado');
+  if (mv.estado_transito === 'recibido') {
+    const dif = (mv.unidades_recibidas ?? mv.unidades) - mv.unidades;
+    if (dif === 0) return t('stock.estadoRecibido');
+    return `${t('stock.estadoRecibido')} (${dif > 0 ? '+' : ''}${dif})`;
+  }
+  return null;
+}
+
+/** Observaciones combinadas: las de creación (notas) y las añadidas al confirmar/anular el traslado (notas_recepcion) — mismo criterio que el sistema anterior, que las concatenaba en un único campo visible en el historial. */
+function textoObservaciones(mv: MovimientoConNombres): string {
+  return [mv.notas, mv.notas_recepcion].filter(Boolean).join(' · ');
+}
 
 export function HistorialTab({ movimientos }: { movimientos: MovimientoConNombres[] }) {
   const { t } = useIdioma();
@@ -69,6 +87,8 @@ export function HistorialTab({ movimientos }: { movimientos: MovimientoConNombre
             Cantidad: mv.unidades,
             Rider: mv.rider_nombre_libre ?? '',
             'Registrado por': mv.admin_usuario ?? '',
+            Estado: textoEstado(mv, t) ?? '',
+            Observaciones: textoObservaciones(mv),
           }))}
         />
       </div>
@@ -84,7 +104,7 @@ export function HistorialTab({ movimientos }: { movimientos: MovimientoConNombre
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
                 <th className="px-3 py-2">{t('stock.colFecha')}</th>
@@ -94,20 +114,41 @@ export function HistorialTab({ movimientos }: { movimientos: MovimientoConNombre
                 <ThFiltro label={t('stock.colCantidad')} align="right" tipo="numero" ordenActivo={ordenMov?.campo === 'unidades' ? ordenMov.dir : null} onOrdenar={(d) => ordenarMovPor('unidades', d)} filtro={filtrosMov.cantidad} onFiltrar={(f) => filtrarMovPor('cantidad', f)} />
                 <ThFiltro label={t('stock.colRider')} ordenActivo={ordenMov?.campo === 'rider_nombre_libre' ? ordenMov.dir : null} onOrdenar={(d) => ordenarMovPor('rider_nombre_libre', d)} filtro={filtrosMov.rider} onFiltrar={(f) => filtrarMovPor('rider', f)} />
                 <ThFiltro label={t('stock.colRegistradoPor')} ordenActivo={ordenMov?.campo === 'admin_usuario' ? ordenMov.dir : null} onOrdenar={(d) => ordenarMovPor('admin_usuario', d)} filtro={filtrosMov.registradoPor} onFiltrar={(f) => filtrarMovPor('registradoPor', f)} />
+                <th className="px-3 py-2">{t('stock.colEstado')}</th>
+                <th className="px-3 py-2">{t('stock.colObservaciones')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {movimientosFiltrados.map((mv) => (
-                <tr key={mv.id}>
-                  <td className="px-3 py-2 text-xs text-ink-muted">{formatFecha(mv.created_at)}</td>
-                  <td className="px-3 py-2 text-xs">{mv.tipo_etiqueta}</td>
-                  <td className="px-3 py-2 text-xs text-ink-muted">{mv.centro_origen_nombre ?? '—'}</td>
-                  <td className="px-3 py-2 text-xs text-ink-muted">{mv.centro_destino_nombre ?? '—'}</td>
-                  <td className="px-3 py-2 text-right font-mono">{mv.unidades}</td>
-                  <td className="px-3 py-2 text-xs text-ink-muted">{mv.rider_nombre_libre ?? '—'}</td>
-                  <td className="px-3 py-2 text-xs text-ink-muted">{mv.admin_usuario ?? '—'}</td>
-                </tr>
-              ))}
+              {movimientosFiltrados.map((mv) => {
+                const estado = textoEstado(mv, t);
+                return (
+                  <tr key={mv.id}>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{formatFecha(mv.created_at)}</td>
+                    <td className="px-3 py-2 text-xs">{mv.tipo_etiqueta}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{mv.centro_origen_nombre ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{mv.centro_destino_nombre ?? '—'}</td>
+                    <td className="px-3 py-2 text-right font-mono">{mv.unidades}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{mv.rider_nombre_libre ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs text-ink-muted">{mv.admin_usuario ?? '—'}</td>
+                    <td className="px-3 py-2 text-xs">
+                      {estado && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            mv.estado_transito === 'en_transito'
+                              ? 'bg-amber-50 text-amber-700'
+                              : mv.estado_transito === 'anulado'
+                                ? 'bg-red-50 text-danger'
+                                : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          {estado}
+                        </span>
+                      )}
+                    </td>
+                    <td className="max-w-[220px] px-3 py-2 text-xs text-ink-muted">{textoObservaciones(mv) || '—'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

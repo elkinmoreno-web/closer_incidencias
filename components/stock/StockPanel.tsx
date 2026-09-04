@@ -122,7 +122,7 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {material && <ImportarStockModal material={material} />}
+          {material && <ImportarStockModal material={material} onImportado={() => recargar(material.id)} />}
           {!esFichas && (
             <button
               onClick={() => setParametrosModalAbierto(true)}

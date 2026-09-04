@@ -20,9 +20,11 @@ function TarjetaTraslado({ traslado, onResuelto }: { traslado: TrasladoPendiente
   const { t, idioma } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [confirmando, setConfirmando] = useState(false);
+  const [anulando, setAnulando] = useState(false);
   const [unidadesRecibidas, setUnidadesRecibidas] = useState(String(traslado.unidades));
+  const [observaciones, setObservaciones] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<{ diferencia: number } | null>(null);
+  const [resultado, setResultado] = useState<{ tipo: 'recibido' | 'anulado'; diferencia: number } | null>(null);
 
   // Diferencia calculada EN VIVO mientras se escribe, no solo tras
   // guardar — así el usuario ve de inmediato si lo que va a confirmar
@@ -41,50 +43,83 @@ function TarjetaTraslado({ traslado, onResuelto }: { traslado: TrasladoPendiente
     }
     setError(null);
     startTransition(async () => {
-      const res = await confirmarRecepcionTraslado(traslado.id, n);
+      const res = await confirmarRecepcionTraslado(traslado.id, n, observaciones);
       if (res && 'error' in res) {
         setError(res.error);
         return;
       }
       if (res?.success) {
-        setResultado({ diferencia: res.diferencia });
+        setResultado({ tipo: 'recibido', diferencia: res.diferencia });
       }
     });
   }
 
+  // Antes usaba window.confirm() para pedir la confirmación de anular —
+  // se reemplaza por el mismo patrón de formulario inline que "Ya ha
+  // llegado" para poder ofrecer también aquí el campo de observaciones
+  // opcional (ej. "no llegó nada", "llegó pero incompleto").
   function anular() {
-    if (!confirm(t('stockSolicitudes.confirmarAnular'))) return;
+    setError(null);
     startTransition(async () => {
-      const res = await anularTraslado(traslado.id);
+      const res = await anularTraslado(traslado.id, observaciones);
       if (res && 'error' in res) {
         setError(res.error);
         return;
       }
-      onResuelto();
+      if (res?.success) {
+        setResultado({ tipo: 'anulado', diferencia: 0 });
+      }
     });
   }
 
-  // Tras confirmar, se muestra el resultado con un botón explícito de
-  // "Cerrar" que dispara la recarga de la lista — sin autocierre por
-  // temporizador, que podía sentirse como si la tarjeta se quedara
-  // "pillada" si el usuario no llegaba a leer el mensaje a tiempo.
+  // Resumen del envío (material, cantidad, origen→destino) — se
+  // mantiene visible tras resolver en vez de sustituirse por el
+  // mensaje de resultado, para no perder de vista qué se confirmó o
+  // anuló exactamente.
+  const resumenEnvio = (
+    <div>
+      <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <Truck size={14} className="text-primary" />
+        {nombreSegunIdioma(idioma, traslado.material_titulo, traslado.material_titulo_en)} · {traslado.unidades}
+      </div>
+      <div className="mt-1 text-xs text-ink-muted">
+        {traslado.centro_origen_nombre ?? '—'} → {traslado.centro_destino_nombre ?? '—'}
+      </div>
+      <div className="mt-0.5 text-[11px] text-ink-muted">
+        {t('stockSolicitudes.enviado')}: {formatFecha(traslado.created_at)}
+        {traslado.admin_usuario && ` · ${t('stockSolicitudes.pedidoPor')}: ${traslado.admin_usuario}`}
+      </div>
+    </div>
+  );
+
+  // Tras confirmar o anular, se muestra el resultado con un botón
+  // explícito de "Cerrar" que dispara la recarga de la lista — sin
+  // autocierre por temporizador, que podía sentirse como si la tarjeta
+  // se quedara "pillada" si el usuario no llegaba a leer el mensaje a
+  // tiempo. El resumen del envío (para dónde, cuánto) se mantiene
+  // visible junto al resultado en vez de desaparecer.
   if (resultado) {
     return (
       <div className="rounded-card border border-border bg-surface p-4">
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-          <Truck size={14} className="text-primary" />
-          {nombreSegunIdioma(idioma, traslado.material_titulo, traslado.material_titulo_en)} · {t('stockSolicitudes.recepcionGuardada')}
+        {resumenEnvio}
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="text-sm font-semibold text-ink">
+            {resultado.tipo === 'recibido' ? t('stockSolicitudes.recepcionGuardada') : t('stockSolicitudes.anular') + '.'}
+          </p>
+          {resultado.tipo === 'recibido' && (
+            <p className={`mt-1 text-sm font-medium ${resultado.diferencia === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {resultado.diferencia === 0
+                ? t('stockSolicitudes.coincideConLoEnviado')
+                : resultado.diferencia < 0
+                  ? t('stockSolicitudes.faltaronUnidades').replace('{n}', String(Math.abs(resultado.diferencia)))
+                  : t('stockSolicitudes.sobraronUnidades').replace('{n}', String(resultado.diferencia))}
+            </p>
+          )}
+          {observaciones.trim() && <p className="mt-1 text-xs text-ink-muted">{t('stockSolicitudes.observacionesOpcional')}: {observaciones.trim()}</p>}
+          <button onClick={onResuelto} className="mt-3 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white">
+            {t('stockSolicitudes.cerrar')}
+          </button>
         </div>
-        <p className={`mt-2 text-sm font-medium ${resultado.diferencia === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
-          {resultado.diferencia === 0
-            ? t('stockSolicitudes.coincideConLoEnviado')
-            : resultado.diferencia < 0
-              ? t('stockSolicitudes.faltaronUnidades').replace('{n}', String(Math.abs(resultado.diferencia)))
-              : t('stockSolicitudes.sobraronUnidades').replace('{n}', String(resultado.diferencia))}
-        </p>
-        <button onClick={onResuelto} className="mt-3 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white">
-          {t('stockSolicitudes.cerrar')}
-        </button>
       </div>
     );
   }
@@ -92,24 +127,12 @@ function TarjetaTraslado({ traslado, onResuelto }: { traslado: TrasladoPendiente
   return (
     <div className="rounded-card border border-border bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-            <Truck size={14} className="text-primary" />
-            {nombreSegunIdioma(idioma, traslado.material_titulo, traslado.material_titulo_en)} · {traslado.unidades}
-          </div>
-          <div className="mt-1 text-xs text-ink-muted">
-            {traslado.centro_origen_nombre ?? '—'} → {traslado.centro_destino_nombre ?? '—'}
-          </div>
-          <div className="mt-0.5 text-[11px] text-ink-muted">
-            {t('stockSolicitudes.enviado')}: {formatFecha(traslado.created_at)}
-            {traslado.admin_usuario && ` · ${t('stockSolicitudes.pedidoPor')}: ${traslado.admin_usuario}`}
-          </div>
-        </div>
-        {/* Ambos botones siempre visibles, incluso con el formulario de
+        {resumenEnvio}
+        {/* Ambos botones siempre visibles, incluso con un formulario de
             confirmación abierto — antes "Anular" desaparecía al abrir
             "Ya ha llegado", dejando sin salida a quien se equivocaba de acción. */}
         <div className="flex shrink-0 gap-1.5">
-          {!confirmando && (
+          {!confirmando && !anulando && (
             <button
               onClick={() => setConfirmando(true)}
               className="flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
@@ -118,9 +141,11 @@ function TarjetaTraslado({ traslado, onResuelto }: { traslado: TrasladoPendiente
               {t('stockSolicitudes.yaHaLlegado')}
             </button>
           )}
-          <button onClick={anular} disabled={pending} className="rounded-full bg-red-50 p-1.5 text-danger hover:bg-red-100 disabled:opacity-50">
-            <X size={14} />
-          </button>
+          {!confirmando && !anulando && (
+            <button onClick={() => setAnulando(true)} disabled={pending} className="rounded-full bg-red-50 p-1.5 text-danger hover:bg-red-100 disabled:opacity-50">
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -153,6 +178,41 @@ function TarjetaTraslado({ traslado, onResuelto }: { traslado: TrasladoPendiente
                 : t('stockSolicitudes.sobraronUnidades').replace('{n}', String(diferenciaEnVivo))}
             </p>
           )}
+          <div className="mt-2">
+            <label className="mb-1 block text-xs font-medium text-ink-muted">{t('stockSolicitudes.observacionesOpcional')}</label>
+            <textarea
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              placeholder={t('stockSolicitudes.observacionesPlaceholder')}
+              rows={2}
+              className="w-full rounded-lg border border-border px-3 py-1.5 text-xs focus:border-primary focus:outline-none"
+            />
+          </div>
+        </div>
+      )}
+
+      {anulando && (
+        <div className="mt-3 border-t border-border pt-3">
+          <p className="text-xs font-medium text-danger">{t('stockSolicitudes.confirmarAnular')}</p>
+          <div className="mt-2">
+            <label className="mb-1 block text-xs font-medium text-ink-muted">{t('stockSolicitudes.observacionesOpcional')}</label>
+            <textarea
+              value={observaciones}
+              onChange={(e) => setObservaciones(e.target.value)}
+              placeholder={t('stockSolicitudes.observacionesPlaceholder')}
+              rows={2}
+              autoFocus
+              className="w-full rounded-lg border border-border px-3 py-1.5 text-xs focus:border-primary focus:outline-none"
+            />
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button onClick={anular} disabled={pending} className="rounded-full bg-danger px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
+              {t('stockSolicitudes.confirmarAnulacion')}
+            </button>
+            <button onClick={() => setAnulando(false)} className="rounded-full border border-border px-3 py-1.5 text-xs text-ink-muted">
+              {t('stockSolicitudes.cancelar')}
+            </button>
+          </div>
         </div>
       )}
 

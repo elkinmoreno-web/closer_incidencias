@@ -18,6 +18,11 @@ const TIPOS_CON_CAJAS = new Set(['ENTRADA_PROVEEDOR', 'ENVIO_SUCURSAL']);
 // sin importar lo que se escriba) — se oculta el campo de cantidad
 // para no dar a entender que hace algo con el inventario.
 const TIPO_NEUTRO_SIN_CANTIDAD = 'RIDER_YA_TIENE_SOPORTE';
+// Casi toda entrada de proveedor llega a la base operativa — se
+// preselecciona como destino por defecto (editable) para no obligar a
+// elegirlo a mano en el caso común; antes este tipo ni siquiera exigía
+// destino, así que el stock quedaba sin centro asignado.
+const CENTRO_DEFAULT_ENTRADA_PROVEEDOR = 'San Fernando (Base Operativa)';
 
 type Paso = 'tipo' | 'detalle' | 'confirmar';
 
@@ -262,6 +267,10 @@ export function NuevoMovimientoModal({
                       onClick={() => {
                         setTipoClave(tp.clave);
                         resetearCantidades();
+                        if (tp.clave === 'ENTRADA_PROVEEDOR' && !centroDestinoId) {
+                          const centroDefault = centros.find((c) => c.nombre === CENTRO_DEFAULT_ENTRADA_PROVEEDOR);
+                          if (centroDefault) setCentroDestinoId(String(centroDefault.id));
+                        }
                         // Scroll automático al pie del modal — la lista
                         // de tipos es larga (11 opciones) y sin esto el
                         // usuario tenía que buscar manualmente el botón

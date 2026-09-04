@@ -221,6 +221,7 @@ export interface StockMovimiento {
   unidades_recibidas: number | null;
   recibido_por: string | null;
   recibido_en: string | null;
+  notas_recepcion: string | null;
 }
 
 /** Fila de stock disponible por centro y material, ya calculada (suma del ledger). */

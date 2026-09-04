@@ -170,6 +170,15 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
       celda(m.centro_origen_id).en_calle -= m.unidades;
       celda(m.centro_origen_id).perdida += m.unidades;
     }
+    // Recuperar algo marcado como robado/perdido resta del contador de
+    // "Perdidas" del centro donde reaparece (no del centro donde se
+    // perdió originalmente — puede ser otro) — mismo criterio exacto
+    // que el sistema anterior (cd.perdida -= uds en RECUPERADA_ROBO).
+    // Sin esto "Perdidas" quedaba inflado para siempre aunque el
+    // material ya estuviera de vuelta.
+    if (m.tipo_clave === 'RECUPERADA_ROBO' && m.centro_destino_id) {
+      celda(m.centro_destino_id).perdida -= m.unidades;
+    }
   }
 
   const ahora = Date.now();
@@ -478,6 +487,29 @@ export interface ResultadoImportacionStock {
  * reales de la operación, no un error del importador (decisión
  * explícita: se corrigen después desde el panel con "Ajuste manual").
  */
+// Nombres de centro del CSV que no siguen el patrón "<CIUDAD> CENTRO"
+// (más abajo) ni coinciden literalmente con el nombre real — o porque
+// el centro real tiene un prefijo de grupo (JEREZ, ALICANTE, FD...) que
+// el CSV no incluye, o porque trae una grafía distinta (con/sin tilde,
+// "Base Operativa", etc). Confirmado 1:1 contra la tabla centros real;
+// si un nombre del CSV coincidiera con más de un centro real no se
+// incluye aquí a propósito — mejor dejarlo en "no encontrados" para
+// revisión manual que asignar stock al centro equivocado.
+const ALIAS_CENTRO_IMPORTACION: Record<string, string> = {
+  'san fernando de cadiz': 'jerez san fernando',
+  'chiclana de la frontera': 'jerez chiclana de la frontera',
+  'cadiz ciudad': 'jerez cadiz',
+  'castellon': 'castellon de la plana',
+  'elche': 'alicante elche',
+  's. de compostela': 'santiago de compostela',
+  'puerto de santa maria': 'jerez puerto de santa maria',
+  berlin: 'fd berlin',
+  hamburgo: 'fd hamburg',
+  heidelberg: 'fd heidelberg',
+  mannheim: 'fd mannheim',
+  stuttgart: 'fd stuttgart',
+};
+
 export async function importarStockInicial(materialId: number, filas: FilaImportacionStock[]): Promise<ResultadoImportacionStock> {
   try {
     const { supabase, yo } = await assertAdmin();
@@ -486,13 +518,28 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
     const { data: centros } = await supabase.from('centros').select('id, nombre');
     const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
 
+    // Resuelve un nombre de centro del CSV probando, en orden: (1) el
+    // nombre normalizado tal cual, (2) el alias explícito de arriba, (3)
+    // "<nombre> CENTRO" — muchas ciudades con varios centros reales
+    // tienen uno genérico así (ej. "Jerez" en el CSV -> "JEREZ CENTRO"
+    // real), y el CSV histórico solo traía el nombre de la ciudad sin
+    // ese sufijo.
+    function resolverCentroId(nombreCsv: string): number | undefined {
+      const normalizado = normalizarNombreCentro(nombreCsv);
+      return (
+        idPorNombreCentro.get(normalizado) ??
+        (ALIAS_CENTRO_IMPORTACION[normalizado] ? idPorNombreCentro.get(ALIAS_CENTRO_IMPORTACION[normalizado]) : undefined) ??
+        idPorNombreCentro.get(`${normalizado} centro`)
+      );
+    }
+
     const centrosNoEncontrados: string[] = [];
     const registros: Record<string, unknown>[] = [];
     let filasIgnoradas = 0;
     const NOTA = 'Migración de stock inicial desde el sistema anterior (Google Sheets)';
 
     for (const fila of filas) {
-      const centroId = idPorNombreCentro.get(normalizarNombreCentro(fila.centroNombre));
+      const centroId = resolverCentroId(fila.centroNombre);
       if (!centroId) {
         centrosNoEncontrados.push(fila.centroNombre);
         continue;
@@ -818,7 +865,7 @@ export type ConfirmarRecepcionState = { error: string } | { success: true; difer
  * aparte porque el cálculo ya usa unidades_recibidas cuando el estado
  * es "recibido".
  */
-export async function confirmarRecepcionTraslado(movimientoId: number, unidadesRecibidas: number): Promise<ConfirmarRecepcionState> {
+export async function confirmarRecepcionTraslado(movimientoId: number, unidadesRecibidas: number, notasRecepcion?: string): Promise<ConfirmarRecepcionState> {
   try {
     const { supabase, yo } = await assertAdmin();
 
@@ -827,11 +874,24 @@ export async function confirmarRecepcionTraslado(movimientoId: number, unidadesR
     if (mov.estado_transito !== 'en_transito') return { error: 'Ese envío ya no está en tránsito.' };
     if (unidadesRecibidas < 0) return { error: 'La cantidad recibida no puede ser negativa.' };
 
-    const { error } = await supabase
+    const { data: actualizado, error } = await supabase
       .from('stock_movimientos')
-      .update({ estado_transito: 'recibido', unidades_recibidas: unidadesRecibidas, recibido_por: yo!.id, recibido_en: new Date().toISOString() })
-      .eq('id', movimientoId);
+      .update({
+        estado_transito: 'recibido',
+        unidades_recibidas: unidadesRecibidas,
+        recibido_por: yo!.id,
+        recibido_en: new Date().toISOString(),
+        notas_recepcion: notasRecepcion?.trim() || null,
+      })
+      .eq('id', movimientoId)
+      .select('id')
+      .maybeSingle();
     if (error) return { error: error.message };
+    // RLS puede dejar pasar el UPDATE sin error pero sin afectar ninguna
+    // fila (ej. políticas desalineadas entre roles) — sin esto se
+    // devolvía éxito al frontend aunque nada cambiara realmente en la
+    // base, causa real de un bug donde "Ya ha llegado" no hacía nada.
+    if (!actualizado) return { error: 'No se pudo actualizar el envío (sin permiso). Contacta a un administrador.' };
 
     revalidatePath('/dashboard/stock');
     return { success: true, diferencia: unidadesRecibidas - mov.unidades };
@@ -841,15 +901,21 @@ export async function confirmarRecepcionTraslado(movimientoId: number, unidadesR
 }
 
 /** Anula un traslado antes de que llegue — no afecta al destino; el origen ya quedó descontado (el material salió físicamente y hay que gestionarlo aparte, igual que el sistema anterior no revertía el origen al anular). */
-export async function anularTraslado(movimientoId: number): Promise<ConfirmarRecepcionState> {
+export async function anularTraslado(movimientoId: number, notasRecepcion?: string): Promise<ConfirmarRecepcionState> {
   try {
     const { supabase } = await assertAdmin();
     const { data: mov } = await supabase.from('stock_movimientos').select('estado_transito').eq('id', movimientoId).maybeSingle();
     if (!mov) return { error: 'Movimiento no encontrado.' };
     if (mov.estado_transito !== 'en_transito') return { error: 'Ese envío ya no está en tránsito.' };
 
-    const { error } = await supabase.from('stock_movimientos').update({ estado_transito: 'anulado' }).eq('id', movimientoId);
+    const { data: actualizado, error } = await supabase
+      .from('stock_movimientos')
+      .update({ estado_transito: 'anulado', notas_recepcion: notasRecepcion?.trim() || null })
+      .eq('id', movimientoId)
+      .select('id')
+      .maybeSingle();
     if (error) return { error: error.message };
+    if (!actualizado) return { error: 'No se pudo anular el envío (sin permiso). Contacta a un administrador.' };
 
     revalidatePath('/dashboard/stock');
     return { success: true, diferencia: 0 };

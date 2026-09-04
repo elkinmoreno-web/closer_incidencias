@@ -7,6 +7,13 @@ import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimien
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
 import { generarFichaDesdeGoogleDocs } from '@/lib/googleDocs';
 import { carpetaFichaPorGestor } from '@/lib/googleDrive';
+import { enviarCorreoGmail } from '@/lib/googleMail';
+
+// Mientras se valida el aviso de discrepancias (recién activado), solo
+// llega a este correo — cuando se confirme que funciona bien se suma
+// al resto del equipo (Rodrigo, Nicolás), igual que hacía el sistema
+// anterior mandándolo a STK_CFG.DEVS.
+const CORREOS_AVISO_DISCREPANCIA_RECEPCION = ['elkin.moreno@closerlogistics.com'];
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -869,7 +876,11 @@ export async function confirmarRecepcionTraslado(movimientoId: number, unidadesR
   try {
     const { supabase, yo } = await assertAdmin();
 
-    const { data: mov } = await supabase.from('stock_movimientos').select('unidades, estado_transito').eq('id', movimientoId).maybeSingle();
+    const { data: mov } = await supabase
+      .from('stock_movimientos')
+      .select('unidades, estado_transito, stock_materiales(titulo), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre)')
+      .eq('id', movimientoId)
+      .maybeSingle();
     if (!mov) return { error: 'Movimiento no encontrado.' };
     if (mov.estado_transito !== 'en_transito') return { error: 'Ese envío ya no está en tránsito.' };
     if (unidadesRecibidas < 0) return { error: 'La cantidad recibida no puede ser negativa.' };
@@ -893,8 +904,34 @@ export async function confirmarRecepcionTraslado(movimientoId: number, unidadesR
     // base, causa real de un bug donde "Ya ha llegado" no hacía nada.
     if (!actualizado) return { error: 'No se pudo actualizar el envío (sin permiso). Contacta a un administrador.' };
 
+    const diferencia = unidadesRecibidas - mov.unidades;
+    // Aviso por correo cuando lo recibido no coincide con lo enviado —
+    // mismo criterio que _stkAvisarIncidencia() del sistema anterior.
+    // No debe romper la confirmación si el correo falla (API caída,
+    // scope de Gmail no autorizado, etc.), solo queda logueado.
+    if (diferencia !== 0) {
+      const materialTitulo = (mov as any).stock_materiales?.titulo ?? 'Material';
+      const origenNombre = (mov as any).origen?.nombre ?? '—';
+      const destinoNombre = (mov as any).destino?.nombre ?? '—';
+      enviarCorreoGmail(
+        CORREOS_AVISO_DISCREPANCIA_RECEPCION,
+        `⚠️ Incidencia de recepción · ${materialTitulo} · ${origenNombre} ➡️ ${destinoNombre}`,
+        `<div style="font-family:sans-serif;padding:20px;color:#333;max-width:640px">
+          <h2 style="color:#D6402F;margin-top:0">⚠️ Diferencia al recepcionar ${materialTitulo}</h2>
+          <p>${yo!.usuario} ha recepcionado un envío con una cantidad distinta a la enviada.</p>
+          <div style="background:#FBE6E3;border-left:4px solid #D6402F;padding:12px;border-radius:4px">
+            <b>Ruta:</b> ${origenNombre} ➡️ ${destinoNombre}<br>
+            <b>Enviadas:</b> ${mov.unidades}<br><b>Contadas:</b> ${unidadesRecibidas}<br>
+            <b>Diferencia:</b> ${diferencia > 0 ? '+' : ''}${diferencia}
+          </div>
+          ${notasRecepcion ? `<p><b>Observaciones:</b> ${notasRecepcion.trim()}</p>` : ''}
+          <p style="font-size:11px;color:#888">Aviso automático del panel de stock.</p>
+        </div>`
+      ).catch((e) => registrarError('confirmarRecepcionTraslado:aviso', e));
+    }
+
     revalidatePath('/dashboard/stock');
-    return { success: true, diferencia: unidadesRecibidas - mov.unidades };
+    return { success: true, diferencia };
   } catch (e) {
     return { error: registrarError('confirmarRecepcionTraslado', e, 'No se pudo confirmar la recepción. Inténtalo de nuevo.') };
   }

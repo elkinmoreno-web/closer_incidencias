@@ -275,4 +275,4 @@ export function normalizarNombreCentro(s: string): string {
  * lista cuando Stock esté listo para todo el equipo (el control de
  * acceso por rol de siempre lo sigue aplicando el layout/Sidebar aparte).
  */
-export const CORREOS_ACCESO_STOCK_TEMPORAL = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com', 'nicolas.correa@closerlogistics.com'];
+export const CORREOS_ACCESO_STOCK_TEMPORAL = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com', 'nicolas.correa@closerlogistics.com', 'cesar.buitrago@closerlogistics.com'];

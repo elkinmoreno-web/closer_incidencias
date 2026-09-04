@@ -402,14 +402,22 @@ export async function listarMovimientosRecientes(materialId: number, limite = 30
   (StockMovimiento & { centro_origen_nombre: string | null; centro_destino_nombre: string | null; admin_usuario: string | null; tipo_etiqueta: string })[]
 > {
   const { supabase } = await assertAdmin();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('stock_movimientos')
     .select(
-      '*, origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins(usuario), stock_tipos_movimiento(etiqueta, etiqueta_en)'
+      // admins!stock_movimientos_admin_id_fkey (no "admins(usuario)" a secas):
+      // stock_movimientos tiene DOS FKs a admins (admin_id y recibido_por,
+      // esta última añadida para el flujo de recepción de traslados), así
+      // que PostgREST no puede resolver el embed sin ambigüedad (PGRST201)
+      // y devolvía data=null en cada consulta — el historial parecía
+      // "vacío" aunque el movimiento sí se hubiera guardado.
+      '*, origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins!stock_movimientos_admin_id_fkey(usuario), stock_tipos_movimiento(etiqueta, etiqueta_en)'
     )
     .eq('material_id', materialId)
     .order('created_at', { ascending: false })
     .limit(limite);
+
+  if (error) registrarError('listarMovimientosRecientes', error);
 
   return (data ?? []).map((m: any) => ({
     ...m,
@@ -780,12 +788,14 @@ export async function listarTrasladosPendientes(materialId: number): Promise<
   (StockMovimiento & { material_titulo: string; material_titulo_en: string | null; centro_origen_nombre: string | null; centro_destino_nombre: string | null; admin_usuario: string | null })[]
 > {
   const { supabase } = await assertAdmin();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('stock_movimientos')
-    .select('*, stock_materiales(titulo, titulo_en), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins(usuario)')
+    .select('*, stock_materiales(titulo, titulo_en), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins!stock_movimientos_admin_id_fkey(usuario)')
     .eq('estado_transito', 'en_transito')
     .eq('material_id', materialId)
     .order('created_at', { ascending: false });
+
+  if (error) registrarError('listarTrasladosPendientes', error);
 
   return (data ?? []).map((m: any) => ({
     ...m,

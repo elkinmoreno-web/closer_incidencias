@@ -14,7 +14,8 @@ import { updateSession } from '@/lib/supabase/middleware';
  * sesión — como /rider/login o /gestor/login, páginas públicas — el
  * middleware se quedaba esperando hasta el timeout de Vercel (25s),
  * devolviendo 504 en una página que no debería tocar la base de datos
- * para nada.
+ * para nada. Confirmado como causa real de un 504
+ * MIDDLEWARE_INVOCATION_TIMEOUT en /rider/login.
  */
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -28,7 +29,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const { response, user, supabase } = await updateSession(request);
+  const { response, user, supabase, timedOut } = await updateSession(request);
+
+  // Si Supabase no respondió a tiempo, no se puede saber con certeza si
+  // hay sesión o no — se deja pasar la petición en vez de redirigir a
+  // login (que sería un falso "no tienes sesión" para alguien que sí la
+  // tiene). La página real (Server Component) vuelve a comprobar la
+  // sesión con más margen de tiempo, así que la seguridad no depende
+  // solo de este paso.
+  if (timedOut) {
+    return response;
+  }
 
   if (!user) {
     const loginPath = isDashboardRoute ? '/gestor/login' : '/rider/login';

@@ -5,17 +5,30 @@ import { updateSession } from '@/lib/supabase/middleware';
  * Control de acceso central. Se ejecuta antes de cualquier página protegida.
  * No confiamos solo en esto (RLS en la base de datos es la barrera real),
  * pero evita que alguien sin sesión llegue a ver el HTML del panel.
+ *
+ * IMPORTANTE: la comprobación de qué ruta es se hace ANTES de llamar a
+ * updateSession() — esta última hace una petición HTTP real a Supabase
+ * Auth (auth.getUser()) desde el Edge Runtime, con recursos más
+ * restringidos que una función normal. Si esa llamada se colgaba (red,
+ * DNS, latencia de Supabase) en una ruta que ni siquiera necesita
+ * sesión — como /rider/login o /gestor/login, páginas públicas — el
+ * middleware se quedaba esperando hasta el timeout de Vercel (25s),
+ * devolviendo 504 en una página que no debería tocar la base de datos
+ * para nada.
  */
 export async function middleware(request: NextRequest) {
-  const { response, user, supabase } = await updateSession(request);
   const path = request.nextUrl.pathname;
 
   const isDashboardRoute = path.startsWith('/dashboard');
   const isRiderRoute = path.startsWith('/rider/dashboard');
 
+  // Rutas públicas (login, marketing, lo que sea que no matchee las dos
+  // de arriba): responde de inmediato, SIN llamar a Supabase.
   if (!isDashboardRoute && !isRiderRoute) {
-    return response;
+    return NextResponse.next();
   }
+
+  const { response, user, supabase } = await updateSession(request);
 
   if (!user) {
     const loginPath = isDashboardRoute ? '/gestor/login' : '/rider/login';

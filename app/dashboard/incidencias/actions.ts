@@ -72,6 +72,32 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
     }
   }
 
+  // Evidencia adicional (hasta 3 imágenes) — mismo campo y límite que
+  // ya tenía el formulario del rider (IncidenciaForm.tsx /
+  // app/rider/dashboard/actions.ts), que nunca se replicó en el modal
+  // de creación del admin.
+  const evidenciasFiles = formData.getAll('evidencia') as File[];
+  const evidenciasValidas = evidenciasFiles.filter((f) => f && f.size > 0);
+  if (evidenciasValidas.length > 3) return { error: 'Máximo 3 archivos de evidencia adicional' };
+  for (const f of evidenciasValidas) {
+    const err = validarArchivo(f, ALLOWED_IMAGE_MIME);
+    if (err) return { error: err };
+  }
+
+  const stamp = Date.now();
+  const evidenciaIds: string[] = [];
+  for (let i = 0; i < evidenciasValidas.length; i++) {
+    const f = evidenciasValidas[i];
+    const nombre = `${rider.dni}_admin_${stamp}_evidencia_${i + 1}.${extFromMime(f.type)}`;
+    try {
+      const buffer = Buffer.from(await f.arrayBuffer());
+      const fileId = await subirArchivoDrive('Incidencias', nombre, buffer, f.type);
+      evidenciaIds.push(fileId);
+    } catch (e) {
+      return { error: registrarError('crearIncidenciaAdmin:evidencia', e, 'No se pudo subir una de las imágenes de evidencia. Inténtalo de nuevo en unos minutos.') };
+    }
+  }
+
   const { error: insertError } = await supabase.from('incidencias').insert({
     rider_id: rider.id,
     dni: rider.dni,
@@ -83,6 +109,7 @@ export async function crearIncidenciaAdmin(_prev: FormActionState, formData: For
     direccion_recogida: direccionRecogida,
     direccion_entrega: direccionEntrega,
     screenshot_url: screenshotFileId,
+    evidencia_ids: evidenciaIds,
     estado: 'pendiente',
   });
 

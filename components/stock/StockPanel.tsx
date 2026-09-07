@@ -12,6 +12,7 @@ import {
 import type { StockMaterial, StockDisponible, StockMovimiento, StockTipoMovimiento, StockParametros, StockFicha, Centro } from '@/lib/types';
 import { NuevoMovimientoModal } from '@/components/stock/NuevoMovimientoModal';
 import { ImportarStockModal } from '@/components/stock/ImportarStockModal';
+import { ReiniciarStockModal } from '@/components/stock/ReiniciarStockModal';
 import { ParametrosStockModal } from '@/components/stock/ParametrosStockModal';
 import { StockResumenTab } from '@/components/stock/StockResumenTab';
 import { SolicitudesTab } from '@/components/stock/SolicitudesTab';
@@ -137,6 +138,14 @@ export function StockPanel({
               fuera de las suyas (RLS), así que se reserva a Super Admin
               en vez de fallar a medias con un error críptico. */}
           {material && esSuperAdmin && <ImportarStockModal material={material} onImportado={() => recargar(material.id)} />}
+          {esSuperAdmin && (
+            <ReiniciarStockModal
+              onVaciado={() => {
+                recargarFichas();
+                if (materialActivo !== null) recargar(materialActivo);
+              }}
+            />
+          )}
           {!esFichas && (
             <button
               onClick={() => setParametrosModalAbierto(true)}

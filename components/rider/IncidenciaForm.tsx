@@ -133,23 +133,24 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
   }
 
   if (state?.posibleDuplicado) {
-    const { minutos, codigoPedido } = state.posibleDuplicado;
+    const { minutos, codigoPedido, motivoNombre } = state.posibleDuplicado;
+    const pedidoSufijo = codigoPedido ? t('incidenciaForm.duplicadoPedidoSufijo').replace('{codigo}', codigoPedido) : '';
+    const texto = (motivoNombre ? t('incidenciaForm.duplicadoTextoConMotivo').replace('{motivo}', motivoNombre) : t('incidenciaForm.duplicadoTextoSinMotivo'))
+      .replace('{minutos}', String(minutos))
+      .replace('{pedido}', pedidoSufijo);
     return (
       <div className="rounded-xl bg-amber-50 px-4 py-4 text-sm text-amber-900">
-        <p className="font-semibold">¿Ya reportaste esto?</p>
-        <p className="mt-1 text-amber-800">
-          Reportaste una incidencia con el mismo motivo hace {minutos} minuto(s)
-          {codigoPedido ? ` (pedido ${codigoPedido})` : ''}. ¿Seguro que quieres crear otra?
-        </p>
+        <p className="font-semibold">{t('incidenciaForm.duplicadoTitulo')}</p>
+        <p className="mt-1 text-amber-800">{texto}</p>
         <div className="mt-3 flex gap-2">
           <button
             onClick={confirmarDuplicado}
             className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary-dark"
           >
-            Sí, crear otra
+            {t('incidenciaForm.duplicadoConfirmar')}
           </button>
           <button onClick={() => window.location.reload()} className="rounded-full border border-border px-4 py-2 text-xs font-semibold text-ink-muted hover:bg-bg">
-            Cancelar
+            {t('incidenciaForm.duplicadoCancelar')}
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient, getAdminActual } from '@/lib/supabase/server';
+import { createClient, createAdminClient, getAdminActual } from '@/lib/supabase/server';
 import { registrarError, normalizarNombreCentro } from '@/lib/utils';
 import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockItemFicha } from '@/lib/types';
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
@@ -10,12 +10,12 @@ import { carpetaFichaPorGestor } from '@/lib/googleDrive';
 import { enviarCorreoGmail, plantillaCorreoStock } from '@/lib/googleMail';
 
 // TEMPORAL mientras Stock sigue en pruebas: todos los avisos llegan
-// solo a este correo. Cuando se confirme que el sistema funciona bien,
-// pasa a ser dinámico — a los admins/moderadores con la ciudad de
-// origen o destino asignada (admin_ciudades) + Rodrigo + Nicolás +
+// solo a estos correos. Cuando se confirme que el sistema funciona
+// bien, pasa a ser dinámico — a los admins/moderadores con la ciudad
+// de origen o destino asignada (admin_ciudades) + Rodrigo + Nicolás +
 // Elkin, igual que el correo llegaba a STK_CFG.DEVS en el sistema
 // anterior pero ahora por ciudad en vez de a un puñado fijo de gente.
-const CORREOS_AVISO_STOCK = ['elkin.moreno@closerlogistics.com'];
+const CORREOS_AVISO_STOCK = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com'];
 
 // Tipos de movimiento cuyo registro dispara un aviso por correo —
 // pedido explícitamente: entradas/salidas "grandes" del almacén
@@ -1021,5 +1021,40 @@ export async function anularTraslado(movimientoId: number, notasRecepcion?: stri
     return { success: true, diferencia: 0 };
   } catch (e) {
     return { error: registrarError('anularTraslado', e, 'No se pudo anular el envío. Inténtalo de nuevo.') };
+  }
+}
+
+export type VaciarStockState = { error: string } | { success: true; movimientosBorrados: number; fichasBorradas: number } | undefined;
+
+/**
+ * Borra TODO el ledger de Stock (todos los materiales) y todas las
+ * fichas — pensado para dejar el módulo en blanco antes de importar
+ * los datos reales de producción desde cero, una vez terminadas las
+ * pruebas. Irreversible: no hay papelera para esto (a diferencia de
+ * incidencias/ausencias). No borra los PDFs ya subidos a Google Drive
+ * (las fichas referenciaban un archivo ahí; borrarlos también
+ * implicaría permisos y lógica de Drive aparte, fuera del alcance de
+ * "vaciar la base").
+ *
+ * Ni stock_movimientos ni stock_fichas tienen política RLS de DELETE
+ * (a propósito: nadie debería poder borrar el ledger vía la API
+ * normal) — se usa el cliente de servicio, igual que crear el primer
+ * usuario admin, y se comprueba el rol a mano aquí mismo.
+ */
+export async function vaciarStockDePrueba(): Promise<VaciarStockState> {
+  try {
+    const { yo } = await assertAdmin();
+    if (!yo || yo.rol !== 'super_admin') return { error: 'Solo un Super Admin puede vaciar el módulo de Stock.' };
+
+    const admin = createAdminClient();
+    const { data: movs, error: errorMovs } = await admin.from('stock_movimientos').delete().gte('id', 0).select('id');
+    if (errorMovs) return { error: errorMovs.message };
+    const { data: fichas, error: errorFichas } = await admin.from('stock_fichas').delete().gte('id', 0).select('id');
+    if (errorFichas) return { error: errorFichas.message };
+
+    revalidatePath('/dashboard/stock');
+    return { success: true, movimientosBorrados: movs?.length ?? 0, fichasBorradas: fichas?.length ?? 0 };
+  } catch (e) {
+    return { error: registrarError('vaciarStockDePrueba', e, 'No se pudo vaciar el módulo de Stock. Inténtalo de nuevo.') };
   }
 }

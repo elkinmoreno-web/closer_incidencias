@@ -13,6 +13,7 @@ import { estadoAusenciaColor, estadoAusenciaLabel, formatFecha, formatFechaCorta
 import { urlArchivoDrive } from '@/lib/driveUrl';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
+import { obtenerMotivosAusenciaActivos } from '@/lib/catalogosCache';
 
 const PAGE_SIZE = 10;
 
@@ -60,10 +61,10 @@ export default async function AusenciasPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: ausencias, count }, { data: motivosAusencia }, { data: gestores }, zona] =
+  const [{ data: ausencias, count }, motivosAusencia, { data: gestores }, zona] =
     await Promise.all([
       query,
-      supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
+      obtenerMotivosAusenciaActivos(),
       supabase.from('gestores').select('*').order('nombre'),
       ciudadesYCentrosDeMiZona(),
     ]);

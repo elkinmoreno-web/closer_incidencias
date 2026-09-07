@@ -1,4 +1,8 @@
-import * as XLSX from 'xlsx';
+// Import diferido a propósito (no "import * as XLSX from 'xlsx'" arriba):
+// esta librería pesa varios cientos de KB, y antes se cargaba en el
+// bundle de CUALQUIER página con un modal de importación (Riders,
+// UUIDs, Stock) aunque nadie lo abriera. ExportarCsvButton.tsx ya
+// usaba este mismo patrón para exportar — aquí faltaba para importar.
 
 export interface RiderExcelRow {
   nombre: string;
@@ -118,6 +122,7 @@ function fechaOrNull(v: unknown): string | null {
 
 /** Lee el primer sheet de un archivo .xlsx y devuelve filas como objetos { cabecera: valor }. */
 export async function leerArchivoExcel(file: File): Promise<Record<string, unknown>[]> {
+  const XLSX = await import('xlsx');
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
   const hoja = workbook.Sheets[workbook.SheetNames[0]];

@@ -15,6 +15,7 @@ import { urlArchivoDrive } from '@/lib/driveUrl';
 import type { Incidencia } from '@/lib/types';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
+import { obtenerMotivosActivos } from '@/lib/catalogosCache';
 
 const PAGE_SIZE = 10;
 
@@ -69,10 +70,10 @@ export default async function IncidenciasPage({
     query = query.in('centro_id', (centrosDelGestor ?? []).map((c) => c.id));
   }
 
-  const [{ data: incidencias, count }, { data: motivos }, { data: gestores }, zona] =
+  const [{ data: incidencias, count }, motivos, { data: gestores }, zona] =
     await Promise.all([
       query,
-      supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
+      obtenerMotivosActivos(),
       supabase.from('gestores').select('*').order('nombre'),
       ciudadesYCentrosDeMiZona(),
     ]);

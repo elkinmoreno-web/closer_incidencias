@@ -41,7 +41,7 @@ function extFromMime(mime: string): string {
 }
 
 export type FormActionState =
-  | { error?: string; success?: boolean; posibleDuplicado?: { minutos: number; codigoPedido: string | null } }
+  | { error?: string; success?: boolean; posibleDuplicado?: { minutos: number; codigoPedido: string | null; motivoNombre: string | null } }
   | undefined;
 
 export async function enviarIncidencia(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
@@ -60,18 +60,21 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
     if (parsed.data.dni !== rider.dni) return { error: 'El DNI no coincide con tu cuenta' };
 
-    // Aviso de posible duplicado: si el mismo rider reportó el MISMO
-    // motivo hace menos de 5 minutos, se le pregunta antes de crear otra
-    // — puede ser el mismo caso reenviado sin querer, o algo genuinamente
-    // distinto (se puede confirmar y seguir igual).
+    // Aviso de posible duplicado: si el mismo rider reportó CUALQUIER
+    // incidencia hace menos de 5 minutos, se le pregunta antes de crear
+    // otra — puede ser el mismo caso reenviado sin querer (a veces con
+    // un motivo distinto al primero, por error o por indecisión), o
+    // algo genuinamente distinto (se puede confirmar y seguir igual).
+    // Antes solo se comparaba si el motivo coincidía exacto, así que un
+    // reenvío con OTRO motivo pasaba sin aviso — causa real de
+    // incidencias duplicadas reportada por el usuario.
     const forzar = formData.get('forzarDuplicado') === 'true';
     if (!forzar) {
       const haceCincoMin = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const { data: reciente } = await supabase
         .from('incidencias')
-        .select('created_at, codigo_pedido')
+        .select('created_at, codigo_pedido, motivos(nombre)')
         .eq('rider_id', rider.id)
-        .eq('motivo_id', parsed.data.motivoId)
         .neq('estado', 'papelera')
         .gte('created_at', haceCincoMin)
         .order('created_at', { ascending: false })
@@ -80,7 +83,8 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
 
       if (reciente) {
         const minutos = Math.max(1, Math.round((Date.now() - new Date(reciente.created_at).getTime()) / 60000));
-        return { posibleDuplicado: { minutos, codigoPedido: reciente.codigo_pedido } };
+        const motivoNombre = (reciente.motivos as unknown as { nombre: string } | null)?.nombre ?? null;
+        return { posibleDuplicado: { minutos, codigoPedido: reciente.codigo_pedido, motivoNombre } };
       }
     }
 

@@ -25,13 +25,32 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+      // Sin esto, una llamada lenta o colgada a Supabase Auth bloqueaba
+      // el middleware hasta el timeout de la plataforma (25s en
+      // Vercel) — causa real de los 504 MIDDLEWARE_INVOCATION_TIMEOUT
+      // vistos en producción. Con AbortSignal.timeout, la petición
+      // falla rápido (8s) y sigue como "sin sesión" en vez de colgar
+      // TODA la respuesta.
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(8000) }),
+      },
     }
   );
 
   // IMPORTANTE: no borrar esta línea. Refresca el token si ha caducado.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Si falla (timeout, Supabase caído, etc.) se trata como "sin
+  // sesión" — el middleware redirige a login como si no hubiera
+  // cookie, en vez de tumbar toda la petición con un 504. RLS sigue
+  // siendo la barrera real de todas formas.
+  let user = null;
+  try {
+    const {
+      data: { user: u },
+    } = await supabase.auth.getUser();
+    user = u;
+  } catch (e) {
+    console.error('[middleware] auth.getUser() falló (timeout o Supabase caído):', e instanceof Error ? e.message : e);
+  }
 
   return { response, user, supabase };
 }

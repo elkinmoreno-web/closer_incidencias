@@ -7,15 +7,21 @@ import { updateSession } from '@/lib/supabase/middleware';
  * pero evita que alguien sin sesión llegue a ver el HTML del panel.
  */
 export async function middleware(request: NextRequest) {
-  const { response, user, supabase } = await updateSession(request);
   const path = request.nextUrl.pathname;
 
   const isDashboardRoute = path.startsWith('/dashboard');
   const isRiderRoute = path.startsWith('/rider/dashboard');
 
+  // Antes se llamaba a updateSession() (una petición de red a Supabase
+  // Auth) para CUALQUIER ruta, incluidas /rider/login y /gestor/login
+  // que ni siquiera necesitan sesión — si Supabase iba lento, esa
+  // llamada colgaba el middleware de TODO el sitio, no solo del panel.
+  // Ahora solo se paga ese costo en las rutas realmente protegidas.
   if (!isDashboardRoute && !isRiderRoute) {
-    return response;
+    return NextResponse.next();
   }
+
+  const { response, user, supabase } = await updateSession(request);
 
   if (!user) {
     const loginPath = isDashboardRoute ? '/gestor/login' : '/rider/login';

@@ -66,7 +66,9 @@ export function AnuncioForm({
         ref={formRef}
         onSubmit={(e) => {
           e.preventDefault();
-          const mensaje = new FormData(e.currentTarget).get('mensaje') as string;
+          const formData = new FormData(e.currentTarget);
+          const mensaje = formData.get('mensaje') as string;
+          const mensajeEn = formData.get('mensajeEn') as string;
           if (!mensaje?.trim()) {
             setError(t('anuncio.escribeMensaje'));
             return;
@@ -75,7 +77,7 @@ export function AnuncioForm({
           const ciudadIdFinal = ciudadId === '' ? null : Number(ciudadId);
           startTransition(async () => {
             try {
-              await publicarAnuncio(mensaje, ciudadIdFinal, audiencia);
+              await publicarAnuncio(mensaje, ciudadIdFinal, audiencia, mensajeEn);
               formRef.current?.reset();
             } catch (e2) {
               setError((e2 as Error).message);
@@ -110,6 +112,11 @@ export function AnuncioForm({
           name="mensaje"
           placeholder={t('anuncio.mensajePlaceholder')}
           className="min-w-[200px] flex-1 rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        />
+        <input
+          name="mensajeEn"
+          placeholder={t('anuncio.mensajeEnPlaceholder')}
+          className="min-w-[260px] flex-1 rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
         />
         <button
           type="submit"

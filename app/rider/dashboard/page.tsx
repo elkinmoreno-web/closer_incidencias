@@ -10,6 +10,7 @@ import { ZonaConexionPanel } from '@/components/rider/ZonaConexionPanel';
 import { inicioSemanaActualISO } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
+import { obtenerMotivosActivos, obtenerMotivosAusenciaActivos } from '@/lib/catalogosCache';
 
 export default async function RiderDashboardPage() {
   const rider = await getRiderActual();
@@ -20,10 +21,10 @@ export default async function RiderDashboardPage() {
   const supabase = createClient();
   const inicioSemana = inicioSemanaActualISO();
 
-  const [{ data: motivos }, { data: motivosAusencia }, { data: incidenciasSemana }, { data: ausenciasSemana }, { data: riderConCentro }] =
+  const [motivos, motivosAusencia, { data: incidenciasSemana }, { data: ausenciasSemana }, { data: riderConCentro }] =
     await Promise.all([
-      supabase.from('motivos').select('*').eq('activo', true).order('nombre'),
-      supabase.from('motivos_ausencia').select('*').eq('activo', true).order('nombre'),
+      obtenerMotivosActivos(),
+      obtenerMotivosAusenciaActivos(),
       supabase
         .from('incidencias')
         .select('id, estado, created_at, codigo_pedido, motivo_rechazo, motivos(nombre, nombre_en, instrucciones_aprobacion, instrucciones_aprobacion_en)')

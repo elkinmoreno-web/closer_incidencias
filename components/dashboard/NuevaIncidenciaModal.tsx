@@ -8,6 +8,9 @@ import type { Motivo } from '@/lib/types';
 import { BuscadorRiderRemoto } from '@/components/shared/BuscadorRiderRemoto';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
+import { validarArchivoCliente } from '@/lib/compressImage';
+
+const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -28,8 +31,30 @@ export function NuevaIncidenciaModal({ motivos }: { motivos: Motivo[] }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useFormState<FormActionState, FormData>(crearIncidenciaAdmin, undefined);
   const [motivoId, setMotivoId] = useState('');
+  const [errorEvidencia, setErrorEvidencia] = useState<string | null>(null);
 
   const motivoSeleccionado = useMemo(() => motivos.find((m) => String(m.id) === motivoId), [motivoId, motivos]);
+
+  /** Igual que IncidenciaForm.tsx del rider: hasta 3 archivos de evidencia, mismos tipos permitidos. */
+  function alElegirEvidencias(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) {
+      setErrorEvidencia(null);
+      return;
+    }
+    if (files.length > 3) {
+      setErrorEvidencia(t('incidenciaForm.hastaTresImagenes'));
+      e.target.value = '';
+      return;
+    }
+    const errores = files.map((f) => validarArchivoCliente(f, TIPOS_IMAGEN)).filter((err): err is string => !!err);
+    if (errores.length > 0) {
+      setErrorEvidencia(errores[0]);
+      e.target.value = '';
+      return;
+    }
+    setErrorEvidencia(null);
+  }
 
   if (state?.success && open) {
     // Cierra el modal automáticamente al terminar con éxito.
@@ -114,6 +139,20 @@ export function NuevaIncidenciaModal({ motivos }: { motivos: Motivo[] }) {
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaIncidencia.captura')}</label>
                 <input type="file" name="screenshot" accept="image/jpeg,image/png,image/webp" className="text-sm" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('incidenciaForm.evidencia')}</label>
+                <input
+                  type="file"
+                  name="evidencia"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={alElegirEvidencias}
+                  className="text-sm"
+                />
+                <span className="mt-1 block text-xs text-ink-muted">{t('incidenciaForm.hastaTresImagenes')}</span>
+                {errorEvidencia && <p className="text-xs text-danger">{errorEvidencia}</p>}
               </div>
 
               {state?.error && <p className="text-sm font-medium text-danger">{state.error}</p>}

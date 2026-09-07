@@ -148,10 +148,18 @@ export function NuevaIncidenciaModal({ motivos }: { motivos: Motivo[] }) {
                   name="evidencia"
                   accept="image/jpeg,image/png,image/webp"
                   multiple
-                  onChange={alElegirEvidencias}
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 3) {
+                      setErrorEvidencia('Máximo 3 archivos');
+                      e.target.value = '';
+                      return;
+                    }
+                    setErrorEvidencia(null);
+                  }}
                   className="text-sm"
                 />
-                <span className="mt-1 block text-xs text-ink-muted">{t('incidenciaForm.hastaTresImagenes')}</span>
+                <span className="text-xs text-ink-muted">{t('incidenciaForm.hastaTresImagenes')}</span>
                 {errorEvidencia && <p className="text-xs text-danger">{errorEvidencia}</p>}
               </div>
 

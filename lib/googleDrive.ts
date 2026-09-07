@@ -54,6 +54,8 @@ async function driveFetch(url: string, init: RequestInit = {}, reintentos = 2): 
   const token = await obtenerAccessToken();
   const resp = await fetch(url, { ...init, headers: { ...init.headers, Authorization: `Bearer ${token}` } });
 
+  // Límite de cuota transitorio (ahora es NUESTRA propia cuota, así que
+  // debería ser raro, pero no cuesta nada tener el reintento).
   if (resp.status === 403 && reintentos > 0) {
     const cuerpo = await resp.clone().text();
     if (cuerpo.includes('rateLimitExceeded') || cuerpo.includes('userRateLimitExceeded') || cuerpo.includes('Quota exceeded')) {

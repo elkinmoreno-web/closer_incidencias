@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { z } from 'zod';
 
@@ -67,6 +67,7 @@ export async function toggleMotivo(id: number, activo: boolean) {
   const { error } = await supabase.from('motivos').update({ activo }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
+  revalidateTag('motivos');
 }
 
 /**
@@ -79,6 +80,7 @@ export async function actualizarInstruccionesMotivo(id: number, instrucciones: s
   const { error } = await supabase.from('motivos').update({ instrucciones_aprobacion: valor }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
+  revalidateTag('motivos');
 }
 
 /**
@@ -92,6 +94,7 @@ export async function actualizarInstruccionesMotivoEn(id: number, instrucciones:
   const { error } = await supabase.from('motivos').update({ instrucciones_aprobacion_en: valor }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
+  revalidateTag('motivos');
 }
 
 /**
@@ -106,6 +109,7 @@ export async function actualizarNombreMotivoEn(id: number, nombreEn: string) {
   const { error } = await supabase.from('motivos').update({ nombre_en: valor }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
+  revalidateTag('motivos');
 }
 
 export async function actualizarNombreMotivoAusenciaEn(id: number, nombreEn: string) {
@@ -114,6 +118,7 @@ export async function actualizarNombreMotivoAusenciaEn(id: number, nombreEn: str
   const { error } = await supabase.from('motivos_ausencia').update({ nombre_en: valor }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
+  revalidateTag('motivos-ausencia');
 }
 
 export async function toggleMotivoAusencia(id: number, activo: boolean) {
@@ -121,6 +126,7 @@ export async function toggleMotivoAusencia(id: number, activo: boolean) {
   const { error } = await supabase.from('motivos_ausencia').update({ activo }).eq('id', id);
   if (error) throw new Error(error.message);
   revalidatePath('/dashboard/configuracion');
+  revalidateTag('motivos-ausencia');
 }
 
 /**
@@ -133,7 +139,7 @@ export async function toggleMotivoAusencia(id: number, activo: boolean) {
  * - Administrador (zona limitada): SOLO puede publicar en una de sus
  *   propias ciudades asignadas, nunca global ni en ciudad ajena.
  */
-export async function publicarAnuncio(mensaje: string, ciudadId: number | null, audiencia: 'todos' | 'admins' | 'riders' = 'todos') {
+export async function publicarAnuncio(mensaje: string, ciudadId: number | null, audiencia: 'todos' | 'admins' | 'riders' = 'todos', mensajeEn?: string) {
   const { supabase, rol } = await assertSuperAdminOAdministrador();
   const {
     data: { user },
@@ -150,6 +156,7 @@ export async function publicarAnuncio(mensaje: string, ciudadId: number | null, 
 
   const { error } = await supabase.from('anuncios').insert({
     mensaje: mensaje.trim(),
+    mensaje_en: mensajeEn?.trim() || null,
     activo: true,
     ciudad_id: ciudadId,
     audiencia,

@@ -31,7 +31,7 @@ const PATRONES: Record<string, RegExp> = {
  * — el nombre de columna varía según el material (confirmado con
  * datos reales: Mochilas/Chubasqueros usan un formato, Soportes otro).
  */
-export function ImportarStockModal({ material }: { material: StockMaterial }) {
+export function ImportarStockModal({ material, onImportado }: { material: StockMaterial; onImportado?: () => void }) {
   const { t, idioma } = useIdioma();
   const [open, setOpen] = useState(false);
   const [fase, setFase] = useState<Fase>('inicial');
@@ -50,6 +50,7 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
   const [usarTallas, setUsarTallas] = useState(false);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [resultado, setResultado] = useState<ResultadoImportacionStock | null>(null);
+  const [errorImportacion, setErrorImportacion] = useState<string | null>(null);
 
   function reset() {
     setFase('inicial');
@@ -114,6 +115,7 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
 
   async function confirmarImportacion() {
     setFase('importando');
+    setErrorImportacion(null);
     const filas = filasCrudas.map((f) => ({
       centroNombre: String(f[colCentro] ?? '').trim(),
       cantidad: usarTallas ? 0 : num(f[colCantidad]),
@@ -126,9 +128,24 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
       rotas: colRotas ? num(f[colRotas]) : 0,
       noRecuperadas: colNoRecuperadas ? num(f[colNoRecuperadas]) : 0,
     }));
-    const res = await importarStockInicial(material.id, filas);
-    setResultado(res);
-    setFase('terminado');
+    try {
+      const res = await importarStockInicial(material.id, filas);
+      setResultado(res);
+      setFase('terminado');
+      // Sin esto, la tabla de Stock/Historial detrás del modal seguía
+      // mostrando los datos de antes de importar — parecía que "cerraba
+      // y no guardaba" aunque el resultado mostrado sí reportara
+      // movimientos creados (el problema era solo de refresco, no de
+      // guardado).
+      onImportado?.();
+    } catch (e) {
+      // Sin esto, si la Server Action lanza una excepción (ej. un
+      // error 500 real de servidor), la fase se quedaba en
+      // "importando" para siempre, sin ningún mensaje — el modal
+      // parecía "colgado" sin dar pista de qué pasó.
+      setErrorImportacion(e instanceof Error ? e.message : 'No se pudo completar la importación. Inténtalo de nuevo.');
+      setFase('previsualizando');
+    }
   }
 
   const listoParaImportar = usarTallas
@@ -217,6 +234,8 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
                   {filasCrudas.length} {t('stockImport.filasListas')}
                 </p>
 
+                {errorImportacion && <p className="text-sm font-medium text-danger">{errorImportacion}</p>}
+
                 <div className="flex justify-end gap-2">
                   <button onClick={reset} className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted">
                     {t('stockImport.cancelar')}
@@ -239,7 +258,18 @@ export function ImportarStockModal({ material }: { material: StockMaterial }) {
               </div>
             )}
 
-            {fase === 'terminado' && resultado && (
+            {fase === 'terminado' && resultado && resultado.error && (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-danger">{resultado.error}</p>
+                <div className="flex justify-end">
+                  <button onClick={cerrar} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white">
+                    {t('stockImport.cerrar')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {fase === 'terminado' && resultado && !resultado.error && (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-ink">
                   <span className="font-semibold text-emerald-700">{resultado.insertados}</span> {t('stockImport.resultadoInsertados')}

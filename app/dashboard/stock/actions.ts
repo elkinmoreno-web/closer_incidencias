@@ -1,12 +1,28 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient, getAdminActual } from '@/lib/supabase/server';
+import { createClient, createAdminClient, getAdminActual } from '@/lib/supabase/server';
 import { registrarError, normalizarNombreCentro } from '@/lib/utils';
 import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockItemFicha } from '@/lib/types';
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
 import { generarFichaDesdeGoogleDocs } from '@/lib/googleDocs';
 import { carpetaFichaPorGestor } from '@/lib/googleDrive';
+import { enviarCorreoGmail, plantillaCorreoStock } from '@/lib/googleMail';
+
+// TEMPORAL mientras Stock sigue en pruebas: todos los avisos llegan
+// solo a estos correos. Cuando se confirme que el sistema funciona
+// bien, pasa a ser dinámico — a los admins/moderadores con la ciudad
+// de origen o destino asignada (admin_ciudades) + Rodrigo + Nicolás +
+// Elkin, igual que el correo llegaba a STK_CFG.DEVS en el sistema
+// anterior pero ahora por ciudad en vez de a un puñado fijo de gente.
+const CORREOS_AVISO_STOCK = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com'];
+
+// Tipos de movimiento cuyo registro dispara un aviso por correo —
+// pedido explícitamente: entradas/salidas "grandes" del almacén
+// (proveedor, envíos entre centros, mensajería) y recuperaciones de
+// robo. El resto (entrega a rider, devoluciones, ajustes menores) no
+// avisa para no saturar de correos por movimientos rutinarios.
+const TIPOS_NOTIFICABLES_AL_REGISTRAR = new Set(['ENTRADA_PROVEEDOR', 'ENVIO_SUCURSAL', 'TRASPASO_INTERNO', 'ENVIO_MENSAJERIA', 'RECUPERADA_ROBO']);
 
 async function assertAdmin() {
   const supabase = createClient();
@@ -20,6 +36,23 @@ export async function listarMaterialesStock(): Promise<StockMaterial[]> {
   const { supabase } = await assertAdmin();
   const { data } = await supabase.from('stock_materiales').select('*').eq('activo', true).order('orden');
   return (data ?? []) as StockMaterial[];
+}
+
+/**
+ * Todos los centros activos, sin limitar a la zona del admin — a
+ * diferencia de ciudadesYCentrosDeMiZona() (usado para el resto del
+ * panel), el centro DESTINO de un movimiento de Stock puede ser
+ * cualquiera (ej. un envío de Madrid a Valencia), no solo los de tu
+ * propia zona. El centro ORIGEN sigue limitado a tu zona en el
+ * frontend (NuevoMovimientoModal) — RLS ya impide crear/ver
+ * movimientos donde ni origen ni destino sean tuyos, así que exponer
+ * aquí la lista completa de centros (solo id+nombre, sin datos
+ * sensibles) no abre ningún acceso nuevo.
+ */
+export async function listarTodosLosCentros(): Promise<{ id: number; nombre: string }[]> {
+  const { supabase } = await assertAdmin();
+  const { data } = await supabase.from('centros').select('id, nombre').eq('activo', true).order('nombre');
+  return data ?? [];
 }
 
 /** Catálogo de tipos de movimiento, para poblar el selector "Tipo de movimiento". */
@@ -52,24 +85,16 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
     .select('centro_origen_id, centro_destino_id, unidades, talla_m, talla_l, talla_xl, talla_xxl, tipo_clave, created_at, estado_transito, unidades_recibidas, stock_tipos_movimiento(resta_origen, suma_destino, clase)')
     .eq('material_id', materialId);
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre, ciudad_id').order('nombre');
+  const { data: centros } = await supabase.from('centros').select('id, nombre, ciudad_id, gestor_carpeta').order('nombre');
   const nombrePorCentro = new Map((centros ?? []).map((c) => [c.id, c.nombre]));
 
-  // Los gestores de un centro son los admins/moderadores que tienen la
-  // CIUDAD de ese centro asignada en admin_ciudades — el mismo dato
-  // que ya rige los permisos por zona en el resto del CRM. Se guardan
-  // como LISTA de usuarios individuales (no un texto combinado como
-  // "Paty / Didier"), para poder filtrar por cada uno por separado.
-  const { data: asignaciones } = await supabase.from('admin_ciudades').select('ciudad_id, admins(usuario)');
-  const gestoresPorCiudad = new Map<number, string[]>();
-  for (const a of asignaciones ?? []) {
-    const usuario = (a.admins as unknown as { usuario: string } | null)?.usuario;
-    if (!usuario) continue;
-    const lista = gestoresPorCiudad.get(a.ciudad_id) ?? [];
-    lista.push(usuario);
-    gestoresPorCiudad.set(a.ciudad_id, lista);
-  }
-  const gestoresPorCentro = new Map((centros ?? []).map((c) => [c.id, c.ciudad_id ? (gestoresPorCiudad.get(c.ciudad_id) ?? []) : []]));
+  // El "gestor" que se muestra/filtra en Stock es el texto tal cual
+  // vino del CSV de inventario original (ej. "Paty/Didier"), guardado
+  // en centros.gestor_carpeta — decisión explícita del usuario:
+  // mantenerlo así, distinto del admin real asignado por
+  // admin_ciudades (que sigue rigiendo los permisos de zona en el
+  // resto del CRM, pero no es lo que se ve aquí).
+  const gestorPorCentro = new Map((centros ?? []).map((c) => [c.id, c.gestor_carpeta]));
 
   const { data: parametrosRow } = await supabase.from('stock_parametros').select('*').eq('id', 1).maybeSingle();
   const ventanaConsumoDias = parametrosRow?.ventana_consumo_dias ?? 28;
@@ -83,7 +108,7 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
         material_id: materialId,
         centro_id: centroId,
         centro_nombre: nombrePorCentro.get(centroId) ?? '—',
-        gestores: gestoresPorCentro.get(centroId) ?? [],
+        gestor: gestorPorCentro.get(centroId) ?? null,
         disponible: 0,
         transito_entrante: 0,
         transito_saliente: 0,
@@ -178,6 +203,15 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
       celda(m.centro_origen_id).en_calle -= m.unidades;
       celda(m.centro_origen_id).perdida += m.unidades;
     }
+    // Recuperar algo marcado como robado/perdido resta del contador de
+    // "Perdidas" del centro donde reaparece (no del centro donde se
+    // perdió originalmente — puede ser otro) — mismo criterio exacto
+    // que el sistema anterior (cd.perdida -= uds en RECUPERADA_ROBO).
+    // Sin esto "Perdidas" quedaba inflado para siempre aunque el
+    // material ya estuviera de vuelta.
+    if (m.tipo_clave === 'RECUPERADA_ROBO' && m.centro_destino_id) {
+      celda(m.centro_destino_id).perdida -= m.unidades;
+    }
   }
 
   const ahora = Date.now();
@@ -243,9 +277,20 @@ export interface RegistrarMovimientoInput {
   riderId?: string | null;
   riderNombreLibre?: string | null;
   notas?: string;
+  // Si la operación va a dejar el disponible del centro origen en
+  // negativo, el backend no bloquea (solo AJUSTE_MANUAL puede
+  // corregir descuadres, pero cualquier salida puede quedarse sin
+  // stock real en el centro) — en su lugar, devuelve
+  // "requiereConfirmacion" con el saldo actual, y solo continúa si
+  // esta bandera viene en true (el usuario ya confirmó en el frontend).
+  confirmarNegativo?: boolean;
 }
 
-export type RegistrarMovimientoState = { error: string } | { success: true } | undefined;
+export type RegistrarMovimientoState =
+  | { error: string }
+  | { success: true }
+  | { requiereConfirmacion: true; disponibleActual: number; quedariaEn: number }
+  | undefined;
 
 // Solo estos dos tipos manejan "cajas + unidades sueltas" — portado
 // literal de esCajas en _stkRegistrar() del sistema de Sheets. El
@@ -336,6 +381,37 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
     // siendo instantáneo, igual que antes.
     const esTraslado = tipo.clase === 'traslado';
 
+    // Aviso (no bloqueo) si la operación va a dejar el disponible del
+    // centro origen en negativo — confirmado explícitamente que el
+    // sistema debe avisar con una confirmación, no impedir el
+    // registro (hay casos reales donde se envía primero y se
+    // regulariza después). Solo aplica cuando el tipo REALMENTE resta
+    // del origen (regla.resta_origen true — se define un poco más abajo
+    // junto al resto de reglas, pero aquí se repite la comprobación
+    // mínima porque el catálogo completo se consulta después del insert
+    // en otras funciones; para evitar una consulta extra redundante,
+    // se usa directamente el tipo.clase, que ya distingue salida/traslado/entrada).
+    if (input.centroOrigenId && !input.confirmarNegativo && (tipo.clase === 'salida' || esTraslado)) {
+      const { data: movimientosOrigen } = await supabase
+        .from('stock_movimientos')
+        .select('unidades, centro_origen_id, centro_destino_id, tipo_clave, estado_transito, stock_tipos_movimiento(resta_origen, suma_destino)')
+        .eq('material_id', input.materialId)
+        .or(`centro_origen_id.eq.${input.centroOrigenId},centro_destino_id.eq.${input.centroOrigenId}`);
+
+      let disponibleActual = 0;
+      for (const m of movimientosOrigen ?? []) {
+        const regla = m.stock_tipos_movimiento as unknown as { resta_origen: boolean | null; suma_destino: boolean } | null;
+        if (!regla) continue;
+        if (regla.resta_origen === true && m.centro_origen_id === input.centroOrigenId) disponibleActual -= m.unidades;
+        if (regla.suma_destino && m.centro_destino_id === input.centroOrigenId && m.estado_transito !== 'en_transito') disponibleActual += m.unidades;
+      }
+
+      const quedariaEn = disponibleActual - unidades;
+      if (quedariaEn < 0) {
+        return { requiereConfirmacion: true, disponibleActual, quedariaEn };
+      }
+    }
+
     const { error } = await supabase.from('stock_movimientos').insert({
       material_id: input.materialId,
       tipo_clave: input.tipoClave,
@@ -356,6 +432,33 @@ export async function registrarMovimientoStock(input: RegistrarMovimientoInput):
 
     if (error) return { error: error.message };
 
+    // Aviso por correo para los tipos de movimiento "grandes" (entrada
+    // de proveedor, envíos entre centros, mensajería, recuperación de
+    // robo) — pedido explícito, para enterarse sin tener que estar
+    // mirando el panel. No debe romper el registro si el correo falla.
+    if (TIPOS_NOTIFICABLES_AL_REGISTRAR.has(input.tipoClave)) {
+      const [{ data: centroOrigen }, { data: centroDestino }] = await Promise.all([
+        input.centroOrigenId ? supabase.from('centros').select('nombre').eq('id', input.centroOrigenId).maybeSingle() : Promise.resolve({ data: null }),
+        input.centroDestinoId ? supabase.from('centros').select('nombre').eq('id', input.centroDestinoId).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const origenNombre = centroOrigen?.nombre ?? '—';
+      const destinoNombre = centroDestino?.nombre ?? '—';
+      enviarCorreoGmail(
+        CORREOS_AVISO_STOCK,
+        `📦 ${tipo.etiqueta} · ${material.titulo} · ${origenNombre} ➡️ ${destinoNombre}`,
+        plantillaCorreoStock({
+          titulo: `${tipo.etiqueta} registrado`,
+          filas: [
+            { etiqueta: 'Material', valor: material.titulo },
+            { etiqueta: 'Ruta', valor: `${origenNombre} ➡️ ${destinoNombre}` },
+            { etiqueta: 'Cantidad', valor: String(unidades) },
+            { etiqueta: 'Registrado por', valor: yo!.usuario },
+          ],
+          observaciones: input.notas?.trim() || null,
+        })
+      ).catch((e) => registrarError('registrarMovimientoStock:aviso', e));
+    }
+
     revalidatePath('/dashboard/stock');
     return { success: true };
   } catch (e) {
@@ -368,14 +471,22 @@ export async function listarMovimientosRecientes(materialId: number, limite = 30
   (StockMovimiento & { centro_origen_nombre: string | null; centro_destino_nombre: string | null; admin_usuario: string | null; tipo_etiqueta: string })[]
 > {
   const { supabase } = await assertAdmin();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('stock_movimientos')
     .select(
-      '*, origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins(usuario), stock_tipos_movimiento(etiqueta, etiqueta_en)'
+      // admins!stock_movimientos_admin_id_fkey (no "admins(usuario)" a secas):
+      // stock_movimientos tiene DOS FKs a admins (admin_id y recibido_por,
+      // esta última añadida para el flujo de recepción de traslados), así
+      // que PostgREST no puede resolver el embed sin ambigüedad (PGRST201)
+      // y devolvía data=null en cada consulta — el historial parecía
+      // "vacío" aunque el movimiento sí se hubiera guardado.
+      '*, origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins!stock_movimientos_admin_id_fkey(usuario), stock_tipos_movimiento(etiqueta, etiqueta_en)'
     )
     .eq('material_id', materialId)
     .order('created_at', { ascending: false })
     .limit(limite);
+
+  if (error) registrarError('listarMovimientosRecientes', error);
 
   return (data ?? []).map((m: any) => ({
     ...m,
@@ -412,6 +523,7 @@ export interface ResultadoImportacionStock {
   insertados: number;
   centrosNoEncontrados: string[]; // nombres del CSV que no coinciden con ningún centro real (ni siquiera normalizando) — no se crean solos, se listan para revisión manual
   filasIgnoradas: number; // cantidad 0 en todas las columnas — no aportan nada al ledger
+  error?: string; // ej. "solo Super Admin puede importar" — se muestra en vez del resumen normal
 }
 
 /**
@@ -436,106 +548,191 @@ export interface ResultadoImportacionStock {
  * reales de la operación, no un error del importador (decisión
  * explícita: se corrigen después desde el panel con "Ajuste manual").
  */
+// Nombres de centro del CSV que no siguen el patrón "<CIUDAD> CENTRO"
+// (más abajo) ni coinciden literalmente con el nombre real — o porque
+// el centro real tiene un prefijo de grupo (JEREZ, ALICANTE, FD...) que
+// el CSV no incluye, o porque trae una grafía distinta (con/sin tilde,
+// "Base Operativa", etc). Confirmado 1:1 contra la tabla centros real;
+// si un nombre del CSV coincidiera con más de un centro real no se
+// incluye aquí a propósito — mejor dejarlo en "no encontrados" para
+// revisión manual que asignar stock al centro equivocado.
+const ALIAS_CENTRO_IMPORTACION: Record<string, string> = {
+  'san fernando de cadiz': 'jerez san fernando',
+  'chiclana de la frontera': 'jerez chiclana de la frontera',
+  'cadiz ciudad': 'jerez cadiz',
+  'castellon': 'castellon de la plana',
+  'elche': 'alicante elche',
+  's. de compostela': 'santiago de compostela',
+  'puerto de santa maria': 'jerez puerto de santa maria',
+  berlin: 'fd berlin',
+  hamburgo: 'fd hamburg',
+  heidelberg: 'fd heidelberg',
+  mannheim: 'fd mannheim',
+  stuttgart: 'fd stuttgart',
+};
+
 export async function importarStockInicial(materialId: number, filas: FilaImportacionStock[]): Promise<ResultadoImportacionStock> {
-  const { supabase, yo } = await assertAdmin();
+  try {
+    const { supabase, yo } = await assertAdmin();
+    if (!yo) throw new Error('No se pudo identificar tu sesión de administrador. Vuelve a iniciar sesión e inténtalo de nuevo.');
+    // Un CSV de migración típicamente cubre centros de toda España; un
+    // admin/moderador con ciudades limitadas solo puede insertar en las
+    // suyas (RLS), así que una sola fila fuera de su zona tumbaba TODO
+    // el lote (es un único INSERT masivo, todo-o-nada) con un error
+    // críptico de Postgres. Se restringe a Super Admin, igual que el
+    // resto de operaciones "de catálogo/migración global" del panel.
+    if (yo.rol !== 'super_admin') return { insertados: 0, centrosNoEncontrados: [], filasIgnoradas: 0, error: 'Solo un Super Admin puede importar un CSV de stock inicial.' };
 
-  const { data: centros } = await supabase.from('centros').select('id, nombre');
-  const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
+    const { data: centros } = await supabase.from('centros').select('id, nombre');
+    const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
 
-  const centrosNoEncontrados: string[] = [];
-  const registros: Record<string, unknown>[] = [];
-  let filasIgnoradas = 0;
-  const NOTA = 'Migración de stock inicial desde el sistema anterior (Google Sheets)';
-
-  for (const fila of filas) {
-    const centroId = idPorNombreCentro.get(normalizarNombreCentro(fila.centroNombre));
-    if (!centroId) {
-      centrosNoEncontrados.push(fila.centroNombre);
-      continue;
-    }
-
-    const tallaM = fila.tallaM ?? 0;
-    const tallaL = fila.tallaL ?? 0;
-    const tallaXl = fila.tallaXl ?? 0;
-    const tallaXxl = fila.tallaXxl ?? 0;
-    const disponible = tallaM || tallaL || tallaXl || tallaXxl ? tallaM + tallaL + tallaXl + tallaXxl : fila.cantidad;
-    const enTransito = fila.enTransito ?? 0;
-    const entregadas = fila.entregadas ?? 0;
-    const rotas = fila.rotas ?? 0;
-    const noRecuperadas = fila.noRecuperadas ?? 0;
-
-    if (!disponible && !enTransito && !entregadas && !rotas && !noRecuperadas) {
-      filasIgnoradas++;
-      continue;
+    // Resuelve un nombre de centro del CSV probando, en orden: (1) el
+    // nombre normalizado tal cual, (2) el alias explícito de arriba, (3)
+    // "<nombre> CENTRO" — muchas ciudades con varios centros reales
+    // tienen uno genérico así (ej. "Jerez" en el CSV -> "JEREZ CENTRO"
+    // real), y el CSV histórico solo traía el nombre de la ciudad sin
+    // ese sufijo.
+    function resolverCentroId(nombreCsv: string): number | undefined {
+      const normalizado = normalizarNombreCentro(nombreCsv);
+      return (
+        idPorNombreCentro.get(normalizado) ??
+        (ALIAS_CENTRO_IMPORTACION[normalizado] ? idPorNombreCentro.get(ALIAS_CENTRO_IMPORTACION[normalizado]) : undefined) ??
+        idPorNombreCentro.get(`${normalizado} centro`)
+      );
     }
 
-    if (disponible) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'INV_INICIAL',
-        centro_destino_id: centroId,
-        unidades: disponible,
-        talla_m: tallaM,
-        talla_l: tallaL,
-        talla_xl: tallaXl,
-        talla_xxl: tallaXxl,
-        notas: NOTA,
-        admin_id: yo!.id,
-      });
+    const centrosNoEncontrados: string[] = [];
+    const registros: Record<string, unknown>[] = [];
+    let filasIgnoradas = 0;
+    const NOTA = 'Migración de stock inicial desde el sistema anterior (Google Sheets)';
+
+    for (const fila of filas) {
+      const centroId = resolverCentroId(fila.centroNombre);
+      if (!centroId) {
+        centrosNoEncontrados.push(fila.centroNombre);
+        continue;
+      }
+
+      const tallaM = fila.tallaM ?? 0;
+      const tallaL = fila.tallaL ?? 0;
+      const tallaXl = fila.tallaXl ?? 0;
+      const tallaXxl = fila.tallaXxl ?? 0;
+      const disponible = tallaM || tallaL || tallaXl || tallaXxl ? tallaM + tallaL + tallaXl + tallaXxl : fila.cantidad;
+      // Los 4 contadores del CSV se fuerzan a no-negativos: un valor
+      // negativo aquí (ej. "noRecuperadas: -1", visto en datos reales
+      // migrados) es un error de captura del sistema anterior, no un
+      // caso de negocio válido — a diferencia de un Ajuste manual
+      // hecho a propósito desde el panel, que sí puede ser negativo.
+      const enTransito = Math.max(0, fila.enTransito ?? 0);
+      const entregadas = Math.max(0, fila.entregadas ?? 0);
+      const rotas = Math.max(0, fila.rotas ?? 0);
+      const noRecuperadas = Math.max(0, fila.noRecuperadas ?? 0);
+
+      if (!disponible && !enTransito && !entregadas && !rotas && !noRecuperadas) {
+        filasIgnoradas++;
+        continue;
+      }
+
+      if (disponible) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'INV_INICIAL',
+          centro_destino_id: centroId,
+          unidades: disponible,
+          talla_m: tallaM,
+          talla_l: tallaL,
+          talla_xl: tallaXl,
+          talla_xxl: tallaXxl,
+          notas: NOTA,
+          admin_id: yo.id,
+        });
+      }
+      if (enTransito) {
+        // TRANSITO_MIGRADO: tipo neutro que no resta/suma disponible ni
+        // es un traslado real — solo deja constancia del volumen en
+        // tránsito heredado del sistema anterior, sin inventar un
+        // origen/destino que no se conoce.
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'TRANSITO_MIGRADO',
+          centro_destino_id: centroId,
+          unidades: enTransito,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
+          notas: NOTA + ' (en tránsito)',
+          admin_id: yo.id,
+        });
+      }
+      if (entregadas) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'ENTREGA_RIDER',
+          centro_origen_id: centroId,
+          unidades: entregadas,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
+          notas: NOTA + ' (entregado a riders)',
+          admin_id: yo.id,
+        });
+      }
+      if (rotas) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'DEVOLUCION_ROTA',
+          centro_origen_id: centroId,
+          unidades: rotas,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
+          notas: NOTA + ' (roto)',
+          admin_id: yo.id,
+        });
+      }
+      if (noRecuperadas) {
+        registros.push({
+          material_id: materialId,
+          tipo_clave: 'NO_RECUPERADA',
+          centro_origen_id: centroId,
+          unidades: noRecuperadas,
+          talla_m: 0,
+          talla_l: 0,
+          talla_xl: 0,
+          talla_xxl: 0,
+          notas: NOTA + ' (no recuperado)',
+          admin_id: yo.id,
+        });
+      }
     }
-    if (enTransito) {
-      // TRANSITO_MIGRADO: tipo neutro que no resta/suma disponible ni
-      // es un traslado real — solo deja constancia del volumen en
-      // tránsito heredado del sistema anterior, sin inventar un
-      // origen/destino que no se conoce.
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'TRANSITO_MIGRADO',
-        centro_destino_id: centroId,
-        unidades: enTransito,
-        notas: NOTA + ' (en tránsito)',
-        admin_id: yo!.id,
-      });
+
+    if (registros.length > 0) {
+      const { error } = await supabase.from('stock_movimientos').insert(registros);
+      // Mensaje explícito si falla por un tipo de movimiento que aún
+      // no existe en stock_tipos_movimiento (ej. TRANSITO_MIGRADO/
+      // INV_INICIAL sin dar de alta con el SQL correspondiente) — sin
+      // esto, el error de clave foránea de Postgres es críptico para
+      // quien lo lee en el navegador.
+      if (error) {
+        if (error.message.includes('tipo_clave') || error.message.includes('foreign key')) {
+          throw new Error(`No se pudo guardar la importación: falta dar de alta un tipo de movimiento en la base de datos (${error.message}). Revisa que se hayan ejecutado todos los SQL del módulo de Stock.`);
+        }
+        throw new Error(error.message);
+      }
     }
-    if (entregadas) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'ENTREGA_RIDER',
-        centro_origen_id: centroId,
-        unidades: entregadas,
-        notas: NOTA + ' (entregado a riders)',
-        admin_id: yo!.id,
-      });
-    }
-    if (rotas) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'DEVOLUCION_ROTA',
-        centro_origen_id: centroId,
-        unidades: rotas,
-        notas: NOTA + ' (roto)',
-        admin_id: yo!.id,
-      });
-    }
-    if (noRecuperadas) {
-      registros.push({
-        material_id: materialId,
-        tipo_clave: 'NO_RECUPERADA',
-        centro_origen_id: centroId,
-        unidades: noRecuperadas,
-        notas: NOTA + ' (no recuperado)',
-        admin_id: yo!.id,
-      });
-    }
+
+    revalidatePath('/dashboard/stock');
+    return { insertados: registros.length, centrosNoEncontrados, filasIgnoradas };
+  } catch (e) {
+    // Se relanza (no se traga el error) para que el modal SÍ vea el
+    // mensaje real en vez de quedarse "colgado" en Importando... —
+    // registrarError deja además una traza completa en los logs del
+    // servidor, no solo el mensaje resumido que llega al navegador.
+    throw new Error(registrarError('importarStockInicial', e, e instanceof Error ? e.message : 'No se pudo completar la importación.'));
   }
-
-  if (registros.length > 0) {
-    const { error } = await supabase.from('stock_movimientos').insert(registros);
-    if (error) throw new Error(error.message);
-  }
-
-  revalidatePath('/dashboard/stock');
-  return { insertados: registros.length, centrosNoEncontrados, filasIgnoradas };
 }
 
 export interface CrearFichaInput {
@@ -702,15 +899,18 @@ export async function listarFichasRecientes(limite = 30): Promise<(StockFicha & 
  * admin actual (por origen o destino), así que no hace falta volver a
  * filtrar aquí.
  */
-export async function listarTrasladosPendientes(): Promise<
-  (StockMovimiento & { material_titulo: string; material_titulo_en: string | null; centro_origen_nombre: string | null; centro_destino_nombre: string | null })[]
+export async function listarTrasladosPendientes(materialId: number): Promise<
+  (StockMovimiento & { material_titulo: string; material_titulo_en: string | null; centro_origen_nombre: string | null; centro_destino_nombre: string | null; admin_usuario: string | null })[]
 > {
   const { supabase } = await assertAdmin();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('stock_movimientos')
-    .select('*, stock_materiales(titulo, titulo_en), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre)')
+    .select('*, stock_materiales(titulo, titulo_en), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre), admins!stock_movimientos_admin_id_fkey(usuario)')
     .eq('estado_transito', 'en_transito')
+    .eq('material_id', materialId)
     .order('created_at', { ascending: false });
+
+  if (error) registrarError('listarTrasladosPendientes', error);
 
   return (data ?? []).map((m: any) => ({
     ...m,
@@ -718,6 +918,7 @@ export async function listarTrasladosPendientes(): Promise<
     material_titulo_en: m.stock_materiales?.titulo_en ?? null,
     centro_origen_nombre: m.origen?.nombre ?? null,
     centro_destino_nombre: m.destino?.nombre ?? null,
+    admin_usuario: m.admins?.usuario ?? null,
   }));
 }
 
@@ -732,42 +933,128 @@ export type ConfirmarRecepcionState = { error: string } | { success: true; difer
  * aparte porque el cálculo ya usa unidades_recibidas cuando el estado
  * es "recibido".
  */
-export async function confirmarRecepcionTraslado(movimientoId: number, unidadesRecibidas: number): Promise<ConfirmarRecepcionState> {
+export async function confirmarRecepcionTraslado(movimientoId: number, unidadesRecibidas: number, notasRecepcion?: string): Promise<ConfirmarRecepcionState> {
   try {
     const { supabase, yo } = await assertAdmin();
 
-    const { data: mov } = await supabase.from('stock_movimientos').select('unidades, estado_transito').eq('id', movimientoId).maybeSingle();
+    const { data: mov } = await supabase
+      .from('stock_movimientos')
+      .select('unidades, estado_transito, stock_materiales(titulo), origen:centro_origen_id(nombre), destino:centro_destino_id(nombre)')
+      .eq('id', movimientoId)
+      .maybeSingle();
     if (!mov) return { error: 'Movimiento no encontrado.' };
     if (mov.estado_transito !== 'en_transito') return { error: 'Ese envío ya no está en tránsito.' };
     if (unidadesRecibidas < 0) return { error: 'La cantidad recibida no puede ser negativa.' };
 
-    const { error } = await supabase
+    const { data: actualizado, error } = await supabase
       .from('stock_movimientos')
-      .update({ estado_transito: 'recibido', unidades_recibidas: unidadesRecibidas, recibido_por: yo!.id, recibido_en: new Date().toISOString() })
-      .eq('id', movimientoId);
+      .update({
+        estado_transito: 'recibido',
+        unidades_recibidas: unidadesRecibidas,
+        recibido_por: yo!.id,
+        recibido_en: new Date().toISOString(),
+        notas_recepcion: notasRecepcion?.trim() || null,
+      })
+      .eq('id', movimientoId)
+      .select('id')
+      .maybeSingle();
     if (error) return { error: error.message };
+    // RLS puede dejar pasar el UPDATE sin error pero sin afectar ninguna
+    // fila (ej. políticas desalineadas entre roles) — sin esto se
+    // devolvía éxito al frontend aunque nada cambiara realmente en la
+    // base, causa real de un bug donde "Ya ha llegado" no hacía nada.
+    if (!actualizado) return { error: 'No se pudo actualizar el envío (sin permiso). Contacta a un administrador.' };
+
+    const diferencia = unidadesRecibidas - mov.unidades;
+    // Aviso por correo cuando lo recibido no coincide con lo enviado —
+    // mismo criterio que _stkAvisarIncidencia() del sistema anterior.
+    // No debe romper la confirmación si el correo falla (API caída,
+    // scope de Gmail no autorizado, etc.), solo queda logueado.
+    if (diferencia !== 0) {
+      const materialTitulo = (mov as any).stock_materiales?.titulo ?? 'Material';
+      const origenNombre = (mov as any).origen?.nombre ?? '—';
+      const destinoNombre = (mov as any).destino?.nombre ?? '—';
+      enviarCorreoGmail(
+        CORREOS_AVISO_STOCK,
+        `⚠️ Incidencia de recepción · ${materialTitulo} · ${origenNombre} ➡️ ${destinoNombre}`,
+        plantillaCorreoStock({
+          titulo: `Diferencia al recepcionar ${materialTitulo}`,
+          colorAcento: '#E74C3C',
+          filas: [
+            { etiqueta: 'Ruta', valor: `${origenNombre} ➡️ ${destinoNombre}` },
+            { etiqueta: 'Recepcionado por', valor: yo!.usuario },
+            { etiqueta: 'Enviadas', valor: String(mov.unidades) },
+            { etiqueta: 'Contadas', valor: String(unidadesRecibidas) },
+          ],
+          notaDestacada: `Diferencia: ${diferencia > 0 ? '+' : ''}${diferencia} unidades`,
+          colorNotaDestacada: '#E74C3C',
+          observaciones: notasRecepcion?.trim() || null,
+        })
+      ).catch((e) => registrarError('confirmarRecepcionTraslado:aviso', e));
+    }
 
     revalidatePath('/dashboard/stock');
-    return { success: true, diferencia: unidadesRecibidas - mov.unidades };
+    return { success: true, diferencia };
   } catch (e) {
     return { error: registrarError('confirmarRecepcionTraslado', e, 'No se pudo confirmar la recepción. Inténtalo de nuevo.') };
   }
 }
 
 /** Anula un traslado antes de que llegue — no afecta al destino; el origen ya quedó descontado (el material salió físicamente y hay que gestionarlo aparte, igual que el sistema anterior no revertía el origen al anular). */
-export async function anularTraslado(movimientoId: number): Promise<ConfirmarRecepcionState> {
+export async function anularTraslado(movimientoId: number, notasRecepcion?: string): Promise<ConfirmarRecepcionState> {
   try {
     const { supabase } = await assertAdmin();
     const { data: mov } = await supabase.from('stock_movimientos').select('estado_transito').eq('id', movimientoId).maybeSingle();
     if (!mov) return { error: 'Movimiento no encontrado.' };
     if (mov.estado_transito !== 'en_transito') return { error: 'Ese envío ya no está en tránsito.' };
 
-    const { error } = await supabase.from('stock_movimientos').update({ estado_transito: 'anulado' }).eq('id', movimientoId);
+    const { data: actualizado, error } = await supabase
+      .from('stock_movimientos')
+      .update({ estado_transito: 'anulado', notas_recepcion: notasRecepcion?.trim() || null })
+      .eq('id', movimientoId)
+      .select('id')
+      .maybeSingle();
     if (error) return { error: error.message };
+    if (!actualizado) return { error: 'No se pudo anular el envío (sin permiso). Contacta a un administrador.' };
 
     revalidatePath('/dashboard/stock');
     return { success: true, diferencia: 0 };
   } catch (e) {
     return { error: registrarError('anularTraslado', e, 'No se pudo anular el envío. Inténtalo de nuevo.') };
+  }
+}
+
+export type VaciarStockState = { error: string } | { success: true; movimientosBorrados: number; fichasBorradas: number } | undefined;
+
+/**
+ * Borra TODO el ledger de Stock (todos los materiales) y todas las
+ * fichas — pensado para dejar el módulo en blanco antes de importar
+ * los datos reales de producción desde cero, una vez terminadas las
+ * pruebas. Irreversible: no hay papelera para esto (a diferencia de
+ * incidencias/ausencias). No borra los PDFs ya subidos a Google Drive
+ * (las fichas referenciaban un archivo ahí; borrarlos también
+ * implicaría permisos y lógica de Drive aparte, fuera del alcance de
+ * "vaciar la base").
+ *
+ * Ni stock_movimientos ni stock_fichas tienen política RLS de DELETE
+ * (a propósito: nadie debería poder borrar el ledger vía la API
+ * normal) — se usa el cliente de servicio, igual que crear el primer
+ * usuario admin, y se comprueba el rol a mano aquí mismo.
+ */
+export async function vaciarStockDePrueba(): Promise<VaciarStockState> {
+  try {
+    const { yo } = await assertAdmin();
+    if (!yo || yo.rol !== 'super_admin') return { error: 'Solo un Super Admin puede vaciar el módulo de Stock.' };
+
+    const admin = createAdminClient();
+    const { data: movs, error: errorMovs } = await admin.from('stock_movimientos').delete().gte('id', 0).select('id');
+    if (errorMovs) return { error: errorMovs.message };
+    const { data: fichas, error: errorFichas } = await admin.from('stock_fichas').delete().gte('id', 0).select('id');
+    if (errorFichas) return { error: errorFichas.message };
+
+    revalidatePath('/dashboard/stock');
+    return { success: true, movimientosBorrados: movs?.length ?? 0, fichasBorradas: fichas?.length ?? 0 };
+  } catch (e) {
+    return { error: registrarError('vaciarStockDePrueba', e, 'No se pudo vaciar el módulo de Stock. Inténtalo de nuevo.') };
   }
 }

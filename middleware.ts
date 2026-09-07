@@ -41,6 +41,8 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  const { response, user, supabase } = await updateSession(request);
+
   if (!user) {
     const loginPath = isDashboardRoute ? '/gestor/login' : '/rider/login';
     return NextResponse.redirect(new URL(loginPath, request.url));

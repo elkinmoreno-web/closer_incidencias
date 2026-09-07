@@ -1,8 +1,11 @@
 import { createClient, getUsuarioAutenticado } from '@/lib/supabase/server';
+import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
+import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
 interface Anuncio {
   id: number;
   mensaje: string;
+  mensajeEn: string | null;
   ciudadNombre: string | null; // null = global
 }
 
@@ -23,12 +26,14 @@ export async function AnnouncementBanner() {
   const anuncios = await resolverAnunciosVisibles(supabase, user.id);
   if (anuncios.length === 0) return null;
 
+  const idioma = await resolverIdioma();
+
   return (
     <div className="divide-y divide-amber-200 border-b border-amber-200 bg-amber-50">
       {anuncios.map((a) => (
         <div key={a.id} className="px-6 py-2.5 text-sm font-medium text-amber-900">
           📣 {a.ciudadNombre && <span className="mr-1.5 rounded-full bg-amber-200/70 px-2 py-0.5 text-xs font-semibold">{a.ciudadNombre}</span>}
-          {a.mensaje}
+          {nombreSegunIdioma(idioma, a.mensaje, a.mensajeEn)}
         </div>
       ))}
     </div>
@@ -42,7 +47,7 @@ async function resolverAnunciosVisibles(supabase: ReturnType<typeof createClient
   if (admin) {
     const { data } = await supabase
       .from('anuncios')
-      .select('id, mensaje, ciudad_id, audiencia, ciudades(nombre)')
+      .select('id, mensaje, mensaje_en, ciudad_id, audiencia, ciudades(nombre)')
       .eq('activo', true)
       .in('audiencia', ['todos', 'admins'])
       .order('created_at', { ascending: false });
@@ -65,7 +70,7 @@ async function resolverAnunciosVisibles(supabase: ReturnType<typeof createClient
 
   const { data } = await supabase
     .from('anuncios')
-    .select('id, mensaje, ciudad_id, audiencia, ciudades(nombre)')
+    .select('id, mensaje, mensaje_en, ciudad_id, audiencia, ciudades(nombre)')
     .eq('activo', true)
     .in('audiencia', ['todos', 'riders'])
     .order('created_at', { ascending: false });
@@ -73,7 +78,7 @@ async function resolverAnunciosVisibles(supabase: ReturnType<typeof createClient
   return (data ?? []).filter((a) => a.ciudad_id === null || a.ciudad_id === ciudadIdDelRider).map(mapAnuncio);
 }
 
-function mapAnuncio(a: { id: number; mensaje: string; ciudades?: { nombre: string } | { nombre: string }[] | null }): Anuncio {
+function mapAnuncio(a: { id: number; mensaje: string; mensaje_en: string | null; ciudades?: { nombre: string } | { nombre: string }[] | null }): Anuncio {
   const ciudadRel = Array.isArray(a.ciudades) ? a.ciudades[0] : a.ciudades;
-  return { id: a.id, mensaje: a.mensaje, ciudadNombre: ciudadRel?.nombre ?? null };
+  return { id: a.id, mensaje: a.mensaje, mensajeEn: a.mensaje_en, ciudadNombre: ciudadRel?.nombre ?? null };
 }

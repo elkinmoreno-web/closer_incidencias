@@ -12,6 +12,7 @@ import {
 import type { StockMaterial, StockDisponible, StockMovimiento, StockTipoMovimiento, StockParametros, StockFicha, Centro } from '@/lib/types';
 import { NuevoMovimientoModal } from '@/components/stock/NuevoMovimientoModal';
 import { ImportarStockModal } from '@/components/stock/ImportarStockModal';
+import { ReiniciarStockModal } from '@/components/stock/ReiniciarStockModal';
 import { ParametrosStockModal } from '@/components/stock/ParametrosStockModal';
 import { StockResumenTab } from '@/components/stock/StockResumenTab';
 import { SolicitudesTab } from '@/components/stock/SolicitudesTab';
@@ -45,7 +46,17 @@ const CLAVE_FICHAS = '__fichas__';
  * se muestra directo su propio listado — no tiene esas 3 sub-pestañas
  * porque no es un material con stock por centro.
  */
-export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: StockMaterial[]; centros: Centro[]; esSuperAdmin: boolean }) {
+export function StockPanel({
+  materiales,
+  centros,
+  centrosTodos,
+  esSuperAdmin,
+}: {
+  materiales: StockMaterial[];
+  centros: Centro[];
+  centrosTodos: { id: number; nombre: string }[];
+  esSuperAdmin: boolean;
+}) {
   const { t, idioma } = useIdioma();
   const [seleccion, setSeleccion] = useState<string>(materiales[0] ? String(materiales[0].id) : CLAVE_FICHAS);
   const [pestana, setPestana] = useState<Pestana>('stock');
@@ -122,7 +133,19 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {material && <ImportarStockModal material={material} />}
+          {/* Importar CSV cubre típicamente centros de toda España — un
+              admin/moderador con ciudades limitadas no puede insertar
+              fuera de las suyas (RLS), así que se reserva a Super Admin
+              en vez de fallar a medias con un error críptico. */}
+          {material && esSuperAdmin && <ImportarStockModal material={material} onImportado={() => recargar(material.id)} />}
+          {esSuperAdmin && (
+            <ReiniciarStockModal
+              onVaciado={() => {
+                recargarFichas();
+                if (materialActivo !== null) recargar(materialActivo);
+              }}
+            />
+          )}
           {!esFichas && (
             <button
               onClick={() => setParametrosModalAbierto(true)}
@@ -172,7 +195,7 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
 
           {material && pestana === 'stock' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <StockResumenTab stock={stock} material={material} />)}
 
-          {pestana === 'solicitudes' && <SolicitudesTab />}
+          {material && pestana === 'solicitudes' && <SolicitudesTab materialId={material.id} onResuelto={() => recargar(material.id)} />}
 
           {material && pestana === 'historial' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <HistorialTab movimientos={movimientos} />)}
         </>
@@ -184,10 +207,18 @@ export function StockPanel({ materiales, centros, esSuperAdmin }: { materiales: 
           materiales={materiales}
           tipos={tipos}
           centros={centros}
+          centrosTodos={centrosTodos}
           onCerrar={() => setModalAbierto(false)}
-          onRegistrado={() => {
+          onRegistrado={(materialIdUsado) => {
             setModalAbierto(false);
-            if (materialActivo !== null) recargar(materialActivo);
+            // Recarga el material REALMENTE usado en el registro, que
+            // puede ser distinto del que estaba activo en la pestaña
+            // principal si el usuario cambió de material dentro del
+            // propio modal (Paso 1) — sin esto, el historial se
+            // refrescaba del material equivocado y parecía que el
+            // movimiento nunca se había guardado.
+            setSeleccion(String(materialIdUsado));
+            recargar(materialIdUsado);
           }}
         />
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { X, ChevronLeft, Package, ArrowRight, Check } from 'lucide-react';
 import { registrarMovimientoStock } from '@/app/dashboard/stock/actions';
 import type { StockMaterial, StockTipoMovimiento, Centro } from '@/lib/types';
@@ -18,6 +18,11 @@ const TIPOS_CON_CAJAS = new Set(['ENTRADA_PROVEEDOR', 'ENVIO_SUCURSAL']);
 // sin importar lo que se escriba) — se oculta el campo de cantidad
 // para no dar a entender que hace algo con el inventario.
 const TIPO_NEUTRO_SIN_CANTIDAD = 'RIDER_YA_TIENE_SOPORTE';
+// Casi toda entrada de proveedor llega a la base operativa — se
+// preselecciona como destino por defecto (editable) para no obligar a
+// elegirlo a mano en el caso común; antes este tipo ni siquiera exigía
+// destino, así que el stock quedaba sin centro asignado.
+const CENTRO_DEFAULT_ENTRADA_PROVEEDOR = 'San Fernando (Base Operativa)';
 
 type Paso = 'tipo' | 'detalle' | 'confirmar';
 
@@ -32,19 +37,27 @@ export function NuevoMovimientoModal({
   materiales,
   tipos,
   centros,
+  centrosTodos,
   onCerrar,
   onRegistrado,
 }: {
   material: StockMaterial;
   materiales: StockMaterial[];
   tipos: StockTipoMovimiento[];
+  // Origen: limitado a los centros de tu zona (no puedes fingir que
+  // algo sale de un centro que no es tuyo). Destino: TODOS los centros
+  // activos — un traslado puede ir a cualquier ciudad (ej. Madrid →
+  // Valencia), y RLS ya permite ver/gestionar el movimiento a los
+  // admins de cualquiera de los dos extremos, no solo el origen.
   centros: Centro[];
+  centrosTodos: { id: number; nombre: string }[];
   onCerrar: () => void;
-  onRegistrado: () => void;
+  onRegistrado: (materialId: number) => void;
 }) {
   const { t, idioma } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [avisoNegativo, setAvisoNegativo] = useState<{ disponibleActual: number; quedariaEn: number } | null>(null);
   const [paso, setPaso] = useState<Paso>('tipo');
 
   const [materialId, setMaterialId] = useState(material.id);
@@ -70,6 +83,33 @@ export function NuevoMovimientoModal({
   const [riderElegido, setRiderElegido] = useState<RiderResultado | null>(null);
   const [notas, setNotas] = useState('');
   const [usaCorreos, setUsaCorreos] = useState(false);
+  const contenidoRef = useRef<HTMLDivElement>(null);
+
+  // Se llama al cambiar de material o de tipo de movimiento — sin
+  // esto, un valor escrito para un material CON tallas (ej.
+  // Chubasqueros) quedaba "pegado" en el estado aunque la UI ya
+  // mostrara el formulario de otro material SIN tallas (ej.
+  // Mochilas), y se enviaba igual en el payload aunque invisible —
+  // causa real confirmada del bug donde el movimiento no se
+  // registraba (el backend ignora esos campos fantasma porque decide
+  // por material.tiene_tallas real, así que la cantidad quedaba en 0).
+  function resetearCantidades() {
+    setCantidad('');
+    setCajas('');
+    setSueltas('');
+    setTallaM('');
+    setTallaL('');
+    setTallaXl('');
+    setTallaXxl('');
+    setCajaTallaM('');
+    setCajaTallaL('');
+    setCajaTallaXl('');
+    setCajaTallaXxl('');
+    setSueltaTallaM('');
+    setSueltaTallaL('');
+    setSueltaTallaXl('');
+    setSueltaTallaXxl('');
+  }
 
   const materialSeleccionado = materiales.find((m) => m.id === materialId) ?? material;
   const tipo = tipos.find((tp) => tp.clave === tipoClave);
@@ -117,7 +157,7 @@ export function NuevoMovimientoModal({
     return num(sueltas);
   }, [modoCajas, materialSeleccionado, sueltas, sueltaTallaM, sueltaTallaL, sueltaTallaXl, sueltaTallaXxl]);
 
-  const nombreCentro = (id: string) => centros.find((c) => String(c.id) === id)?.nombre ?? '';
+  const nombreCentro = (id: string) => centrosTodos.find((c) => String(c.id) === id)?.nombre ?? centros.find((c) => String(c.id) === id)?.nombre ?? '';
 
   function puedeAvanzarDeDetalle(): boolean {
     if (tipo?.requiere_origen && !centroOrigenId) return false;
@@ -127,7 +167,7 @@ export function NuevoMovimientoModal({
     return totalUnidades > 0;
   }
 
-  function guardar() {
+  function guardar(confirmarNegativo = false) {
     setError(null);
     startTransition(async () => {
       const res = await registrarMovimientoStock({
@@ -153,12 +193,17 @@ export function NuevoMovimientoModal({
         riderId: riderElegido?.id ?? null,
         riderNombreLibre: riderElegido ? riderElegido.nombre : riderNombreLibre,
         notas: tipo?.clave === 'ENVIO_MENSAJERIA' && usaCorreos ? `[Correos] ${notas}`.trim() : notas,
+        confirmarNegativo,
       });
       if (res && 'error' in res) {
         setError(res.error);
         return;
       }
-      onRegistrado();
+      if (res && 'requiereConfirmacion' in res) {
+        setAvisoNegativo({ disponibleActual: res.disponibleActual, quedariaEn: res.quedariaEn });
+        return;
+      }
+      onRegistrado(materialId);
     });
   }
 
@@ -167,7 +212,7 @@ export function NuevoMovimientoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div ref={contenidoRef} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Cabecera con indicador de pasos */}
         <div className="border-b border-border px-6 py-4">
           <div className="mb-3 flex items-center justify-between">
@@ -205,7 +250,10 @@ export function NuevoMovimientoModal({
                   {materiales.map((m) => (
                     <button
                       key={m.id}
-                      onClick={() => setMaterialId(m.id)}
+                      onClick={() => {
+                        setMaterialId(m.id);
+                        resetearCantidades();
+                      }}
                       className={`flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-xs font-medium transition ${
                         materialId === m.id ? 'border-primary bg-primary/5 text-primary' : 'border-border text-ink-muted hover:border-primary/40'
                       }`}
@@ -223,7 +271,21 @@ export function NuevoMovimientoModal({
                   {tipos.map((tp) => (
                     <button
                       key={tp.clave}
-                      onClick={() => setTipoClave(tp.clave)}
+                      onClick={() => {
+                        setTipoClave(tp.clave);
+                        resetearCantidades();
+                        if (tp.clave === 'ENTRADA_PROVEEDOR' && !centroDestinoId) {
+                          const centroDefault = centrosTodos.find((c) => c.nombre === CENTRO_DEFAULT_ENTRADA_PROVEEDOR);
+                          if (centroDefault) setCentroDestinoId(String(centroDefault.id));
+                        }
+                        // Scroll automático al pie del modal — la lista
+                        // de tipos es larga (11 opciones) y sin esto el
+                        // usuario tenía que buscar manualmente el botón
+                        // "Detalle" más abajo después de elegir.
+                        requestAnimationFrame(() => {
+                          contenidoRef.current?.scrollTo({ top: contenidoRef.current.scrollHeight, behavior: 'smooth' });
+                        });
+                      }}
                       className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left text-sm font-medium transition ${
                         tipoClave === tp.clave ? 'border-primary bg-primary/5 text-primary' : 'border-border text-ink hover:border-primary/40'
                       }`}
@@ -265,7 +327,7 @@ export function NuevoMovimientoModal({
                       <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('stock.centroDestino')}</label>
                       <select value={centroDestinoId} onChange={(e) => setCentroDestinoId(e.target.value)} className="w-full rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none">
                         <option value="">{t('stock.selecciona')}</option>
-                        {centros.map((c) => (
+                        {centrosTodos.map((c) => (
                           <option key={c.id} value={c.id}>{c.nombre}</option>
                         ))}
                       </select>
@@ -395,6 +457,26 @@ export function NuevoMovimientoModal({
                   <div className="flex justify-between border-t border-border pt-2"><dt className="font-semibold text-ink">{t('stock.totalUnidades')}</dt><dd className="font-mono text-lg font-bold text-primary">{totalUnidades}</dd></div>
                 </dl>
               </div>
+              {avisoNegativo && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                  <p className="font-semibold">{t('stock.avisoNegativoTitulo')}</p>
+                  <p className="mt-1">
+                    {t('stock.avisoNegativoDetalle')
+                      .replace('{actual}', String(avisoNegativo.disponibleActual))
+                      .replace('{final}', String(avisoNegativo.quedariaEn))}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setAvisoNegativo(null);
+                      guardar(true);
+                    }}
+                    disabled={pending}
+                    className="mt-2 rounded-full bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  >
+                    {t('stock.confirmarIgualmente')}
+                  </button>
+                </div>
+              )}
               {error && <p className="text-sm font-medium text-danger">{error}</p>}
             </div>
           )}
@@ -431,7 +513,7 @@ export function NuevoMovimientoModal({
             </button>
           )}
           {paso === 'confirmar' && (
-            <button onClick={guardar} disabled={pending} className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
+            <button onClick={() => guardar()} disabled={pending} className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {pending ? t('stock.guardando') : t('stock.registrar')}
             </button>
           )}

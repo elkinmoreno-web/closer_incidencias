@@ -54,7 +54,7 @@ export function FichaCentroModal({ fila, onCerrar }: { fila: StockDisponible; on
             <X size={18} />
           </button>
         </div>
-        {fila.gestores.length > 0 && <p className="mb-3 text-xs text-ink-muted">{t('stock.colGestor')}: {fila.gestores.join(', ')}</p>}
+        {fila.gestor && <p className="mb-3 text-xs text-ink-muted">{t('stock.colGestor')}: {fila.gestor}</p>}
 
         {etiquetaSemaforo && (
           <div className={`mb-4 rounded-lg px-3 py-2.5 text-sm ${etiquetaSemaforo.color}`}>

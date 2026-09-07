@@ -1,21 +1,19 @@
 import { redirect } from 'next/navigation';
 import { StockPanel } from '@/components/stock/StockPanel';
-import { listarMaterialesStock } from '@/app/dashboard/stock/actions';
+import { listarMaterialesStock, listarTodosLosCentros } from '@/app/dashboard/stock/actions';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
 import { getAdminActual } from '@/lib/supabase/server';
+import { CORREOS_ACCESO_STOCK_TEMPORAL } from '@/lib/utils';
 
 export default async function StockPage() {
-  // TEMPORAL: Stock sigue en pruebas — acceso restringido a este
-  // correo mientras se valida en producción. Quitar este bloque
-  // cuando esté listo para todo el equipo (el control de acceso por
-  // rol de siempre ya lo aplica el layout/Sidebar aparte).
+  // TEMPORAL: ver CORREOS_ACCESO_STOCK_TEMPORAL en lib/utils.ts.
   const admin = await getAdminActual();
-  if (admin?.email !== 'elkin.moreno@closerlogistics.com' && admin?.email !== 'rodrigo.heredero@closerlogistics.com') redirect('/dashboard');
+  if (!admin?.email || !CORREOS_ACCESO_STOCK_TEMPORAL.includes(admin.email)) redirect('/dashboard');
 
   const t = crearTraductor(await resolverIdioma());
-  const [materiales, zona] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona()]);
+  const [materiales, zona, centrosTodos] = await Promise.all([listarMaterialesStock(), ciudadesYCentrosDeMiZona(), listarTodosLosCentros()]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -23,7 +21,7 @@ export default async function StockPage() {
         <h1 className="text-2xl font-semibold text-ink">{t('stock.titulo')}</h1>
         <p className="text-sm text-ink-muted">{t('stock.subtitulo')}</p>
       </div>
-      <StockPanel materiales={materiales} centros={zona.centros} esSuperAdmin={zona.esSuperAdmin} />
+      <StockPanel materiales={materiales} centros={zona.centros} centrosTodos={centrosTodos} esSuperAdmin={zona.esSuperAdmin} />
     </div>
   );
 }

@@ -523,6 +523,7 @@ export interface ResultadoImportacionStock {
   insertados: number;
   centrosNoEncontrados: string[]; // nombres del CSV que no coinciden con ningún centro real (ni siquiera normalizando) — no se crean solos, se listan para revisión manual
   filasIgnoradas: number; // cantidad 0 en todas las columnas — no aportan nada al ledger
+  error?: string; // ej. "solo Super Admin puede importar" — se muestra en vez del resumen normal
 }
 
 /**
@@ -574,6 +575,13 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
   try {
     const { supabase, yo } = await assertAdmin();
     if (!yo) throw new Error('No se pudo identificar tu sesión de administrador. Vuelve a iniciar sesión e inténtalo de nuevo.');
+    // Un CSV de migración típicamente cubre centros de toda España; un
+    // admin/moderador con ciudades limitadas solo puede insertar en las
+    // suyas (RLS), así que una sola fila fuera de su zona tumbaba TODO
+    // el lote (es un único INSERT masivo, todo-o-nada) con un error
+    // críptico de Postgres. Se restringe a Super Admin, igual que el
+    // resto de operaciones "de catálogo/migración global" del panel.
+    if (yo.rol !== 'super_admin') return { insertados: 0, centrosNoEncontrados: [], filasIgnoradas: 0, error: 'Solo un Super Admin puede importar un CSV de stock inicial.' };
 
     const { data: centros } = await supabase.from('centros').select('id, nombre');
     const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));

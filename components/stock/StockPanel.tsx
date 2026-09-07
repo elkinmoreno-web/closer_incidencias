@@ -132,7 +132,11 @@ export function StockPanel({
           </button>
         </div>
         <div className="flex items-center gap-2">
-          {material && <ImportarStockModal material={material} onImportado={() => recargar(material.id)} />}
+          {/* Importar CSV cubre típicamente centros de toda España — un
+              admin/moderador con ciudades limitadas no puede insertar
+              fuera de las suyas (RLS), así que se reserva a Super Admin
+              en vez de fallar a medias con un error críptico. */}
+          {material && esSuperAdmin && <ImportarStockModal material={material} onImportado={() => recargar(material.id)} />}
           {!esFichas && (
             <button
               onClick={() => setParametrosModalAbierto(true)}

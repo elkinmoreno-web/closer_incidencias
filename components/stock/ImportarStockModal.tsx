@@ -258,7 +258,18 @@ export function ImportarStockModal({ material, onImportado }: { material: StockM
               </div>
             )}
 
-            {fase === 'terminado' && resultado && (
+            {fase === 'terminado' && resultado && resultado.error && (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm font-medium text-danger">{resultado.error}</p>
+                <div className="flex justify-end">
+                  <button onClick={cerrar} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white">
+                    {t('stockImport.cerrar')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {fase === 'terminado' && resultado && !resultado.error && (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-ink">
                   <span className="font-semibold text-emerald-700">{resultado.insertados}</span> {t('stockImport.resultadoInsertados')}

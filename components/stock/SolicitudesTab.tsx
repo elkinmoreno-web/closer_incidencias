@@ -221,12 +221,23 @@ function TarjetaTraslado({ traslado, onResuelto }: { traslado: TrasladoPendiente
   );
 }
 
-export function SolicitudesTab({ materialId }: { materialId: number }) {
+export function SolicitudesTab({ materialId, onResuelto }: { materialId: number; onResuelto?: () => void }) {
   const { t } = useIdioma();
   const [traslados, setTraslados] = useState<TrasladoPendiente[] | null>(null);
 
   function recargar() {
     listarTrasladosPendientes(materialId).then(setTraslados);
+  }
+
+  // Confirmar/anular un traslado cambia el disponible y el historial del
+  // material — sin avisar al panel padre, la pestaña Stock y el
+  // Historial se quedaban con los datos de antes hasta cambiar de
+  // material o recargar la página entera. Se dispara solo al resolver
+  // una tarjeta, no en la carga inicial (que no cambia nada fuera de
+  // esta pestaña).
+  function alResolver() {
+    recargar();
+    onResuelto?.();
   }
 
   useEffect(() => {
@@ -249,7 +260,7 @@ export function SolicitudesTab({ materialId }: { materialId: number }) {
       ) : (
         <div className="flex flex-col gap-2.5">
           {traslados.map((tr) => (
-            <TarjetaTraslado key={tr.id} traslado={tr} onResuelto={recargar} />
+            <TarjetaTraslado key={tr.id} traslado={tr} onResuelto={alResolver} />
           ))}
         </div>
       )}

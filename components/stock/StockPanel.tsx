@@ -186,7 +186,7 @@ export function StockPanel({
 
           {material && pestana === 'stock' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <StockResumenTab stock={stock} material={material} />)}
 
-          {material && pestana === 'solicitudes' && <SolicitudesTab materialId={material.id} />}
+          {material && pestana === 'solicitudes' && <SolicitudesTab materialId={material.id} onResuelto={() => recargar(material.id)} />}
 
           {material && pestana === 'historial' && (cargando ? <p className="py-6 text-center text-sm text-ink-muted">…</p> : <HistorialTab movimientos={movimientos} />)}
         </>

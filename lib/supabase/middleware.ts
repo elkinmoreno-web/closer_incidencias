@@ -48,15 +48,6 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
-      // Sin esto, una llamada lenta o colgada a Supabase Auth bloqueaba
-      // el middleware hasta el timeout de la plataforma (25s en
-      // Vercel) — causa real de los 504 MIDDLEWARE_INVOCATION_TIMEOUT
-      // vistos en producción. Con AbortSignal.timeout, la petición
-      // falla rápido (8s) y sigue como "sin sesión" en vez de colgar
-      // TODA la respuesta.
-      global: {
-        fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(8000) }),
-      },
     }
   );
 

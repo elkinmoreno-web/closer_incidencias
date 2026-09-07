@@ -137,7 +137,7 @@ export function StockPanel({
               admin/moderador con ciudades limitadas no puede insertar
               fuera de las suyas (RLS), así que se reserva a Super Admin
               en vez de fallar a medias con un error críptico. */}
-          {material && esSuperAdmin && <ImportarStockModal material={material} onImportado={() => recargar(material.id)} />}
+          {material && esSuperAdmin && <ImportarStockModal material={material} centrosTodos={centrosTodos} onImportado={() => recargar(material.id)} />}
           {esSuperAdmin && (
             <ReiniciarStockModal
               onVaciado={() => {

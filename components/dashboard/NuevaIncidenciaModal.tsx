@@ -28,6 +28,7 @@ export function NuevaIncidenciaModal({ motivos }: { motivos: Motivo[] }) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useFormState<FormActionState, FormData>(crearIncidenciaAdmin, undefined);
   const [motivoId, setMotivoId] = useState('');
+  const [errorEvidencia, setErrorEvidencia] = useState<string | null>(null);
 
   const motivoSeleccionado = useMemo(() => motivos.find((m) => String(m.id) === motivoId), [motivoId, motivos]);
 
@@ -114,6 +115,28 @@ export function NuevaIncidenciaModal({ motivos }: { motivos: Motivo[] }) {
               <div>
                 <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('nuevaIncidencia.captura')}</label>
                 <input type="file" name="screenshot" accept="image/jpeg,image/png,image/webp" className="text-sm" />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-ink-muted">{t('incidenciaForm.evidencia')}</label>
+                <input
+                  type="file"
+                  name="evidencia"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length > 3) {
+                      setErrorEvidencia('Máximo 3 archivos');
+                      e.target.value = '';
+                      return;
+                    }
+                    setErrorEvidencia(null);
+                  }}
+                  className="text-sm"
+                />
+                <span className="text-xs text-ink-muted">{t('incidenciaForm.hastaTresImagenes')}</span>
+                {errorEvidencia && <p className="text-xs text-danger">{errorEvidencia}</p>}
               </div>
 
               {state?.error && <p className="text-sm font-medium text-danger">{state.error}</p>}

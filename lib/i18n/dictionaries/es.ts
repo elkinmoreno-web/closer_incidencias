@@ -739,6 +739,13 @@ const es = {
   'stockImport.opcional': 'opcional',
   'stockImport.noImportarEsteDato': 'No importar este dato',
   'stockImport.otrosDatos': 'Otros datos del CSV (opcional)',
+  'stockImport.resolverCentrosDescripcion': 'Estos nombres del CSV no coinciden con ningún centro existente. Asócialos a uno ya existente o crea uno nuevo antes de continuar — para no asignar mal el inventario.',
+  'stockImport.asociadoA': 'Asociado a',
+  'stockImport.filaOmitida': 'Omitida (no se importará esta fila)',
+  'stockImport.asociarConExistente': 'Asociar con un centro existente...',
+  'stockImport.crearCentroNuevo': 'Crear centro nuevo',
+  'stockImport.omitirFila': 'Omitir esta fila (no importar)',
+  'stockImport.continuarImportacion': 'Continuar con la importación',
 
   // KPIs y tabla mejorada de Stock (Fase 2)
   'stock.kpiFisico': 'Stock físico',

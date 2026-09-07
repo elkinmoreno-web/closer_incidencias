@@ -1,14 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, X, Loader2 } from 'lucide-react';
+import { Upload, X, Loader2, PlusCircle } from 'lucide-react';
 import { leerArchivoExcel } from '@/lib/xlsxImport';
-import { importarStockInicial, type ResultadoImportacionStock } from '@/app/dashboard/stock/actions';
+import {
+  importarStockInicial,
+  resolverCentrosParaImportacion,
+  crearCentroDesdeImportacion,
+  type ResultadoImportacionStock,
+} from '@/app/dashboard/stock/actions';
 import type { StockMaterial } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
-type Fase = 'inicial' | 'previsualizando' | 'importando' | 'terminado';
+type Fase = 'inicial' | 'previsualizando' | 'resolviendo' | 'importando' | 'terminado';
 
 // Patrones para adivinar cada columna por su nombre — cubren tanto el
 // formato de Mochilas/Chubasqueros ("Stock Actual", "Cajas Tránsito",
@@ -30,8 +35,23 @@ const PATRONES: Record<string, RegExp> = {
  * CSV que se usaron para migrar) y deja ajustar a mano si hace falta
  * — el nombre de columna varía según el material (confirmado con
  * datos reales: Mochilas/Chubasqueros usan un formato, Soportes otro).
+ *
+ * Antes de importar de verdad, comprueba qué nombres de centro del CSV
+ * no coinciden con ningún centro real y pide resolverlos a mano (paso
+ * "resolviendo"): asociar con un centro existente o crear uno nuevo.
+ * Nunca adivina (ver resolverCentroId en actions.ts) — un nombre
+ * ambiguo como "Madrid" puede representar un total de ciudad, no un
+ * centro puntual, y asignarlo mal descuadra inventario real.
  */
-export function ImportarStockModal({ material, onImportado }: { material: StockMaterial; onImportado?: () => void }) {
+export function ImportarStockModal({
+  material,
+  centrosTodos,
+  onImportado,
+}: {
+  material: StockMaterial;
+  centrosTodos: { id: number; nombre: string }[];
+  onImportado?: () => void;
+}) {
   const { t, idioma } = useIdioma();
   const [open, setOpen] = useState(false);
   const [fase, setFase] = useState<Fase>('inicial');
@@ -52,6 +72,14 @@ export function ImportarStockModal({ material, onImportado }: { material: StockM
   const [resultado, setResultado] = useState<ResultadoImportacionStock | null>(null);
   const [errorImportacion, setErrorImportacion] = useState<string | null>(null);
 
+  // Paso de resolución de centros no encontrados.
+  const [centrosPendientes, setCentrosPendientes] = useState<string[]>([]);
+  const [resoluciones, setResoluciones] = useState<Record<string, number>>({});
+  const [omitidos, setOmitidos] = useState<Set<string>>(new Set());
+  const [nombresNuevos, setNombresNuevos] = useState<Record<string, string>>({});
+  const [creandoCentro, setCreandoCentro] = useState<string | null>(null);
+  const [verificandoCentros, setVerificandoCentros] = useState(false);
+
   function reset() {
     setFase('inicial');
     setFilasCrudas([]);
@@ -69,6 +97,11 @@ export function ImportarStockModal({ material, onImportado }: { material: StockM
     setUsarTallas(false);
     setErrorArchivo(null);
     setResultado(null);
+    setCentrosPendientes([]);
+    setResoluciones({});
+    setOmitidos(new Set());
+    setNombresNuevos({});
+    setCreandoCentro(null);
   }
 
   function cerrar() {
@@ -113,10 +146,8 @@ export function ImportarStockModal({ material, onImportado }: { material: StockM
     return Number.isFinite(n) ? n : 0;
   }
 
-  async function confirmarImportacion() {
-    setFase('importando');
-    setErrorImportacion(null);
-    const filas = filasCrudas.map((f) => ({
+  function filaAImportacion(f: Record<string, unknown>) {
+    return {
       centroNombre: String(f[colCentro] ?? '').trim(),
       cantidad: usarTallas ? 0 : num(f[colCantidad]),
       tallaM: usarTallas ? num(f[colM]) : 0,
@@ -127,9 +158,69 @@ export function ImportarStockModal({ material, onImportado }: { material: StockM
       entregadas: colEntregadas ? num(f[colEntregadas]) : 0,
       rotas: colRotas ? num(f[colRotas]) : 0,
       noRecuperadas: colNoRecuperadas ? num(f[colNoRecuperadas]) : 0,
-    }));
+    };
+  }
+
+  /** Primer paso al pulsar "Importar": comprueba centros SIN escribir nada — si hay nombres sin coincidencia, para en el paso de resolución. */
+  async function comprobarCentros() {
+    setVerificandoCentros(true);
+    setErrorImportacion(null);
     try {
-      const res = await importarStockInicial(material.id, filas);
+      const nombresDistintos = Array.from(
+        new Set(filasCrudas.map((f) => String(f[colCentro] ?? '').trim()).filter(Boolean))
+      );
+      const resueltos = await resolverCentrosParaImportacion(nombresDistintos);
+      const noEncontrados = resueltos.filter((r) => r.centroId === null).map((r) => r.nombreCsv);
+
+      if (noEncontrados.length === 0) {
+        await ejecutarImportacion();
+        return;
+      }
+
+      setCentrosPendientes(noEncontrados);
+      const nombresIniciales: Record<string, string> = {};
+      noEncontrados.forEach((n) => (nombresIniciales[n] = n));
+      setNombresNuevos(nombresIniciales);
+      setResoluciones({});
+      setOmitidos(new Set());
+      setFase('resolviendo');
+    } catch (e) {
+      setErrorImportacion(e instanceof Error ? e.message : 'No se pudo comprobar los centros. Inténtalo de nuevo.');
+    } finally {
+      setVerificandoCentros(false);
+    }
+  }
+
+  async function crearCentroPendiente(nombreCsv: string) {
+    setCreandoCentro(nombreCsv);
+    try {
+      const nombreFinal = nombresNuevos[nombreCsv]?.trim() || nombreCsv;
+      const res = await crearCentroDesdeImportacion(nombreFinal);
+      if ('error' in res) {
+        setErrorImportacion(res.error);
+        return;
+      }
+      setResoluciones((prev) => ({ ...prev, [nombreCsv]: res.id }));
+    } finally {
+      setCreandoCentro(null);
+    }
+  }
+
+  const todosResueltos = centrosPendientes.every((n) => resoluciones[n] !== undefined || omitidos.has(n));
+
+  async function continuarTrasResolucion() {
+    // Combina lo resuelto a mano con el resto del CSV (los que ya
+    // coincidían solos) — los omitidos se dejan tal cual, el backend
+    // los vuelve a listar en "centros no encontrados" del resultado.
+    await ejecutarImportacion(resoluciones);
+  }
+
+  async function ejecutarImportacion(resolucionesManual?: Record<string, number>) {
+    setFase('importando');
+    setErrorImportacion(null);
+    const filas = filasCrudas.map(filaAImportacion);
+    try {
+      const res = await importarStockInicial(material.id, filas, resolucionesManual);
       setResultado(res);
       setFase('terminado');
       // Sin esto, la tabla de Stock/Historial detrás del modal seguía
@@ -241,11 +332,93 @@ export function ImportarStockModal({ material, onImportado }: { material: StockM
                     {t('stockImport.cancelar')}
                   </button>
                   <button
-                    onClick={confirmarImportacion}
-                    disabled={!listoParaImportar}
+                    onClick={comprobarCentros}
+                    disabled={!listoParaImportar || verificandoCentros}
+                    className="flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {verificandoCentros && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {t('stockImport.importar')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {fase === 'resolviendo' && (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-ink-muted">{t('stockImport.resolverCentrosDescripcion')}</p>
+                <div className="flex flex-col gap-3">
+                  {centrosPendientes.map((nombreCsv) => {
+                    const resuelto = resoluciones[nombreCsv];
+                    const omitido = omitidos.has(nombreCsv);
+                    return (
+                      <div key={nombreCsv} className={`rounded-xl border p-3 ${resuelto || omitido ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
+                        <p className="mb-2 text-sm font-semibold text-ink">&quot;{nombreCsv}&quot;</p>
+
+                        {resuelto ? (
+                          <p className="text-xs font-medium text-emerald-700">
+                            ✓ {t('stockImport.asociadoA')} {centrosTodos.find((c) => c.id === resuelto)?.nombre ?? `#${resuelto}`}
+                          </p>
+                        ) : omitido ? (
+                          <p className="text-xs font-medium text-ink-muted">{t('stockImport.filaOmitida')}</p>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <select
+                                defaultValue=""
+                                onChange={(e) => {
+                                  if (!e.target.value) return;
+                                  setResoluciones((prev) => ({ ...prev, [nombreCsv]: Number(e.target.value) }));
+                                }}
+                                className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none"
+                              >
+                                <option value="">{t('stockImport.asociarConExistente')}</option>
+                                {centrosTodos.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.nombre}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                value={nombresNuevos[nombreCsv] ?? nombreCsv}
+                                onChange={(e) => setNombresNuevos((prev) => ({ ...prev, [nombreCsv]: e.target.value }))}
+                                className="flex-1 rounded-lg border border-border px-3 py-1.5 text-sm focus:border-primary focus:outline-none"
+                              />
+                              <button
+                                onClick={() => crearCentroPendiente(nombreCsv)}
+                                disabled={creandoCentro === nombreCsv}
+                                className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
+                              >
+                                {creandoCentro === nombreCsv ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlusCircle size={14} />}
+                                {t('stockImport.crearCentroNuevo')}
+                              </button>
+                            </div>
+                            <button
+                              onClick={() => setOmitidos((prev) => new Set(prev).add(nombreCsv))}
+                              className="self-start text-xs font-medium text-ink-muted underline hover:text-ink"
+                            >
+                              {t('stockImport.omitirFila')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {errorImportacion && <p className="text-sm font-medium text-danger">{errorImportacion}</p>}
+
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setFase('previsualizando')} className="rounded-full border border-border px-4 py-2 text-sm font-medium text-ink-muted">
+                    {t('stockImport.cancelar')}
+                  </button>
+                  <button
+                    onClick={continuarTrasResolucion}
+                    disabled={!todosResueltos}
                     className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    {t('stockImport.importar')}
+                    {t('stockImport.continuarImportacion')}
                   </button>
                 </div>
               </div>

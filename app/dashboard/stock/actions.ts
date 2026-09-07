@@ -221,7 +221,23 @@ export async function obtenerStockDisponible(materialId: number): Promise<StockD
   }
 
   return Array.from(mapa.values())
-    .filter((c) => c.disponible !== 0 || c.talla_m || c.talla_l || c.talla_xl || c.talla_xxl || c.en_calle !== 0 || c.consumo_ventana > 0)
+    // Antes no se incluía tránsito_entrante/saliente aquí: un centro
+    // con disponible=0 pero con mercancía en camino (ej. una migración
+    // de "cajas en tránsito" desde el sistema anterior, que no suma al
+    // disponible hasta confirmarse) desaparecía por completo de la
+    // tabla — el dato SÍ estaba guardado, solo no se mostraba.
+    .filter(
+      (c) =>
+        c.disponible !== 0 ||
+        c.talla_m ||
+        c.talla_l ||
+        c.talla_xl ||
+        c.talla_xxl ||
+        c.en_calle !== 0 ||
+        c.consumo_ventana > 0 ||
+        c.transito_entrante !== 0 ||
+        c.transito_saliente !== 0
+    )
     .sort((a, b) => a.centro_nombre.localeCompare(b.centro_nombre));
 }
 
@@ -571,7 +587,46 @@ const ALIAS_CENTRO_IMPORTACION: Record<string, string> = {
   stuttgart: 'fd stuttgart',
 };
 
-export async function importarStockInicial(materialId: number, filas: FilaImportacionStock[]): Promise<ResultadoImportacionStock> {
+/**
+ * Comprueba, SIN escribir nada, qué nombres de centro de un CSV no
+ * coinciden con ningún centro real — para que el modal de importación
+ * pueda pedirle al admin que los resuelva a mano (asociar a un centro
+ * existente o crear uno nuevo) ANTES de importar, en vez de adivinar
+ * o descartar la fila en silencio.
+ */
+export async function resolverCentrosParaImportacion(nombresCsv: string[]): Promise<{ nombreCsv: string; centroId: number | null }[]> {
+  const { supabase, yo } = await assertAdmin();
+  if (yo?.rol !== 'super_admin') return nombresCsv.map((nombreCsv) => ({ nombreCsv, centroId: null }));
+
+  const { data: centros } = await supabase.from('centros').select('id, nombre');
+  const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
+
+  return nombresCsv.map((nombreCsv) => {
+    const normalizado = normalizarNombreCentro(nombreCsv);
+    const centroId =
+      idPorNombreCentro.get(normalizado) ??
+      (ALIAS_CENTRO_IMPORTACION[normalizado] ? idPorNombreCentro.get(ALIAS_CENTRO_IMPORTACION[normalizado]) : undefined) ??
+      null;
+    return { nombreCsv, centroId };
+  });
+}
+
+/** Da de alta un centro nuevo con solo el nombre (sin ciudad asignada todavía) — para resolver en el momento un nombre de CSV que no coincide con ningún centro real. Misma operación que crearCentro() de Configuración, pero devolviendo el id recién creado para usarlo de inmediato en la importación. */
+export async function crearCentroDesdeImportacion(nombre: string): Promise<{ id: number } | { error: string }> {
+  const { supabase, yo } = await assertAdmin();
+  if (yo?.rol !== 'super_admin') return { error: 'Solo un Super Admin puede crear centros nuevos.' };
+  const limpio = nombre.trim();
+  if (!limpio) return { error: 'El nombre no puede estar vacío.' };
+
+  const { data, error } = await supabase.from('centros').insert({ nombre: limpio }).select('id').single();
+  if (error) return { error: error.message };
+
+  revalidatePath('/dashboard/configuracion');
+  revalidatePath('/dashboard/stock');
+  return { id: data.id };
+}
+
+export async function importarStockInicial(materialId: number, filas: FilaImportacionStock[], resolucionesManual?: Record<string, number>): Promise<ResultadoImportacionStock> {
   try {
     const { supabase, yo } = await assertAdmin();
     if (!yo) throw new Error('No se pudo identificar tu sesión de administrador. Vuelve a iniciar sesión e inténtalo de nuevo.');
@@ -587,17 +642,25 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
     const idPorNombreCentro = new Map((centros ?? []).map((c) => [normalizarNombreCentro(c.nombre), c.id]));
 
     // Resuelve un nombre de centro del CSV probando, en orden: (1) el
-    // nombre normalizado tal cual, (2) el alias explícito de arriba, (3)
-    // "<nombre> CENTRO" — muchas ciudades con varios centros reales
-    // tienen uno genérico así (ej. "Jerez" en el CSV -> "JEREZ CENTRO"
-    // real), y el CSV histórico solo traía el nombre de la ciudad sin
-    // ese sufijo.
+    // nombre normalizado tal cual, (2) el alias explícito de arriba,
+    // (3) lo que el admin haya resuelto a mano en el paso previo del
+    // modal (resolverCentrosParaImportacion + UI de asociar/crear).
+    //
+    // NO se intenta "<nombre> CENTRO" como último recurso automático
+    // (se probó y se quitó): una fila genérica con el nombre de una
+    // ciudad grande (ej. "Madrid", "Malaga") no siempre es el centro
+    // "<CIUDAD> CENTRO" — a veces es un total/agregado de toda la
+    // ciudad con una cantidad grande que no corresponde a ningún centro
+    // puntual. Confirmado con datos reales: una fila "Madrid" con 2554
+    // unidades se atribuyó a MADRID CENTRO sin ser eso — mejor que un
+    // nombre ambiguo se resuelva a mano (o caiga en "centros no
+    // encontrados") que arriesgar inventario real con una suposición.
     function resolverCentroId(nombreCsv: string): number | undefined {
       const normalizado = normalizarNombreCentro(nombreCsv);
       return (
         idPorNombreCentro.get(normalizado) ??
         (ALIAS_CENTRO_IMPORTACION[normalizado] ? idPorNombreCentro.get(ALIAS_CENTRO_IMPORTACION[normalizado]) : undefined) ??
-        idPorNombreCentro.get(`${normalizado} centro`)
+        resolucionesManual?.[nombreCsv]
       );
     }
 
@@ -633,12 +696,30 @@ export async function importarStockInicial(materialId: number, filas: FilaImport
         continue;
       }
 
-      if (disponible) {
+      // OJO: dispara con "entregadas" también, no solo "disponible" —
+      // una fila con Stock Actual=0 pero Entregadas>0 (ej. "0 en
+      // almacén, 1 con un rider", visto en datos reales) necesita igual
+      // esta fila de compensación; si no, el ENTREGA_RIDER de abajo
+      // resta esas unidades de una base 0 y el centro queda en
+      // negativo sin que exista ese descuadre en la realidad.
+      if (disponible || entregadas) {
         registros.push({
           material_id: materialId,
           tipo_clave: 'INV_INICIAL',
           centro_destino_id: centroId,
-          unidades: disponible,
+          // "Stock Actual" del CSV es el disponible NETO (ya excluye lo
+          // que está con riders) — pero el movimiento ENTREGA_RIDER de
+          // abajo resta "entregadas" del disponible del mismo centro
+          // (correcto para una entrega en vivo, donde sí hay que
+          // restarla). Aplicado tal cual al importar, esa resta se
+          // aplica una SEGUNDA vez sobre un número que ya la tenía
+          // descontada — Stock Actual=2554 con 11 entregadas terminaba
+          // mostrando 2543 en vez de 2554. Se compensa sumando
+          // "entregadas" aquí para que el neto final sea exactamente
+          // el valor del CSV. (Rotas/No recuperadas NO necesitan esto:
+          // esos tipos ya tienen resta_origen=null → no vuelven a
+          // restar del almacén, ver obtenerStockDisponible.)
+          unidades: disponible + entregadas,
           talla_m: tallaM,
           talla_l: tallaL,
           talla_xl: tallaXl,

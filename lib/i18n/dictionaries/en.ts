@@ -742,6 +742,13 @@ const en: Record<ClaveTraduccion, string> = {
   'stockImport.opcional': 'optional',
   'stockImport.noImportarEsteDato': "Don't import this data",
   'stockImport.otrosDatos': 'Other CSV data (optional)',
+  'stockImport.resolverCentrosDescripcion': "These CSV names don't match any existing center. Associate them with an existing one or create a new one before continuing — so the inventory isn't assigned incorrectly.",
+  'stockImport.asociadoA': 'Associated with',
+  'stockImport.filaOmitida': 'Skipped (this row will not be imported)',
+  'stockImport.asociarConExistente': 'Associate with an existing center...',
+  'stockImport.crearCentroNuevo': 'Create new center',
+  'stockImport.omitirFila': "Skip this row (don't import)",
+  'stockImport.continuarImportacion': 'Continue with the import',
 
   // KPIs y tabla mejorada de Stock (Fase 2)
   'stock.kpiFisico': 'Physical stock',

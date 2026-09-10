@@ -844,6 +844,8 @@ const es = {
   'stockFicha.generar': 'Generar ficha y PDF',
   'stockFicha.generada': 'Ficha generada correctamente.',
   'stockFicha.verPdf': 'Ver PDF',
+  'stockFicha.verPdfEpiChaleco': '🦺 Ver comunicación del chaleco',
+  'stockFicha.epiChalecoGenerada': 'Se ha generado también la comunicación de entrega del chaleco reflectante (obligatorio por RD 518/2026).',
   // Listado de fichas generadas
   'stockFichas.titulo': 'Fichas de entrega/devolución',
   'stockFichas.sinFichas': 'Todavía no se ha generado ninguna ficha.',

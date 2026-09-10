@@ -31,6 +31,7 @@ export function NuevaFichaModal({ centros, onCerrar, onGenerada }: { centros: Ce
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfUrlEpi, setPdfUrlEpi] = useState<string | null>(null);
 
   const [riderElegido, setRiderElegido] = useState<RiderResultado | null>(null);
   const [dniManual, setDniManual] = useState('');
@@ -89,6 +90,7 @@ export function NuevaFichaModal({ centros, onCerrar, onGenerada }: { centros: Ce
       }
       if (res?.success) {
         setPdfUrl(urlArchivoDrive(res.pdfUrl));
+        if (res.pdfUrlEpi) setPdfUrlEpi(urlArchivoDrive(res.pdfUrlEpi));
         onGenerada();
       }
     });
@@ -107,14 +109,27 @@ export function NuevaFichaModal({ centros, onCerrar, onGenerada }: { centros: Ce
         {pdfUrl ? (
           <div className="flex flex-col items-center gap-3 py-6 text-center">
             <p className="text-sm font-medium text-emerald-700">{t('stockFicha.generada')}</p>
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark"
-            >
-              {t('stockFicha.verPdf')}
-            </a>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark"
+              >
+                {t('stockFicha.verPdf')}
+              </a>
+              {pdfUrlEpi && (
+                <a
+                  href={pdfUrlEpi}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10"
+                >
+                  {t('stockFicha.verPdfEpiChaleco')}
+                </a>
+              )}
+            </div>
+            {pdfUrlEpi && <p className="text-xs text-ink-muted">{t('stockFicha.epiChalecoGenerada')}</p>}
             <button onClick={onCerrar} className="text-xs text-ink-muted hover:text-ink">
               {t('stockImport.cerrar')}
             </button>

@@ -847,6 +847,8 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFicha.generar': 'Generate slip and PDF',
   'stockFicha.generada': 'Slip generated successfully.',
   'stockFicha.verPdf': 'View PDF',
+  'stockFicha.verPdfEpiChaleco': '🦺 View vest communication',
+  'stockFicha.epiChalecoGenerada': 'The reflective vest delivery communication was also generated (mandatory under RD 518/2026).',
   // Listado de fichas generadas
   'stockFichas.titulo': 'Delivery / return slips',
   'stockFichas.sinFichas': 'No slips have been generated yet.',

@@ -314,6 +314,7 @@ export interface StockFicha {
   items: StockItemFicha[]; // las 8 filas del justificante, cada una con su propia marca
   firma_url: string | null;
   pdf_url: string | null;
+  pdf_url_epi: string | null; // comunicación de entrega del chaleco reflectante (solo si esta ficha lo asignó)
   admin_id: string;
   created_at: string;
 }

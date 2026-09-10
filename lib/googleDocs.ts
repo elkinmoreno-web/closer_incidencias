@@ -13,6 +13,13 @@ const DOCS_API = 'https://docs.googleapis.com/v1/documents';
 const ID_PLANTILLA = '1auU17MrruWH7LBJOLnNF6F0U056ZxDwU';
 const MARCA_ASIGNADA = 'X';
 
+// A partir del 1 de octubre de 2026 el chaleco reflectante es
+// obligatorio (RD 518/2026): cuando la ficha ASIGNA uno, además del
+// justificante de material hay que generar esta comunicación aparte,
+// donde el rider firma el "recibí y quedo enterado" de la obligación.
+// Portado de STK_PLT_EPI del sistema de Apps Script anterior.
+const ID_PLANTILLA_EPI_CHALECO = '1UFUBkOmMULAKofY9o0HgR9Qs9Pa3ogZfrF8bmFdyf0c';
+
 /**
  * Rellena la plantilla REAL de Google Docs del justificante (la
  * compartida por el usuario) en vez de generarlo por código con
@@ -208,6 +215,52 @@ export async function generarFichaDesdeGoogleDocs(datos: DatosFichaDocs, carpeta
     // La copia de trabajo siempre se borra, tanto si todo salió bien
     // como si algo falló a mitad de camino — nunca debe quedar un
     // archivo temporal huérfano en Drive.
+    await borrarArchivoDrive(idCopia);
+  }
+}
+
+export interface DatosComunicacionEpi {
+  riderNombre: string;
+  riderDni: string;
+  fecha: string; // dd/mm/aaaa
+  hora: string; // HH:mm
+  firmaPngBytes: Uint8Array | null;
+}
+
+/**
+ * Genera la comunicación de entrega del chaleco reflectante (documento
+ * legal aparte del justificante de material, misma firma reutilizada).
+ * Solo tiene marcadores simples ({{FECHA}}, {{HORA}}, {{TRABAJADOR}},
+ * {{DNI}} y {{FIRMA DEL TRABAJADOR}}), sin tabla de materiales — por
+ * eso reutiliza insertarFirma() tal cual, que ya busca el marcador en
+ * todo el cuerpo del documento.
+ */
+export async function generarComunicacionEpiChaleco(datos: DatosComunicacionEpi, carpetaDestinoId: string, nombreArchivo: string): Promise<string> {
+  const carpetaTemp = await carpetaTemporalFichas();
+  const idCopia = await copiarArchivoDrive(ID_PLANTILLA_EPI_CHALECO, `${nombreArchivo}_TMP`, carpetaTemp);
+
+  try {
+    const requestsGlobales = [
+      { replaceAllText: { containsText: { text: '{{FECHA}}', matchCase: false }, replaceText: datos.fecha } },
+      { replaceAllText: { containsText: { text: '{{HORA}}', matchCase: false }, replaceText: datos.hora } },
+      { replaceAllText: { containsText: { text: '{{TRABAJADOR}}', matchCase: false }, replaceText: datos.riderNombre } },
+      { replaceAllText: { containsText: { text: '{{DNI}}', matchCase: false }, replaceText: datos.riderDni } },
+    ];
+    const respGlobal = await docsFetch(`${DOCS_API}/${idCopia}:batchUpdate`, { method: 'POST', body: JSON.stringify({ requests: requestsGlobales }) });
+    if (!respGlobal.ok) throw new Error(`No se pudo rellenar la comunicación del chaleco (HTTP ${respGlobal.status}): ${await respGlobal.text()}`);
+
+    if (datos.firmaPngBytes) {
+      await insertarFirma(idCopia, datos.firmaPngBytes, carpetaTemp);
+    } else {
+      await docsFetch(`${DOCS_API}/${idCopia}:batchUpdate`, {
+        method: 'POST',
+        body: JSON.stringify({ requests: [{ replaceAllText: { containsText: { text: '{{FIRMA DEL TRABAJADOR}}', matchCase: false }, replaceText: '' } }] }),
+      });
+    }
+
+    const pdfBuffer = await exportarDocGoogleAPdf(idCopia);
+    return await subirBufferACarpeta(carpetaDestinoId, `${nombreArchivo}.pdf`, pdfBuffer, 'application/pdf');
+  } finally {
     await borrarArchivoDrive(idCopia);
   }
 }

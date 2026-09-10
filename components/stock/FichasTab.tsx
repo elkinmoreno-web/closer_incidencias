@@ -137,6 +137,7 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
             <tbody className="divide-y divide-border">
               {fichasFiltradas.map((f) => {
                 const url = urlArchivoDrive(f.pdf_url);
+                const urlEpi = urlArchivoDrive(f.pdf_url_epi);
                 return (
                   <tr key={f.id}>
                     <td className="px-3 py-2 text-xs text-ink-muted">{formatFecha(f.created_at)}</td>
@@ -146,14 +147,21 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
                     <td className="px-3 py-2 text-xs text-ink-muted">{resumenItems(f, etiquetaMarca)}</td>
                     <td className="px-3 py-2 text-xs text-ink-muted">{f.admin_usuario ?? '—'}</td>
                     <td className="px-3 py-2 text-xs">
-                      {url ? (
-                        <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
-                          <FileText size={12} />
-                          {t('stockFicha.verPdf')}
-                        </a>
-                      ) : (
-                        '—'
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+                            <FileText size={12} />
+                            {t('stockFicha.verPdf')}
+                          </a>
+                        ) : (
+                          '—'
+                        )}
+                        {urlEpi && (
+                          <a href={urlEpi} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+                            {t('stockFicha.verPdfEpiChaleco')}
+                          </a>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -167,10 +175,7 @@ export function FichasTab({ fichas, centros, onFichaGenerada }: { fichas: FichaC
         <NuevaFichaModal
           centros={centros}
           onCerrar={() => setModalAbierto(false)}
-          onGenerada={() => {
-            setModalAbierto(false);
-            onFichaGenerada();
-          }}
+          onGenerada={onFichaGenerada}
         />
       )}
     </div>

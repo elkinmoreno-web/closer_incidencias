@@ -5,7 +5,7 @@ import { createClient, createAdminClient, getAdminActual } from '@/lib/supabase/
 import { registrarError, normalizarNombreCentro } from '@/lib/utils';
 import type { StockMaterial, StockTipoMovimiento, StockDisponible, StockMovimiento, StockParametros, StockFicha, StockItemFicha } from '@/lib/types';
 import { ITEMS_FICHA_FIJOS } from '@/lib/types';
-import { generarFichaDesdeGoogleDocs } from '@/lib/googleDocs';
+import { generarFichaDesdeGoogleDocs, generarComunicacionEpiChaleco } from '@/lib/googleDocs';
 import { carpetaFichaPorGestor } from '@/lib/googleDrive';
 import { enviarCorreoGmail, plantillaCorreoStock } from '@/lib/googleMail';
 
@@ -825,7 +825,7 @@ export interface CrearFichaInput {
   firmaBase64: string | null; // dataURL "data:image/png;base64,...." capturada del lienzo, o null si no se firmó
 }
 
-export type CrearFichaState = { error: string } | { success: true; pdfUrl: string | null } | undefined;
+export type CrearFichaState = { error: string } | { success: true; pdfUrl: string | null; pdfUrlEpi?: string | null } | undefined;
 
 // Cada marca corresponde a un tipo de movimiento de stock — mismo
 // mapeo que _pltEstadoElegido()/STK_PLT.MOVER_STOCK del sistema
@@ -906,18 +906,22 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
       nombreArchivo
     );
 
-    const { error: errorFicha } = await supabase.from('stock_fichas').insert({
-      centro_id: input.centroId,
-      rider_id: input.riderId,
-      rider_nombre: input.riderNombre,
-      rider_dni: input.riderDni,
-      fecha: ahora.toISOString().split('T')[0],
-      hora: ahora.toTimeString().split(' ')[0],
-      items: input.items,
-      firma_url: null,
-      pdf_url: pdfFileId,
-      admin_id: yo!.id,
-    });
+    const { data: fichaInsertada, error: errorFicha } = await supabase
+      .from('stock_fichas')
+      .insert({
+        centro_id: input.centroId,
+        rider_id: input.riderId,
+        rider_nombre: input.riderNombre,
+        rider_dni: input.riderDni,
+        fecha: ahora.toISOString().split('T')[0],
+        hora: ahora.toTimeString().split(' ')[0],
+        items: input.items,
+        firma_url: null,
+        pdf_url: pdfFileId,
+        admin_id: yo!.id,
+      })
+      .select('id')
+      .single();
     if (errorFicha) return { error: errorFicha.message };
 
     // Solo los ítems marcados que coinciden con un material del
@@ -951,8 +955,31 @@ export async function crearFichaEntrega(input: CrearFichaInput): Promise<CrearFi
       if (errorMovimientos) return { error: `La ficha se guardó, pero no se pudo actualizar el stock: ${errorMovimientos.message}` };
     }
 
+    // A partir del 1 de octubre de 2026 el chaleco reflectante es
+    // obligatorio (RD 518/2026): si esta ficha lo ASIGNA (no si se
+    // devuelve, ni si la ficha lleva cualquier otro material), se
+    // genera además la comunicación de entrega aparte, reutilizando la
+    // misma firma. Si falla, no se tira abajo la ficha (que ya quedó
+    // guardada) — se ignora en silencio, igual que hacía el sistema
+    // anterior (_pltGenerarEpi_ nunca lanzaba).
+    let pdfUrlEpi: string | null = null;
+    const asignaChaleco = itemsMarcados.some((it) => it.itemClave === 'CHALECO_REFLECTANTE' && it.marca === 'asignacion');
+    if (asignaChaleco) {
+      try {
+        const nombreArchivoEpi = nombreArchivoFicha(input.riderNombre, input.riderDni, 'Comunicacion EPI Chaleco', fechaISO);
+        pdfUrlEpi = await generarComunicacionEpiChaleco({ riderNombre: input.riderNombre, riderDni: input.riderDni, fecha, hora, firmaPngBytes }, carpetaDestinoId, nombreArchivoEpi);
+        // Se guarda en la propia ficha para que el enlace quede visible
+        // también después, en el listado de Fichas — no solo en la
+        // pantalla de éxito del momento en que se generó.
+        const { error: errorEpi } = await supabase.from('stock_fichas').update({ pdf_url_epi: pdfUrlEpi }).eq('id', fichaInsertada.id);
+        if (errorEpi) registrarError('crearFichaEntrega:guardarPdfUrlEpi', errorEpi, 'No se pudo guardar el enlace de la comunicación del chaleco.');
+      } catch (e) {
+        registrarError('crearFichaEntrega:comunicacionEpiChaleco', e, 'No se pudo generar la comunicación del chaleco.');
+      }
+    }
+
     revalidatePath('/dashboard/stock');
-    return { success: true, pdfUrl: pdfFileId };
+    return { success: true, pdfUrl: pdfFileId, pdfUrlEpi };
   } catch (e) {
     return { error: registrarError('crearFichaEntrega', e, 'No se pudo generar la ficha. Inténtalo de nuevo.') };
   }

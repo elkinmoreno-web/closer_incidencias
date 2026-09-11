@@ -255,6 +255,13 @@ export interface StockDisponible {
   semaforo?: StockSemaforo;
 }
 
+export interface AlertasParametros {
+  horas_min_diario: number;
+  pedidos_min_diario: number;
+  horas_min_semanal: number;
+  pedidos_min_semanal: number;
+}
+
 export interface StockParametros {
   lead_time_dias: number;
   cobertura_objetivo_dias: number;

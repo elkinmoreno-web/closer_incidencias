@@ -3,6 +3,7 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { obtenerRendimientoSemanal, obtenerRendimientoDiario, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
 import { semanaIsoDe } from '@/lib/metricas';
+import type { AlertasParametros } from '@/lib/types';
 
 import { registrarError } from '@/lib/utils';
 async function assertAdmin() {
@@ -64,6 +65,7 @@ export interface FilaMetricaAdmin {
   dni: string;
   nombre: string;
   telefono: string;
+  email: string;
   online_hours: number;
   active_hours: number;
   num_of_trips: number;
@@ -82,6 +84,7 @@ function mapearFila(nombreCentro: string, d: DriverPerformance): FilaMetricaAdmi
     dni: d.dni ?? `⚠ sin cruzar (${d.email})`,
     nombre: d.driver_name,
     telefono: d.driver_number,
+    email: d.email,
     online_hours: d.online_hours,
     active_hours: d.active_hours,
     num_of_trips: d.num_of_trips,
@@ -222,4 +225,29 @@ export async function buscarRiderPorTexto(texto: string): Promise<RiderEncontrad
 /** Semana ISO actual (para el selector). */
 export async function semanaActual(): Promise<{ year: number; week: number }> {
   return semanaIsoDe(new Date());
+}
+
+/** Umbrales de la pestaña de Alertas (una sola fila global) — mismo patrón que obtenerParametrosStock. */
+export async function obtenerParametrosAlertas(): Promise<AlertasParametros> {
+  const { supabase } = await assertAdmin();
+  const { data } = await supabase.from('alertas_parametros').select('*').eq('id', 1).maybeSingle();
+  return {
+    horas_min_diario: data?.horas_min_diario ?? 6,
+    pedidos_min_diario: data?.pedidos_min_diario ?? 8,
+    horas_min_semanal: data?.horas_min_semanal ?? 30,
+    pedidos_min_semanal: data?.pedidos_min_semanal ?? 40,
+  };
+}
+
+export type ActualizarParametrosAlertasState = { error: string } | { success: true } | undefined;
+
+/** Solo super_admin puede cambiar los umbrales por defecto (RLS ya lo exige también, esto solo da un mensaje claro). */
+export async function actualizarParametrosAlertas(parametros: AlertasParametros): Promise<ActualizarParametrosAlertasState> {
+  const { supabase, admin } = await assertAdmin();
+  if (admin.rol !== 'super_admin') return { error: 'Solo un Super Admin puede cambiar estos umbrales.' };
+
+  const { error } = await supabase.from('alertas_parametros').update({ ...parametros, updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) return { error: error.message };
+
+  return { success: true };
 }

@@ -497,6 +497,24 @@ const es = {
   'admMetricas.exColAceptacionPct': 'Aceptación %',
   'admMetricas.exColCancelacionPct': 'Cancelación %',
 
+  // Alertas de riders (admin)
+  'admAlertas.tab': 'Alertas',
+  'admAlertas.horasMin': 'Horas conectado (mín.)',
+  'admAlertas.pedidosMin': 'Pedidos (menos de)',
+  'admAlertas.explicacion': 'Se marca a un rider si estuvo conectado al menos estas horas pero hizo menos de estos pedidos.',
+  'admAlertas.guardarUmbrales': 'Guardar como predeterminado',
+  'admAlertas.guardando': 'Guardando...',
+  'admAlertas.guardado': 'Umbrales guardados. Se usarán por defecto para todos los admins.',
+  'admAlertas.sinAlertas': 'Nadie por debajo del umbral en este periodo.',
+  'admAlertas.exSheetName': 'Alertas',
+  'admAlertas.filtrarPlaceholder': 'Filtrar por nombre, DNI, correo o centro...',
+  'admAlertas.colCorreo': 'Correo',
+  'admAlertas.colSemaforo': 'Semáforo TPH',
+  'admAlertas.semaforoTph': 'Semáforo TPH:',
+  'admAlertas.semaforo.rojo': 'Rojo (TPH < 1)',
+  'admAlertas.semaforo.naranja': 'Naranja (1 – 2,35)',
+  'admAlertas.semaforo.verde': 'Verde (> 2,35)',
+
   // Reportes (admin)
   'reportes.titulo': 'Reportes',
   'reportes.subtitulo': 'Actividad de los últimos 30 días.',

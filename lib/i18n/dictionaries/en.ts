@@ -500,6 +500,24 @@ const en: Record<ClaveTraduccion, string> = {
   'admMetricas.exColAceptacionPct': 'Acceptance %',
   'admMetricas.exColCancelacionPct': 'Cancellation %',
 
+  // Rider alerts (admin)
+  'admAlertas.tab': 'Alerts',
+  'admAlertas.horasMin': 'Hours online (min.)',
+  'admAlertas.pedidosMin': 'Orders (fewer than)',
+  'admAlertas.explicacion': 'A rider is flagged if they were online at least this many hours but completed fewer than this many orders.',
+  'admAlertas.guardarUmbrales': 'Save as default',
+  'admAlertas.guardando': 'Saving...',
+  'admAlertas.guardado': 'Thresholds saved. They will be used as the default for all admins.',
+  'admAlertas.sinAlertas': 'No one below the threshold for this period.',
+  'admAlertas.exSheetName': 'Alerts',
+  'admAlertas.filtrarPlaceholder': 'Filter by name, DNI, email or center...',
+  'admAlertas.colCorreo': 'Email',
+  'admAlertas.colSemaforo': 'TPH light',
+  'admAlertas.semaforoTph': 'TPH light:',
+  'admAlertas.semaforo.rojo': 'Red (TPH < 1)',
+  'admAlertas.semaforo.naranja': 'Orange (1 – 2.35)',
+  'admAlertas.semaforo.verde': 'Green (> 2.35)',
+
   // Reportes (admin)
   'reportes.titulo': 'Reports',
   'reportes.subtitulo': 'Activity over the last 30 days.',

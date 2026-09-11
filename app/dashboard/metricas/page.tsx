@@ -1,4 +1,4 @@
-import { MetricasAdminPanel } from '@/components/metricas/MetricasAdminPanel';
+import { MetricasTabs } from '@/components/metricas/MetricasTabs';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
 
@@ -10,7 +10,7 @@ export default async function MetricasPage() {
         <h1 className="text-lg font-semibold text-ink">{t('admMetricas.titulo')}</h1>
         <p className="text-sm text-ink-muted">{t('admMetricas.subtitulo')}</p>
       </div>
-      <MetricasAdminPanel />
+      <MetricasTabs />
     </div>
   );
 }

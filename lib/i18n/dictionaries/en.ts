@@ -517,6 +517,7 @@ const en: Record<ClaveTraduccion, string> = {
   'admAlertas.verSoloRojos': 'Show only these',
   'admAlertas.verTodos': 'Show all',
   'admAlertas.totalMostrados': '{n} riders shown',
+  'admAlertas.umbralActivo': '≥ {horas} h · under {pedidos} orders',
   'admAlertas.ordenarPorSemaforo': 'Sort by traffic light (red first)',
   'admAlertas.guardarUmbrales': 'Save as default',
   'admAlertas.guardando': 'Saving...',

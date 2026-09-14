@@ -514,6 +514,7 @@ const es = {
   'admAlertas.verSoloRojos': 'Ver solo estos',
   'admAlertas.verTodos': 'Ver todos',
   'admAlertas.totalMostrados': '{n} riders mostrados',
+  'admAlertas.umbralActivo': '≥ {horas} h · menos de {pedidos} pedidos',
   'admAlertas.ordenarPorSemaforo': 'Ordenar por semáforo (rojo primero)',
   'admAlertas.guardarUmbrales': 'Guardar como predeterminado',
   'admAlertas.guardando': 'Guardando...',

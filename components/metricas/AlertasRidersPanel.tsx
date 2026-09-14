@@ -100,6 +100,11 @@ export function AlertasRidersPanel() {
 
   // Orden y filtros por columna. Por defecto: los peores primero (rojo
   // arriba y, dentro de cada color, el TPH más bajo).
+  // Solo la PRIMERA vez que llegan los parámetros se activan los filtros: si
+  // luego alguien pulsa "Quitar filtros", cambiar de diario a semanal no se
+  // los vuelve a encender por la espalda.
+  const primeraCargaParams = useRef(true);
+
   const [orden, setOrden] = useState<{ campo: CampoOrden; dir: DireccionOrden }>({ campo: 'semaforo', dir: 'asc' });
   const [filtrosCol, setFiltrosCol] = useState<Record<string, FiltroColumna | undefined>>({});
   const [pagina, setPagina] = useState(1);
@@ -129,17 +134,25 @@ export function AlertasRidersPanel() {
       setCentros(r.centros);
       setEsSuperAdmin(r.esSuperAdmin);
     });
-    obtenerParametrosAlertas().then((p) => {
-      setParametros(p);
-      setHorasMin(p.horas_min_diario);
-      setPedidosMin(p.pedidos_min_diario);
-    });
+    obtenerParametrosAlertas().then(setParametros);
   }, []);
 
   useEffect(() => {
     if (!parametros) return;
-    setHorasMin(modo === 'diario' ? parametros.horas_min_diario : parametros.horas_min_semanal);
-    setPedidosMin(modo === 'diario' ? parametros.pedidos_min_diario : parametros.pedidos_min_semanal);
+    const horas = modo === 'diario' ? parametros.horas_min_diario : parametros.horas_min_semanal;
+    const pedidos = modo === 'diario' ? parametros.pedidos_min_diario : parametros.pedidos_min_semanal;
+    setHorasMin(horas);
+    setPedidosMin(pedidos);
+    // Los umbrales guardados se aplican SOLOS, sin tener que abrir "Filtros"
+    // y pulsar "Aplicar": son los que el equipo ha fijado como referencia de
+    // "esto no es normal", así que entrar y verlo ya acotado es lo útil.
+    // Si alguien quiere ver la lista entera, tiene "Quitar filtros".
+    setHorasMinAplicado(horas);
+    setPedidosMinAplicado(pedidos);
+    if (primeraCargaParams.current) {
+      setFiltrosAplicados(true);
+      primeraCargaParams.current = false;
+    }
   }, [modo, parametros]);
 
   useEffect(() => {
@@ -425,6 +438,14 @@ export function AlertasRidersPanel() {
           <span className="text-xs text-ink-muted">
             {t('admAlertas.totalMostrados').replace('{n}', String(alertas.length))}
           </span>
+          {/* Se dice en claro qué umbral está recortando la lista: si no, al
+              entrar y ver menos riders de los esperados no hay forma de saber
+              por qué. */}
+          {filtrosAplicados && (
+            <span className="rounded-full bg-bg px-2 py-0.5 font-mono text-[11px] text-ink-muted">
+              {t('admAlertas.umbralActivo').replace('{horas}', String(horasMinAplicado)).replace('{pedidos}', String(pedidosMinAplicado))}
+            </span>
+          )}
         </div>
 
         {/* Semáforo SIEMPRE visible, a la derecha */}

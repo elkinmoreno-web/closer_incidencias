@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Search, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, Download, RefreshCw } from 'lucide-react';
 import {
   centrosConsultablesMetricas,
   obtenerMetricasAdminSemanal,
   obtenerMetricasAdminDiario,
   buscarRiderPorTexto,
-  semanaActual,
   type FilaMetricaAdmin,
   type RiderEncontrado,
   type CentroConId,
@@ -43,8 +42,12 @@ export function MetricasAdminPanel() {
   const { t, idioma } = useIdioma();
   const locale = idioma === 'en' ? 'en-US' : 'es-ES';
   const [modo, setModo] = useState<Modo>('semanal');
-  const [year, setYear] = useState<number | null>(null);
-  const [week, setWeek] = useState<number | null>(null);
+  // Año/semana de "hoy" se calculan en el propio cliente (semanaIsoDe es
+  // una función pura) para que estén listos desde el primer render — así
+  // la carga inicial no tiene que esperar un viaje al servidor aparte.
+  const inicial = useMemo(() => semanaIsoDe(new Date()), []);
+  const [year, setYear] = useState<number>(inicial.year);
+  const [week, setWeek] = useState<number>(inicial.week);
   const [fechaDia, setFechaDia] = useState(() => fechaLimiteMetricas());
   const [centros, setCentros] = useState<CentroConId[]>([]);
   const [centroFiltro, setCentroFiltro] = useState<string>('todos');
@@ -58,22 +61,29 @@ export function MetricasAdminPanel() {
   const [resultadoBusqueda, setResultadoBusqueda] = useState<RiderEncontrado[] | null>(null);
   const [buscando, setBuscando] = useState(false);
 
-  // Evita que una petición vieja (de un clic anterior en "siguiente/anterior"
-  // hecho muy rápido) sobreescriba el resultado de una más nueva que ya
-  // volvió antes. Cada consulta lleva un número de turno; solo se aplica
-  // el resultado si sigue siendo el turno más reciente cuando responde.
+  // Navegar entre semanas/días o cambiar de centro YA NO dispara una
+  // consulta por sí solo — antes cada clic en "siguiente semana" volvía a
+  // pedir datos y había que esperar cada vez para poder seguir moviéndose.
+  // Ahora esos controles solo cambian lo que se VE seleccionado; la
+  // consulta real solo sale cuando se pulsa "Cargar" (o en la carga
+  // inicial, apenas se conocen los centros del admin).
+  const [consulta, setConsulta] = useState(0);
+
+  // Evita que una petición vieja (de un "Cargar" anterior hecho muy
+  // rápido) sobreescriba el resultado de una más nueva que ya volvió
+  // antes. Cada consulta lleva un número de turno; solo se aplica el
+  // resultado si sigue siendo el turno más reciente cuando responde.
   const turnoRef = useRef(0);
 
   useEffect(() => {
     centrosConsultablesMetricas().then((r) => setCentros(r.centros));
-    semanaActual().then((s) => {
-      setYear(s.year);
-      setWeek(s.week);
-    });
   }, []);
 
   useEffect(() => {
-    if (modo === 'semanal' && (year === null || week === null)) return;
+    // Espera a conocer los centros del admin antes de la primera consulta
+    // (dispara sola en cuanto llegan) — luego solo se repite si "consulta"
+    // cambia, es decir, al pulsar "Cargar".
+    if (centros.length === 0) return;
     const miTurno = ++turnoRef.current;
 
     setCargando(true);
@@ -85,7 +95,7 @@ export function MetricasAdminPanel() {
       return;
     }
 
-    const promesa = modo === 'semanal' ? obtenerMetricasAdminSemanal(ids, year!, week!, forzar) : obtenerMetricasAdminDiario(ids, fechaDia, forzar);
+    const promesa = modo === 'semanal' ? obtenerMetricasAdminSemanal(ids, year, week, forzar) : obtenerMetricasAdminDiario(ids, fechaDia, forzar);
 
     promesa
       .then((res) => {
@@ -104,10 +114,10 @@ export function MetricasAdminPanel() {
       .finally(() => {
         if (turnoRef.current === miTurno) setCargando(false);
       });
-  }, [modo, year, week, fechaDia, centroFiltro, centros, forzar, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberado: solo re-consulta al llegar los centros o al pulsar "Cargar" (consulta), no en cada cambio de modo/semana/día/centro/forzar
+  }, [centros, consulta]);
 
   function cambiarSemana(delta: number) {
-    if (year === null || week === null) return;
     const { lunes } = rangoSemanaIso(year, week);
     const d = new Date(lunes + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() + delta * 7);
@@ -125,11 +135,10 @@ export function MetricasAdminPanel() {
     setFechaDia(d.toISOString().split('T')[0]);
   }
 
-  const rango = modo === 'semanal' && year !== null && week !== null ? rangoSemanaIso(year, week) : null;
+  const rango = modo === 'semanal' ? rangoSemanaIso(year, week) : null;
   const limite = fechaLimiteMetricas(); // los últimos 2 días no se muestran: los datos aún se están asentando
   const esHoyODespues = modo === 'diario' ? fechaDia >= limite : rango ? rango.lunes >= semanaIsoDeHoyLunes() : false;
   const anteriorSemanaDeshabilitada = (() => {
-    if (year === null || week === null) return true;
     const { lunes } = rangoSemanaIso(year, week);
     const d = new Date(lunes + 'T12:00:00Z');
     d.setUTCDate(d.getUTCDate() - 7);
@@ -186,9 +195,9 @@ export function MetricasAdminPanel() {
     const XLSX = await import('xlsx');
     const hoja = XLSX.utils.json_to_sheet(
       filasFiltradas.map((f) => ({
-        [t('admMetricas.exColCentro')]: f.centro,
         [t('admMetricas.exColDni')]: f.dni,
         [t('admMetricas.exColNombre')]: f.nombre,
+        [t('admMetricas.exColCentro')]: f.centro,
         [t('admMetricas.exColTelefono')]: f.telefono,
         [t('admMetricas.exColHorasOnline')]: f.online_hours,
         [t('admMetricas.exColHorasActivo')]: f.active_hours,
@@ -285,6 +294,14 @@ export function MetricasAdminPanel() {
             <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} className="accent-primary" />
             {t('admMetricas.forzarIgnorarCache')}
           </label>
+          <button
+            onClick={() => setConsulta((c) => c + 1)}
+            disabled={cargando}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-50"
+          >
+            {cargando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            {t('admMetricas.cargar')}
+          </button>
         </div>
         <button
           onClick={exportarVisible}
@@ -375,8 +392,8 @@ export function MetricasAdminPanel() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-surface text-left uppercase tracking-wide text-ink-muted">
-                  <th className="px-3 py-2">{t('admMetricas.colCentro')}</th>
                   <th className="px-3 py-2">{t('admMetricas.colRider')}</th>
+                  <th className="px-3 py-2">{t('admMetricas.colCentro')}</th>
                   <th className="px-3 py-2 text-center">{t('admMetricas.colHorasOnline')}</th>
                   <th className="px-3 py-2 text-center">{t('admMetricas.colViajes')}</th>
                   <th className="px-3 py-2 text-center">{t('admMetricas.colAceptacion')}</th>
@@ -386,12 +403,12 @@ export function MetricasAdminPanel() {
               <tbody>
                 {filasPagina.map((f, i) => (
                   <tr key={`${f.dni}-${i}`} className="border-b border-border">
-                    <td className="max-w-[110px] truncate px-3 py-2 text-ink-muted" title={f.centro}>
-                      {f.centro}
-                    </td>
                     <td className="px-3 py-2">
                       <div className="font-medium text-ink">{f.nombre}</div>
                       <div className="font-mono text-[10px] text-ink-muted">{f.dni}</div>
+                    </td>
+                    <td className="max-w-[110px] truncate px-3 py-2 text-ink-muted" title={f.centro}>
+                      {f.centro}
                     </td>
                     <td className="px-3 py-2 text-center font-mono">{fmtFloat(f.online_hours)}</td>
                     <td className="px-3 py-2 text-center font-mono text-primary">{fmtInt(f.num_of_trips, locale)}</td>

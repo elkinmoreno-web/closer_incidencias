@@ -33,6 +33,8 @@ export interface DriverDailyStat {
   pct_cancel: number | null;
   rider_dni: string | null;
   rider_nombre: string | null;
+  /** Solo lo devuelve get_centers_data (la consulta multi-centro): permite agrupar sin volver a preguntar de quién es cada fila. */
+  centro_id?: number | null;
 }
 
 /** Mismo shape que usaba el resto de la app con Fleet Manager, para minimizar cambios en el código que ya lo consume. */
@@ -122,9 +124,13 @@ export async function obtenerRendimientoDiario(centroId: number, fechaIso: strin
   return agregarPorRider((data ?? []) as DriverDailyStat[]);
 }
 
-/** Rendimiento de UN centro (por su id real en Closer CRM) agregado para una semana ISO (año + número de semana). */
-export async function obtenerRendimientoSemanal(centroId: number, year: number, week: number): Promise<DriverPerformance[]> {
-  const supabase = createAdminClient();
+/**
+ * Rango de fechas de una semana ISO, recortado al límite de datos
+ * asentados (fechaLimiteMetricas: hoy -2 días). Devuelve null si la
+ * semana entera es posterior a ese límite — sin este recorte, el resumen
+ * agregado mostraba días que la tabla de abajo todavía no enseñaba.
+ */
+async function rangoSemanaAcotado(year: number, week: number): Promise<{ desde: string; hasta: string } | null> {
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
   const dow = simple.getUTCDay();
   const lunes = new Date(simple);
@@ -133,18 +139,64 @@ export async function obtenerRendimientoSemanal(centroId: number, year: number, 
   domingo.setUTCDate(lunes.getUTCDate() + 6);
   const fmt = (d: Date) => d.toISOString().split('T')[0];
 
-  // Mismo límite que usa la tabla día por día (fechaLimiteMetricas: hoy
-  // -2 días, los datos más recientes aún se están asentando) — sin
-  // esto, el resumen agregado (estas tarjetas) mostraba datos de días
-  // que la tabla de abajo todavía no mostraba, dando la impresión
-  // contradictoria de "no hay días con datos" pero sí un resumen con
-  // números.
   const { fechaLimiteMetricas } = await import('@/lib/metricas');
   const limiteIso = fechaLimiteMetricas();
-  const hastaIso = fmt(domingo) > limiteIso ? limiteIso : fmt(domingo);
-  if (fmt(lunes) > limiteIso) return []; // toda la semana es futura respecto al límite
+  if (fmt(lunes) > limiteIso) return null; // toda la semana es futura respecto al límite
+  return { desde: fmt(lunes), hasta: fmt(domingo) > limiteIso ? limiteIso : fmt(domingo) };
+}
 
-  const { data, error } = await supabase.rpc('get_center_data', { p_centro_id: centroId, p_date_from: fmt(lunes), p_date_to: hastaIso });
+/** Rendimiento de UN centro (por su id real en Closer CRM) agregado para una semana ISO (año + número de semana). */
+export async function obtenerRendimientoSemanal(centroId: number, year: number, week: number): Promise<DriverPerformance[]> {
+  const supabase = createAdminClient();
+  const rango = await rangoSemanaAcotado(year, week);
+  if (!rango) return [];
+
+  const { data, error } = await supabase.rpc('get_center_data', { p_centro_id: centroId, p_date_from: rango.desde, p_date_to: rango.hasta });
   if (error) throw new Error(`Supabase respondió con error al pedir métricas: ${error.message}`);
   return agregarPorRider((data ?? []) as DriverDailyStat[]);
+}
+
+/**
+ * Rendimiento de VARIOS centros en UNA sola consulta (get_centers_data).
+ *
+ * El panel de admin pedía un centro por llamada: con 165 centros eran 165
+ * consultas que repetían el mismo escaneo y los mismos joins, ~67 s de
+ * trabajo de base de datos y ~38 s de espera en pantalla. La función
+ * get_centers_data resuelve todos los centros de golpe (~250 ms) y
+ * devuelve el centro_id en cada fila, así que aquí solo hay que agrupar.
+ */
+async function rendimientoVariosCentros(centroIds: number[], desdeIso: string, hastaIso: string): Promise<Map<number, DriverPerformance[]>> {
+  const resultado = new Map<number, DriverPerformance[]>();
+  if (centroIds.length === 0) return resultado;
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.rpc('get_centers_data', {
+    p_centro_ids: centroIds,
+    p_date_from: desdeIso,
+    p_date_to: hastaIso,
+  });
+  if (error) throw new Error(`Supabase respondió con error al pedir métricas: ${error.message}`);
+
+  const porCentro = new Map<number, DriverDailyStat[]>();
+  for (const fila of (data ?? []) as DriverDailyStat[]) {
+    const centroId = fila.centro_id;
+    if (centroId === null || centroId === undefined) continue;
+    if (!porCentro.has(centroId)) porCentro.set(centroId, []);
+    porCentro.get(centroId)!.push(fila);
+  }
+
+  porCentro.forEach((filas, centroId) => resultado.set(centroId, agregarPorRider(filas)));
+  return resultado;
+}
+
+/** Rendimiento DIARIO de varios centros en una sola consulta. */
+export async function obtenerRendimientoDiarioVarios(centroIds: number[], fechaIso: string): Promise<Map<number, DriverPerformance[]>> {
+  return rendimientoVariosCentros(centroIds, fechaIso, fechaIso);
+}
+
+/** Rendimiento SEMANAL de varios centros en una sola consulta. */
+export async function obtenerRendimientoSemanalVarios(centroIds: number[], year: number, week: number): Promise<Map<number, DriverPerformance[]>> {
+  const rango = await rangoSemanaAcotado(year, week);
+  if (!rango) return new Map();
+  return rendimientoVariosCentros(centroIds, rango.desde, rango.hasta);
 }

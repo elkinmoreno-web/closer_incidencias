@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { obtenerRendimientoSemanal, obtenerRendimientoDiario, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
+import { obtenerRendimientoSemanalVarios, obtenerRendimientoDiarioVarios, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
 import { semanaIsoDe } from '@/lib/metricas';
 import type { AlertasParametros } from '@/lib/types';
 
@@ -46,19 +46,6 @@ export async function centrosConsultablesMetricas(): Promise<{ centros: CentroCo
 }
 
 const CACHE_TTL_MINUTOS = 30;
-
-async function conConcurrencia<T, R>(items: T[], limite: number, tarea: (item: T) => Promise<R>): Promise<R[]> {
-  const resultados: R[] = new Array(items.length);
-  let indice = 0;
-  async function trabajador() {
-    while (indice < items.length) {
-      const i = indice++;
-      resultados[i] = await tarea(items[i]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabajador));
-  return resultados;
-}
 
 export interface FilaMetricaAdmin {
   centro: string;
@@ -131,17 +118,22 @@ export async function obtenerMetricasAdminSemanal(
   const resultadosPorCentro = new Map<number, DriverPerformance[]>();
   cacheValida.forEach((v, id) => resultadosPorCentro.set(id, v));
 
-  await conConcurrencia(centrosAConsultar, 5, async (centro) => {
+  // UNA sola consulta para todos los centros que falten (antes era una por
+  // centro: 165 consultas repitiendo el mismo escaneo y los mismos joins).
+  if (centrosAConsultar.length > 0) {
     try {
-      const drivers = await obtenerRendimientoSemanal(centro.id, year, week);
-      resultadosPorCentro.set(centro.id, drivers);
-      await admClient
-        .from('fleet_metrics_cache')
-        .upsert({ centro_id: centro.id, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
+      const porCentro = await obtenerRendimientoSemanalVarios(centrosAConsultar.map((c) => c.id), year, week);
+      const ahora = new Date().toISOString();
+      const aCachear = centrosAConsultar.map((centro) => {
+        const drivers = porCentro.get(centro.id) ?? [];
+        resultadosPorCentro.set(centro.id, drivers);
+        return { centro_id: centro.id, year, week, datos: drivers, actualizado_en: ahora };
+      });
+      await admClient.from('fleet_metrics_cache').upsert(aCachear, { onConflict: 'centro_id,year,week' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
+      errores.push(registrarError('metricas:semanal', e, 'No se pudieron obtener las métricas de este periodo'));
     }
-  });
+  }
 
   const nombrePorId = new Map(centrosValidos.map((c) => [c.id, c.nombre]));
 
@@ -184,17 +176,22 @@ export async function obtenerMetricasAdminDiario(
   const resultadosPorCentro = new Map<number, DriverPerformance[]>();
   cacheValida.forEach((v, id) => resultadosPorCentro.set(id, v));
 
-  await conConcurrencia(centrosAConsultar, 5, async (centro) => {
+  // UNA sola consulta para todos los centros que falten (ver comentario en
+  // la versión semanal).
+  if (centrosAConsultar.length > 0) {
     try {
-      const drivers = await obtenerRendimientoDiario(centro.id, fecha);
-      resultadosPorCentro.set(centro.id, drivers);
-      await admClient
-        .from('fleet_metrics_cache_diario')
-        .upsert({ centro_id: centro.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
+      const porCentro = await obtenerRendimientoDiarioVarios(centrosAConsultar.map((c) => c.id), fecha);
+      const ahora = new Date().toISOString();
+      const aCachear = centrosAConsultar.map((centro) => {
+        const drivers = porCentro.get(centro.id) ?? [];
+        resultadosPorCentro.set(centro.id, drivers);
+        return { centro_id: centro.id, fecha, datos: drivers, actualizado_en: ahora };
+      });
+      await admClient.from('fleet_metrics_cache_diario').upsert(aCachear, { onConflict: 'centro_id,fecha' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
+      errores.push(registrarError('metricas:diario', e, 'No se pudieron obtener las métricas de este periodo'));
     }
-  });
+  }
 
   const nombrePorId = new Map(centrosValidos.map((c) => [c.id, c.nombre]));
 
@@ -225,6 +222,25 @@ export async function buscarRiderPorTexto(texto: string): Promise<RiderEncontrad
 /** Semana ISO actual (para el selector). */
 export async function semanaActual(): Promise<{ year: number; week: number }> {
   return semanaIsoDe(new Date());
+}
+
+/**
+ * Última vez que el pipeline externo (fuera de este repo) escribió una
+ * fila en driver_daily_stats — para mostrar "Actualizado el: ..." en el
+ * panel. No hay columna updated_at (solo created_at, que marca cuándo
+ * apareció la fila POR PRIMERA VEZ, no cuándo se corrigió); esto es la
+ * mejor aproximación disponible hoy a "cuándo se tocó la tabla por
+ * última vez".
+ */
+export async function obtenerUltimaActualizacionMetricas(): Promise<string | null> {
+  await assertAdmin(); // exige sesión de admin válida antes de responder
+  // driver_daily_stats tiene RLS activado pero SIN políticas (nadie
+  // puede leerla con el cliente normal) — por eso el resto del código
+  // ya la lee siempre con el cliente de rol de servicio, vía
+  // get_center_data(). Se hace lo mismo aquí.
+  const admin = createAdminClient();
+  const { data } = await admin.from('driver_daily_stats').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return data?.created_at ?? null;
 }
 
 /** Umbrales de la pestaña de Alertas (una sola fila global) — mismo patrón que obtenerParametrosStock. */

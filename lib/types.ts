@@ -4,7 +4,7 @@
 
 export type RolAdmin = 'super_admin' | 'administrador' | 'moderador' | 'admin_zona'; // 'admin_zona' en desuso, se migró a 'moderador'
 export type EstadoIncidencia = 'pendiente' | 'aprobada' | 'rechazada' | 'papelera';
-export type EstadoAusencia = 'pendiente' | 'aprobada' | 'rechazada' | 'revisada'; // 'revisada' en desuso
+export type EstadoAusencia = 'pendiente' | 'aprobada' | 'rechazada' | 'papelera' | 'revisada'; // 'revisada' en desuso
 
 export interface Ciudad {
   id: number;

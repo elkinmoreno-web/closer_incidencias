@@ -7,6 +7,15 @@ import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME,
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { mensajeError, registrarError, canonicalEmail } from '@/lib/utils';
+
+/**
+ * Ventana en la que un envío idéntico del mismo rider se considera un
+ * reintento y NO crea otro registro. 2 minutos cubre de sobra las tandas
+ * observadas (hasta 17 envíos separados ~3 s) sin impedir que alguien
+ * comunique dos ausencias distintas seguidas: para colisionar tendrían que
+ * coincidir rider, motivo y las dos fechas.
+ */
+const VENTANA_ANTIDUPLICADOS_MS = 2 * 60 * 1000;
 export async function riderSignOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
@@ -111,6 +120,30 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
       if (err) return { error: err };
     }
 
+    // Misma guarda anti-duplicados que en enviarAusencia (ver el comentario
+    // de VENTANA_ANTIDUPLICADOS_MS). Aquí se colaban tandas de hasta 20
+    // incidencias idénticas del mismo rider en el mismo minuto.
+    let consultaDuplicado = supabase
+      .from('incidencias')
+      .select('id')
+      .eq('rider_id', rider.id)
+      .eq('motivo_id', parsed.data.motivoId);
+    // .eq() no casa con NULL en Postgres, así que el caso "sin código de
+    // pedido" (motivos que no lo piden) necesita .is() explícito.
+    consultaDuplicado = parsed.data.codigoPedido
+      ? consultaDuplicado.eq('codigo_pedido', parsed.data.codigoPedido)
+      : consultaDuplicado.is('codigo_pedido', null);
+
+    const { data: yaExiste } = await consultaDuplicado
+      .gte('created_at', new Date(Date.now() - VENTANA_ANTIDUPLICADOS_MS).toISOString())
+      .limit(1)
+      .maybeSingle();
+
+    if (yaExiste) {
+      revalidatePath('/rider/dashboard');
+      return { success: true };
+    }
+
     const stamp = Date.now();
     let screenshotFileId: string | null = null;
     const evidenciaIds: string[] = [];
@@ -185,6 +218,32 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
     for (const f of validos) {
       const err = validarArchivo(f, ALLOWED_DOC_MIME);
       if (err) return { error: err };
+    }
+
+    // Guarda anti-duplicados: si ya existe una ausencia IDÉNTICA de este
+    // rider creada hace menos de VENTANA_ANTIDUPLICADOS_MS, no se inserta
+    // otra y se devuelve éxito igual (el rider ve que se envió, que es lo
+    // que quería).
+    //
+    // Hacía falta porque se colaban tandas de hasta 17 ausencias idénticas,
+    // separadas por intervalos regulares de ~3 s — un reintento automático,
+    // no clics: el botón ya se deshabilita mientras se envía. Al no saber
+    // qué exactamente reintenta (red del rider, navegador, proxy...), la
+    // única defensa fiable es que el servidor sea idempotente.
+    const { data: yaExiste } = await supabase
+      .from('ausencias')
+      .select('id')
+      .eq('rider_id', rider.id)
+      .eq('motivo_id', parsed.data.motivoId)
+      .eq('fecha_inicio', parsed.data.fechaInicio)
+      .eq('fecha_fin', parsed.data.fechaFin)
+      .gte('created_at', new Date(Date.now() - VENTANA_ANTIDUPLICADOS_MS).toISOString())
+      .limit(1)
+      .maybeSingle();
+
+    if (yaExiste) {
+      revalidatePath('/rider/dashboard');
+      return { success: true };
     }
 
     const nombreBase = `${rider.dni}_${parsed.data.fechaInicio}_${parsed.data.fechaFin}_${Date.now()}`;

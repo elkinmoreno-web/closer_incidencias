@@ -57,6 +57,7 @@ const ESTADO_AUSENCIA_LABEL: Record<EstadoAusencia, string> = {
   aprobada: 'Aprobada',
   rechazada: 'Rechazada',
   revisada: 'Revisada', // en desuso, se conserva por compatibilidad de tipos
+  papelera: 'En papelera',
 };
 
 const ESTADO_AUSENCIA_LABEL_EN: Record<EstadoAusencia, string> = {
@@ -64,6 +65,7 @@ const ESTADO_AUSENCIA_LABEL_EN: Record<EstadoAusencia, string> = {
   aprobada: 'Approved',
   rechazada: 'Rejected',
   revisada: 'Reviewed',
+  papelera: 'In trash',
 };
 
 const ESTADO_AUSENCIA_COLOR: Record<EstadoAusencia, string> = {
@@ -71,6 +73,7 @@ const ESTADO_AUSENCIA_COLOR: Record<EstadoAusencia, string> = {
   aprobada: 'bg-emerald-100 text-emerald-800',
   rechazada: 'bg-red-100 text-red-800',
   revisada: 'bg-emerald-100 text-emerald-800',
+  papelera: 'bg-slate-200 text-slate-600',
 };
 
 export function estadoAusenciaLabel(estado: EstadoAusencia, idioma: 'es' | 'en' = 'es'): string {

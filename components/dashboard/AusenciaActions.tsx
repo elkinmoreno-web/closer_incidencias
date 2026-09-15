@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Check, X } from 'lucide-react';
-import { aprobarAusencia, rechazarAusencia } from '@/app/dashboard/ausencias/actions';
+import { Check, X, Trash2 } from 'lucide-react';
+import { aprobarAusencia, rechazarAusencia, enviarAusenciaAPapelera } from '@/app/dashboard/ausencias/actions';
 import type { EstadoAusencia } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
@@ -65,6 +65,18 @@ export function AusenciaActions({ id, estado }: { id: string; estado: EstadoAuse
         className="rounded-full bg-red-50 p-2 text-danger transition hover:bg-red-100 disabled:opacity-40"
       >
         <X size={16} />
+      </button>
+      <button
+        title={t('accIncidencia.enviarPapelera')}
+        disabled={pending}
+        onClick={() => {
+          if (confirm(t('accIncidencia.confirmarPapelera'))) {
+            startTransition(() => enviarAusenciaAPapelera(id));
+          }
+        }}
+        className="rounded-full bg-slate-100 p-2 text-slate-600 transition hover:bg-slate-200 disabled:opacity-60"
+      >
+        <Trash2 size={16} />
       </button>
     </div>
   );

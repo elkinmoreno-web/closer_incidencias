@@ -38,6 +38,8 @@ export default async function AusenciasPage({
   let query = supabase
     .from('ausencias')
     .select('*, motivos_ausencia(nombre, nombre_en), admins:revisado_por_id(usuario), centros(nombre)', { count: 'exact' })
+    // Las enviadas a la papelera no salen aquí: se ven (y se recuperan) en /dashboard/papelera.
+    .neq('estado', 'papelera')
     .order('created_at', { ascending: false })
     .range(from, to);
 

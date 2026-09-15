@@ -169,6 +169,7 @@ const es = {
 
   // TableFilters (compartido)
   'filtros.todosLosEstados': 'Todos los estados',
+  'filtros.todosLosTipos': 'Todos los tipos',
   'filtros.todosLosGestores': 'Todos los gestores',
   'filtros.todasLasCiudades': 'Todas las ciudades',
   'filtros.todosLosCentros': 'Todos los centros',
@@ -563,7 +564,7 @@ const es = {
 
   // Papelera (admin)
   'papelera.titulo': 'Papelera',
-  'papelera.descripcion': 'Incidencias eliminadas. Se conservan aquí (nada se borra de verdad) y se pueden recuperar.',
+  'papelera.descripcion': 'Incidencias y ausencias eliminadas. Se conservan aquí (nada se borra de verdad) y se pueden recuperar.',
   'papelera.buscarPlaceholder': 'Buscar rider o DNI...',
   'papelera.vacia': 'La papelera está vacía',
   'papelera.colRider': 'Rider',
@@ -571,6 +572,9 @@ const es = {
   'papelera.colMotivo': 'Motivo',
   'papelera.colEliminadoPor': 'Eliminado por',
   'papelera.colFecha': 'Fecha',
+  'papelera.colTipo': 'Tipo',
+  'papelera.tipoIncidencia': 'Incidencia',
+  'papelera.tipoAusencia': 'Ausencia',
   'papelera.colAcciones': 'Acciones',
   'papelera.recuperar': 'Recuperar',
 

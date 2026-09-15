@@ -515,6 +515,8 @@ const es = {
   'admAlertas.verTodos': 'Ver todos',
   'admAlertas.totalMostrados': '{n} riders mostrados',
   'admAlertas.umbralActivo': '≥ {horas} h · menos de {pedidos} pedidos',
+  'admAlertas.vacioPorFiltros': 'Hay {n} riders en este periodo, pero ninguno pasa los filtros actuales (≥ {horas} h y menos de {pedidos} pedidos). Si el periodo acaba de empezar, es normal que nadie llegue todavía a ese mínimo de horas.',
+  'admAlertas.verLosDelPeriodo': 'Ver los {n} del periodo',
   'admAlertas.ordenarPorSemaforo': 'Ordenar por semáforo (rojo primero)',
   'admAlertas.guardarUmbrales': 'Guardar como predeterminado',
   'admAlertas.guardando': 'Guardando...',

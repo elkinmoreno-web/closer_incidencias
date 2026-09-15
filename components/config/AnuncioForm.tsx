@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useTransition } from 'react';
-import { publicarAnuncio, desactivarAnuncio } from '@/app/dashboard/configuracion/actions';
+import { publicarAnuncio, desactivarAnuncio, editarAnuncio } from '@/app/dashboard/configuracion/actions';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import type { ClaveTraduccion } from '@/lib/i18n/dictionaries/es';
 
@@ -10,6 +10,7 @@ type Audiencia = 'todos' | 'admins' | 'riders';
 interface AnuncioActivo {
   id: number;
   mensaje: string;
+  mensajeEn: string | null;
   ciudadNombre: string | null; // null = global
   audiencia: Audiencia;
 }
@@ -36,12 +37,92 @@ export function AnuncioForm({
   const [audiencia, setAudiencia] = useState<Audiencia>('todos');
   const formRef = useRef<HTMLFormElement>(null);
 
+  // Anuncio que se está editando en línea (null = ninguno). Se edita en el
+  // sitio en vez de quitar y volver a publicar, que le cambiaba la fecha y
+  // lo movía de posición en la lista.
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [edMensaje, setEdMensaje] = useState('');
+  const [edMensajeEn, setEdMensajeEn] = useState('');
+  const [edAudiencia, setEdAudiencia] = useState<Audiencia>('todos');
+
+  function empezarEdicion(a: AnuncioActivo) {
+    setEditandoId(a.id);
+    setEdMensaje(a.mensaje);
+    setEdMensajeEn(a.mensajeEn ?? '');
+    setEdAudiencia(a.audiencia);
+    setError(null);
+  }
+
+  function guardarEdicion(id: number) {
+    if (!edMensaje.trim()) {
+      setError(t('anuncio.escribeMensaje'));
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        await editarAnuncio(id, edMensaje, edAudiencia, edMensajeEn);
+        setEditandoId(null);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {anunciosActivos.length > 0 && (
         <div className="space-y-2">
           {anunciosActivos.map((a) => {
             const claveAud = claveEtiquetaAudiencia(a.audiencia);
+
+            if (editandoId === a.id) {
+              return (
+                <div key={a.id} className="flex flex-col gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold">
+                    📣 <span className="rounded-full bg-amber-200/70 px-2 py-0.5">{a.ciudadNombre ?? t('anuncio.global')}</span>
+                  </div>
+                  <input
+                    value={edMensaje}
+                    onChange={(e) => setEdMensaje(e.target.value)}
+                    placeholder={t('anuncio.mensajePlaceholder')}
+                    className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <input
+                    value={edMensajeEn}
+                    onChange={(e) => setEdMensajeEn(e.target.value)}
+                    placeholder={t('anuncio.mensajeEnPlaceholder')}
+                    className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={edAudiencia}
+                      onChange={(e) => setEdAudiencia(e.target.value as Audiencia)}
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                    >
+                      <option value="todos">{t('anuncio.paraTodos')}</option>
+                      <option value="admins">{t('anuncio.soloAdmins')}</option>
+                      <option value="riders">{t('anuncio.soloRiders')}</option>
+                    </select>
+                    <button
+                      disabled={pending}
+                      onClick={() => guardarEdicion(a.id)}
+                      className="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
+                    >
+                      {t('comun.guardar')}
+                    </button>
+                    <button
+                      disabled={pending}
+                      onClick={() => setEditandoId(null)}
+                      className="rounded-full border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      {t('comun.cancelar')}
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={a.id} className="flex items-center justify-between rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <span>
@@ -49,13 +130,22 @@ export function AnuncioForm({
                   {claveAud && <span className="mr-1.5 rounded-full bg-amber-300/60 px-2 py-0.5 text-xs font-semibold">{t(claveAud)}</span>}
                   {a.mensaje}
                 </span>
-                <button
-                  disabled={pending}
-                  onClick={() => startTransition(() => desactivarAnuncio(a.id))}
-                  className="ml-3 shrink-0 rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60"
-                >
-                  {t('anuncio.quitar')}
-                </button>
+                <span className="ml-3 flex shrink-0 gap-2">
+                  <button
+                    disabled={pending}
+                    onClick={() => empezarEdicion(a)}
+                    className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    {t('comun.editar')}
+                  </button>
+                  <button
+                    disabled={pending}
+                    onClick={() => startTransition(() => desactivarAnuncio(a.id))}
+                    className="rounded-full border border-amber-300 px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                  >
+                    {t('anuncio.quitar')}
+                  </button>
+                </span>
               </div>
             );
           })}

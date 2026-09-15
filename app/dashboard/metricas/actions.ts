@@ -1,8 +1,9 @@
 'use server';
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { obtenerRendimientoSemanal, obtenerRendimientoDiario, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
+import { obtenerRendimientoSemanalVarios, obtenerRendimientoDiarioVarios, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
 import { semanaIsoDe } from '@/lib/metricas';
+import type { AlertasParametros } from '@/lib/types';
 
 import { registrarError } from '@/lib/utils';
 async function assertAdmin() {
@@ -46,24 +47,12 @@ export async function centrosConsultablesMetricas(): Promise<{ centros: CentroCo
 
 const CACHE_TTL_MINUTOS = 30;
 
-async function conConcurrencia<T, R>(items: T[], limite: number, tarea: (item: T) => Promise<R>): Promise<R[]> {
-  const resultados: R[] = new Array(items.length);
-  let indice = 0;
-  async function trabajador() {
-    while (indice < items.length) {
-      const i = indice++;
-      resultados[i] = await tarea(items[i]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabajador));
-  return resultados;
-}
-
 export interface FilaMetricaAdmin {
   centro: string;
   dni: string;
   nombre: string;
   telefono: string;
+  email: string;
   online_hours: number;
   active_hours: number;
   num_of_trips: number;
@@ -82,6 +71,7 @@ function mapearFila(nombreCentro: string, d: DriverPerformance): FilaMetricaAdmi
     dni: d.dni ?? `⚠ sin cruzar (${d.email})`,
     nombre: d.driver_name,
     telefono: d.driver_number,
+    email: d.email,
     online_hours: d.online_hours,
     active_hours: d.active_hours,
     num_of_trips: d.num_of_trips,
@@ -128,17 +118,22 @@ export async function obtenerMetricasAdminSemanal(
   const resultadosPorCentro = new Map<number, DriverPerformance[]>();
   cacheValida.forEach((v, id) => resultadosPorCentro.set(id, v));
 
-  await conConcurrencia(centrosAConsultar, 5, async (centro) => {
+  // UNA sola consulta para todos los centros que falten (antes era una por
+  // centro: 165 consultas repitiendo el mismo escaneo y los mismos joins).
+  if (centrosAConsultar.length > 0) {
     try {
-      const drivers = await obtenerRendimientoSemanal(centro.id, year, week);
-      resultadosPorCentro.set(centro.id, drivers);
-      await admClient
-        .from('fleet_metrics_cache')
-        .upsert({ centro_id: centro.id, year, week, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,year,week' });
+      const porCentro = await obtenerRendimientoSemanalVarios(centrosAConsultar.map((c) => c.id), year, week);
+      const ahora = new Date().toISOString();
+      const aCachear = centrosAConsultar.map((centro) => {
+        const drivers = porCentro.get(centro.id) ?? [];
+        resultadosPorCentro.set(centro.id, drivers);
+        return { centro_id: centro.id, year, week, datos: drivers, actualizado_en: ahora };
+      });
+      await admClient.from('fleet_metrics_cache').upsert(aCachear, { onConflict: 'centro_id,year,week' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
+      errores.push(registrarError('metricas:semanal', e, 'No se pudieron obtener las métricas de este periodo'));
     }
-  });
+  }
 
   const nombrePorId = new Map(centrosValidos.map((c) => [c.id, c.nombre]));
 
@@ -181,17 +176,22 @@ export async function obtenerMetricasAdminDiario(
   const resultadosPorCentro = new Map<number, DriverPerformance[]>();
   cacheValida.forEach((v, id) => resultadosPorCentro.set(id, v));
 
-  await conConcurrencia(centrosAConsultar, 5, async (centro) => {
+  // UNA sola consulta para todos los centros que falten (ver comentario en
+  // la versión semanal).
+  if (centrosAConsultar.length > 0) {
     try {
-      const drivers = await obtenerRendimientoDiario(centro.id, fecha);
-      resultadosPorCentro.set(centro.id, drivers);
-      await admClient
-        .from('fleet_metrics_cache_diario')
-        .upsert({ centro_id: centro.id, fecha, datos: drivers, actualizado_en: new Date().toISOString() }, { onConflict: 'centro_id,fecha' });
+      const porCentro = await obtenerRendimientoDiarioVarios(centrosAConsultar.map((c) => c.id), fecha);
+      const ahora = new Date().toISOString();
+      const aCachear = centrosAConsultar.map((centro) => {
+        const drivers = porCentro.get(centro.id) ?? [];
+        resultadosPorCentro.set(centro.id, drivers);
+        return { centro_id: centro.id, fecha, datos: drivers, actualizado_en: ahora };
+      });
+      await admClient.from('fleet_metrics_cache_diario').upsert(aCachear, { onConflict: 'centro_id,fecha' });
     } catch (e) {
-      errores.push(`${centro.nombre}: ${registrarError('sync:' + centro.nombre, e, 'No se pudieron obtener los datos de este centro')}`);
+      errores.push(registrarError('metricas:diario', e, 'No se pudieron obtener las métricas de este periodo'));
     }
-  });
+  }
 
   const nombrePorId = new Map(centrosValidos.map((c) => [c.id, c.nombre]));
 
@@ -222,4 +222,48 @@ export async function buscarRiderPorTexto(texto: string): Promise<RiderEncontrad
 /** Semana ISO actual (para el selector). */
 export async function semanaActual(): Promise<{ year: number; week: number }> {
   return semanaIsoDe(new Date());
+}
+
+/**
+ * Última vez que el pipeline externo (fuera de este repo) escribió una
+ * fila en driver_daily_stats — para mostrar "Actualizado el: ..." en el
+ * panel. No hay columna updated_at (solo created_at, que marca cuándo
+ * apareció la fila POR PRIMERA VEZ, no cuándo se corrigió); esto es la
+ * mejor aproximación disponible hoy a "cuándo se tocó la tabla por
+ * última vez".
+ */
+export async function obtenerUltimaActualizacionMetricas(): Promise<string | null> {
+  await assertAdmin(); // exige sesión de admin válida antes de responder
+  // driver_daily_stats tiene RLS activado pero SIN políticas (nadie
+  // puede leerla con el cliente normal) — por eso el resto del código
+  // ya la lee siempre con el cliente de rol de servicio, vía
+  // get_center_data(). Se hace lo mismo aquí.
+  const admin = createAdminClient();
+  const { data } = await admin.from('driver_daily_stats').select('created_at').order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return data?.created_at ?? null;
+}
+
+/** Umbrales de la pestaña de Alertas (una sola fila global) — mismo patrón que obtenerParametrosStock. */
+export async function obtenerParametrosAlertas(): Promise<AlertasParametros> {
+  const { supabase } = await assertAdmin();
+  const { data } = await supabase.from('alertas_parametros').select('*').eq('id', 1).maybeSingle();
+  return {
+    horas_min_diario: data?.horas_min_diario ?? 6,
+    pedidos_min_diario: data?.pedidos_min_diario ?? 8,
+    horas_min_semanal: data?.horas_min_semanal ?? 30,
+    pedidos_min_semanal: data?.pedidos_min_semanal ?? 40,
+  };
+}
+
+export type ActualizarParametrosAlertasState = { error: string } | { success: true } | undefined;
+
+/** Solo super_admin puede cambiar los umbrales por defecto (RLS ya lo exige también, esto solo da un mensaje claro). */
+export async function actualizarParametrosAlertas(parametros: AlertasParametros): Promise<ActualizarParametrosAlertasState> {
+  const { supabase, admin } = await assertAdmin();
+  if (admin.rol !== 'super_admin') return { error: 'Solo un Super Admin puede cambiar estos umbrales.' };
+
+  const { error } = await supabase.from('alertas_parametros').update({ ...parametros, updated_at: new Date().toISOString() }).eq('id', 1);
+  if (error) return { error: error.message };
+
+  return { success: true };
 }

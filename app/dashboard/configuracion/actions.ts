@@ -169,6 +169,53 @@ export async function publicarAnuncio(mensaje: string, ciudadId: number | null, 
   revalidatePath('/rider/dashboard');
 }
 
+/**
+ * Edita el texto y la audiencia de un anuncio ya publicado, sin tener que
+ * quitarlo y volver a crearlo (que le cambiaba la fecha y lo movía de sitio
+ * en la lista). Mismas reglas de permisos que desactivarAnuncio: un
+ * administrador de zona solo puede tocar los de SUS ciudades, y el anuncio
+ * global es cosa exclusiva del Super Admin.
+ *
+ * La ciudad NO se puede cambiar aquí a propósito: mover un anuncio de una
+ * ciudad a otra es, en la práctica, otro anuncio distinto — y permitirlo
+ * abriría la puerta a que un administrador de zona colase un aviso en una
+ * ciudad ajena editando uno suyo.
+ */
+export async function editarAnuncio(
+  id: number,
+  mensaje: string,
+  audiencia: 'todos' | 'admins' | 'riders',
+  mensajeEn?: string
+) {
+  const { supabase, rol } = await assertSuperAdminOAdministrador();
+
+  if (!mensaje.trim()) throw new Error('El mensaje no puede quedar vacío');
+
+  const { data: anuncio } = await supabase.from('anuncios').select('ciudad_id').eq('id', id).single();
+  if (!anuncio) throw new Error('Anuncio no encontrado');
+
+  if (rol !== 'super_admin') {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { data: admin } = await supabase.from('admins').select('id').eq('auth_user_id', user!.id).single();
+    if (anuncio.ciudad_id === null) throw new Error('Solo un Super Admin puede editar un anuncio global');
+    const { data: misCiudades } = await supabase.from('admin_ciudades').select('ciudad_id').eq('admin_id', admin!.id);
+    const permitido = (misCiudades ?? []).some((c) => c.ciudad_id === anuncio.ciudad_id);
+    if (!permitido) throw new Error('No puedes editar un anuncio de una ciudad que no es tuya');
+  }
+
+  const { error } = await supabase
+    .from('anuncios')
+    .update({ mensaje: mensaje.trim(), mensaje_en: mensajeEn?.trim() || null, audiencia })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/configuracion');
+  revalidatePath('/rider/dashboard');
+}
+
 export async function desactivarAnuncio(id: number) {
   const { supabase, rol } = await assertSuperAdminOAdministrador();
 

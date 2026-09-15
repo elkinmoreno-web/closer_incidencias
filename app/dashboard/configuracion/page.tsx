@@ -39,7 +39,7 @@ export default async function ConfiguracionPage() {
       supabase.from('motivos').select('*').order('nombre'),
       supabase.from('motivos_ausencia').select('*').order('nombre'),
       supabase.from('admins').select('id, usuario, rol, activo').order('usuario'),
-      supabase.from('anuncios').select('id, mensaje, ciudad_id, audiencia, ciudades(nombre)').eq('activo', true).order('created_at', { ascending: false }),
+      supabase.from('anuncios').select('id, mensaje, mensaje_en, ciudad_id, audiencia, ciudades(nombre)').eq('activo', true).order('created_at', { ascending: false }),
       supabase.from('ciudades').select('*').order('nombre'),
       supabase.from('admin_ciudades').select('admin_id, ciudad_id, ciudades(nombre)'),
     ]);
@@ -51,7 +51,7 @@ export default async function ConfiguracionPage() {
     .map((a) => {
       const ciudadRel = a.ciudades as unknown as { nombre: string } | { nombre: string }[] | null;
       const nombre = Array.isArray(ciudadRel) ? ciudadRel[0]?.nombre : ciudadRel?.nombre;
-      return { id: a.id, mensaje: a.mensaje, ciudadNombre: nombre ?? null, audiencia: a.audiencia as 'todos' | 'admins' | 'riders' };
+      return { id: a.id, mensaje: a.mensaje, mensajeEn: a.mensaje_en ?? null, ciudadNombre: nombre ?? null, audiencia: a.audiencia as 'todos' | 'admins' | 'riders' };
     });
 
   const zonasPorAdmin = new Map<string, string[]>();

@@ -125,12 +125,20 @@ export async function obtenerRendimientoDiario(centroId: number, fechaIso: strin
 }
 
 /**
- * Rango de fechas de una semana ISO, recortado al límite de datos
- * asentados (fechaLimiteMetricas: hoy -2 días). Devuelve null si la
- * semana entera es posterior a ese límite — sin este recorte, el resumen
- * agregado mostraba días que la tabla de abajo todavía no enseñaba.
+ * Rango de fechas de una semana ISO.
+ *
+ * `acotarADatosAsentados` recorta el final al límite de fechaLimiteMetricas
+ * (hoy -2 días) y devuelve null si la semana entera cae después: es lo que
+ * usa el panel del RIDER, para que no vea días a medio consolidar.
+ *
+ * Los paneles de admin lo pasan en false — prefieren ver el dato de hoy
+ * aunque venga incompleto (el día D entra parcial y se completa el D+1).
  */
-async function rangoSemanaAcotado(year: number, week: number): Promise<{ desde: string; hasta: string } | null> {
+async function rangoSemanaAcotado(
+  year: number,
+  week: number,
+  acotarADatosAsentados = true
+): Promise<{ desde: string; hasta: string } | null> {
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
   const dow = simple.getUTCDay();
   const lunes = new Date(simple);
@@ -138,6 +146,8 @@ async function rangoSemanaAcotado(year: number, week: number): Promise<{ desde: 
   const domingo = new Date(lunes);
   domingo.setUTCDate(lunes.getUTCDate() + 6);
   const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+  if (!acotarADatosAsentados) return { desde: fmt(lunes), hasta: fmt(domingo) };
 
   const { fechaLimiteMetricas } = await import('@/lib/metricas');
   const limiteIso = fechaLimiteMetricas();
@@ -194,9 +204,13 @@ export async function obtenerRendimientoDiarioVarios(centroIds: number[], fechaI
   return rendimientoVariosCentros(centroIds, fechaIso, fechaIso);
 }
 
-/** Rendimiento SEMANAL de varios centros en una sola consulta. */
+/**
+ * Rendimiento SEMANAL de varios centros en una sola consulta (panel de
+ * admin): SIN recortar a los datos asentados, para que la semana en curso
+ * se vea hasta hoy en vez de salir vacía.
+ */
 export async function obtenerRendimientoSemanalVarios(centroIds: number[], year: number, week: number): Promise<Map<number, DriverPerformance[]>> {
-  const rango = await rangoSemanaAcotado(year, week);
+  const rango = await rangoSemanaAcotado(year, week, false);
   if (!rango) return new Map();
   return rendimientoVariosCentros(centroIds, rango.desde, rango.hasta);
 }

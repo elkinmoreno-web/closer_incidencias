@@ -91,9 +91,24 @@ export function fmtDMY(iso: string): string {
 }
 
 /**
+ * Fecha de hoy en yyyy-mm-dd, según la hora LOCAL (no UTC: a las 00:30 de
+ * Madrid, toISOString() todavía devolvería el día anterior).
+ */
+export function hoyIso(): string {
+  const d = new Date();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mes}-${dia}`;
+}
+
+/**
  * Fecha límite para las métricas: los últimos 2 días no se muestran
- * porque los datos de Fleet Manager tardan ese margen en asentarse del
- * todo. Si hoy es jueves 16, el día más reciente visible es el martes 14.
+ * porque los datos tardan ese margen en asentarse del todo (el día D entra
+ * parcial durante el propio día D y se completa el D+1).
+ *
+ * Solo la usa el panel del RIDER. Los paneles de admin (Performance y
+ * Alertas) muestran hasta hoy: quien gestiona prefiere ver el dato de hoy
+ * aunque venga incompleto a no verlo.
  */
 export function fechaLimiteMetricas(): string {
   const d = new Date();

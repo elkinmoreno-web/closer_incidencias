@@ -12,7 +12,7 @@ import {
   type CentroConId,
 } from '@/app/dashboard/metricas/actions';
 import { paginasAMostrar } from '@/lib/pagination';
-import { semanaIsoDe, fechaLimiteMetricas, semanaEsMuyAntigua } from '@/lib/metricas';
+import { semanaIsoDe, hoyIso, semanaEsMuyAntigua } from '@/lib/metricas';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 const fmtInt = (n: number | null, locale: string) => (n === null || n === undefined ? '—' : Math.round(n).toLocaleString(locale));
@@ -48,7 +48,7 @@ export function MetricasAdminPanel() {
   const inicial = useMemo(() => semanaIsoDe(new Date()), []);
   const [year, setYear] = useState<number>(inicial.year);
   const [week, setWeek] = useState<number>(inicial.week);
-  const [fechaDia, setFechaDia] = useState(() => fechaLimiteMetricas());
+  const [fechaDia, setFechaDia] = useState(() => hoyIso());
   const [centros, setCentros] = useState<CentroConId[]>([]);
   const [centroFiltro, setCentroFiltro] = useState<string>('todos');
   const [filas, setFilas] = useState<FilaMetricaAdmin[]>([]);
@@ -136,7 +136,10 @@ export function MetricasAdminPanel() {
   }
 
   const rango = modo === 'semanal' ? rangoSemanaIso(year, week) : null;
-  const limite = fechaLimiteMetricas(); // los últimos 2 días no se muestran: los datos aún se están asentando
+  // Antes se bloqueaban los 2 últimos días (los datos aún se asientan). En
+  // gestión interesa ver el día de hoy aunque venga incompleto, así que el
+  // tope es hoy. Ese margen sigue aplicándose en el panel del rider.
+  const limite = hoyIso();
   const esHoyODespues = modo === 'diario' ? fechaDia >= limite : rango ? rango.lunes >= semanaIsoDeHoyLunes() : false;
   const anteriorSemanaDeshabilitada = (() => {
     const { lunes } = rangoSemanaIso(year, week);

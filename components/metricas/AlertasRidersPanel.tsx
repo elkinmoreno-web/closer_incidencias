@@ -629,7 +629,33 @@ export function AlertasRidersPanel() {
                 {alertasPagina.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-3 py-10 text-center text-ink-muted">
-                      {t('admAlertas.sinAlertas')}
+                      {/* Si hay datos del periodo pero los filtros los dejan
+                          todos fuera, se dice CUÁNTOS hay y por qué no salen:
+                          una tabla vacía sin más parece un fallo. Pasa mucho
+                          en el periodo en curso — el umbral semanal (p. ej.
+                          30 h) no lo alcanza nadie un lunes. */}
+                      {filas.length > 0 ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <p>
+                            {t('admAlertas.vacioPorFiltros')
+                              .replace('{n}', String(filas.length))
+                              .replace('{horas}', String(horasMinAplicado))
+                              .replace('{pedidos}', String(pedidosMinAplicado))}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setFiltrosAplicados(false);
+                              setSemaforosActivos(new Set(TODOS_LOS_SEMAFOROS));
+                              setFiltrosCol({});
+                            }}
+                            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark"
+                          >
+                            {t('admAlertas.verLosDelPeriodo').replace('{n}', String(filas.length))}
+                          </button>
+                        </div>
+                      ) : (
+                        t('admAlertas.sinAlertas')
+                      )}
                     </td>
                   </tr>
                 )}

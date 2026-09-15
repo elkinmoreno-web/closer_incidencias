@@ -518,6 +518,8 @@ const en: Record<ClaveTraduccion, string> = {
   'admAlertas.verTodos': 'Show all',
   'admAlertas.totalMostrados': '{n} riders shown',
   'admAlertas.umbralActivo': '≥ {horas} h · under {pedidos} orders',
+  'admAlertas.vacioPorFiltros': 'There are {n} riders in this period, but none match the current filters (≥ {horas} h and under {pedidos} orders). If the period has just started, it is normal that nobody has reached that minimum of hours yet.',
+  'admAlertas.verLosDelPeriodo': 'Show the {n} in this period',
   'admAlertas.ordenarPorSemaforo': 'Sort by traffic light (red first)',
   'admAlertas.guardarUmbrales': 'Save as default',
   'admAlertas.guardando': 'Saving...',

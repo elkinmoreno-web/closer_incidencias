@@ -12,7 +12,7 @@ import {
   type CentroConId,
 } from '@/app/dashboard/metricas/actions';
 import type { AlertasParametros } from '@/lib/types';
-import { semanaIsoDe, fechaLimiteMetricas, semanaEsMuyAntigua } from '@/lib/metricas';
+import { semanaIsoDe, hoyIso, semanaEsMuyAntigua } from '@/lib/metricas';
 import { paginasAMostrar } from '@/lib/pagination';
 // Cabecera con orden + filtro por columna. Vive en components/stock porque
 // nació allí, pero es genérica y ya la usan varias tablas del proyecto.
@@ -67,7 +67,7 @@ export function AlertasRidersPanel() {
   const inicial = useMemo(() => semanaIsoDe(new Date()), []);
   const [year, setYear] = useState<number>(inicial.year);
   const [week, setWeek] = useState<number>(inicial.week);
-  const [fechaDia, setFechaDia] = useState(() => fechaLimiteMetricas());
+  const [fechaDia, setFechaDia] = useState(() => hoyIso());
   const [centros, setCentros] = useState<CentroConId[]>([]);
   const [esSuperAdmin, setEsSuperAdmin] = useState(false);
   const [centroFiltro, setCentroFiltro] = useState<string>('todos');
@@ -199,7 +199,10 @@ export function AlertasRidersPanel() {
   }
 
   const rango = modo === 'semanal' ? rangoSemanaIso(year, week) : null;
-  const limite = fechaLimiteMetricas();
+  // El tope es hoy: antes se bloqueaban los 2 últimos días porque el dato
+  // aún se estaba asentando, pero para avisar a un rider interesa ver el día
+  // de hoy aunque venga incompleto. El margen sigue en el panel del rider.
+  const limite = hoyIso();
 
   // 1) Base: solo el umbral de horas/pedidos y la búsqueda (lo que está
   //    detrás de "Aplicar"). El recuento del semáforo se calcula sobre

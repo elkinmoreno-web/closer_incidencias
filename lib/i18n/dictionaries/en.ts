@@ -172,6 +172,7 @@ const en: Record<ClaveTraduccion, string> = {
 
   // TableFilters (compartido)
   'filtros.todosLosEstados': 'All statuses',
+  'filtros.todosLosTipos': 'All types',
   'filtros.todosLosGestores': 'All managers',
   'filtros.todasLasCiudades': 'All cities',
   'filtros.todosLosCentros': 'All centers',
@@ -566,7 +567,7 @@ const en: Record<ClaveTraduccion, string> = {
 
   // Papelera (admin)
   'papelera.titulo': 'Trash',
-  'papelera.descripcion': 'Deleted incidents. They stay here (nothing is truly deleted) and can be restored.',
+  'papelera.descripcion': 'Deleted incidents and absences. They stay here (nothing is truly deleted) and can be restored.',
   'papelera.buscarPlaceholder': 'Search rider or ID...',
   'papelera.vacia': 'The trash is empty',
   'papelera.colRider': 'Rider',
@@ -574,6 +575,9 @@ const en: Record<ClaveTraduccion, string> = {
   'papelera.colMotivo': 'Reason',
   'papelera.colEliminadoPor': 'Deleted by',
   'papelera.colFecha': 'Date',
+  'papelera.colTipo': 'Type',
+  'papelera.tipoIncidencia': 'Incident',
+  'papelera.tipoAusencia': 'Absence',
   'papelera.colAcciones': 'Actions',
   'papelera.recuperar': 'Restore',
 

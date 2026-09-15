@@ -35,6 +35,46 @@ export async function aprobarAusencia(id: string) {
   revalidatePath('/dashboard/ausencias');
 }
 
+/**
+ * Manda una ausencia a la papelera. Igual que en incidencias: no se borra
+ * de la base, solo pasa a estado 'papelera' guardando quién y cuándo, para
+ * que se pueda recuperar desde Papelera si fue un error.
+ */
+export async function enviarAusenciaAPapelera(id: string) {
+  const supabase = createClient();
+  const adminId = await getCurrentAdmin(supabase);
+
+  const { data: fila, error } = await supabase
+    .from('ausencias')
+    .update({ estado: 'papelera', eliminado_por_id: adminId, fecha_eliminacion: new Date().toISOString() })
+    .eq('id', id)
+    .select('centro_id')
+    .single();
+
+  if (error) throw new Error(error.message);
+  await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Enviar a papelera', detalles: `Movió a papelera la ausencia ${id}`, centro_id: fila?.centro_id ?? null });
+  revalidatePath('/dashboard/ausencias');
+  revalidatePath('/dashboard/papelera');
+}
+
+/** Devuelve una ausencia de la papelera a "pendiente". */
+export async function recuperarAusenciaDePapelera(id: string) {
+  const supabase = createClient();
+  const adminId = await getCurrentAdmin(supabase);
+
+  const { data: fila, error } = await supabase
+    .from('ausencias')
+    .update({ estado: 'pendiente', eliminado_por_id: null, fecha_eliminacion: null })
+    .eq('id', id)
+    .select('centro_id')
+    .single();
+
+  if (error) throw new Error(error.message);
+  await supabase.from('auditoria').insert({ admin_id: adminId, accion: 'Recuperar de papelera', detalles: `Recuperó la ausencia ${id}`, centro_id: fila?.centro_id ?? null });
+  revalidatePath('/dashboard/ausencias');
+  revalidatePath('/dashboard/papelera');
+}
+
 export async function rechazarAusencia(id: string, motivoRechazo: string) {
   const supabase = createClient();
   const adminId = await getCurrentAdmin(supabase);

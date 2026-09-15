@@ -369,6 +369,20 @@ async function importarRidersLoteInterno(filas: FilaImportacion[]): Promise<Resu
     const directo = centroMap.get(normalizarNombreCentro(nombreExcel));
     if (directo) return directo;
 
+    // Red de seguridad: "FD Alicante Benidorm" → "ALICANTE BENIDORM".
+    // Sin esto, un centro del Excel que no estuviera en MAPEO_CENTROS creaba
+    // un DUPLICADO ("FD Alicante Benidorm" junto al "ALICANTE BENIDORM" que
+    // ya existía), los riders se iban al duplicado y el centro de verdad
+    // aparecía vacío en Performance y Alertas. Pasó con 8 centros.
+    // Solo actúa si el nombre sin el prefijo coincide con uno YA existente:
+    // nunca inventa nada (los alemanes, que no tienen gemelo, siguen su
+    // camino normal más abajo).
+    const sinPrefijoFd = normalizarNombreCentro(nombreExcel).replace(/^fd\s+/, '');
+    if (sinPrefijoFd !== normalizarNombreCentro(nombreExcel)) {
+      const porPrefijo = centroMap.get(sinPrefijoFd);
+      if (porPrefijo) return porPrefijo;
+    }
+
     if (normalizarNombreCentro(nombreExcel).startsWith('mcd')) {
       const nombreLimpio = nombreExcel.trim();
       const id = await crearCentroYCiudad(nombreLimpio, nombreLimpio);

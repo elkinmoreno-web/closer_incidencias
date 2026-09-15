@@ -20,6 +20,7 @@ interface MotivoOpcion {
 export function TableFilters({
   searchPlaceholder,
   estados,
+  tipos,
   ciudades,
   centros,
   motivos,
@@ -29,6 +30,7 @@ export function TableFilters({
 }: {
   searchPlaceholder?: string;
   estados?: Opcion[];
+  tipos?: Opcion[];
   ciudades?: Ciudad[];
   centros?: Centro[];
   motivos?: MotivoOpcion[];
@@ -94,6 +96,19 @@ export function TableFilters({
           onChange={(e) => setParam('q', e.target.value)}
           className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none sm:col-span-2"
         />
+      )}
+
+      {tipos && (
+        <select
+          defaultValue={searchParams.get('tipo') ?? ''}
+          onChange={(e) => setParam('tipo', e.target.value)}
+          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="">{t('filtros.todosLosTipos')}</option>
+          {tipos.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
       )}
 
       {estados && (

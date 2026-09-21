@@ -29,6 +29,25 @@ import { mensajeError } from '@/lib/utils';
 const ALIAS_REMITENTE = 'Closer Logistics · Operaciones';
 
 /**
+ * A dónde van las respuestas de los riders.
+ *
+ * Sin esto, las respuestas caen en el buzón personal de quien autorizó
+ * la cuenta de Gmail — que es lo que pasó el primer día de envío real.
+ * La dirección del remitente no se puede cambiar (Gmail la firma con la
+ * cuenta autenticada), pero el Reply-To sí es libre, así que es la única
+ * palanca para que no acaben donde no toca.
+ *
+ * Apúntala SOLO a un buzón que alguien lea de verdad. Si se deja vacía,
+ * las respuestas siguen yendo a la cuenta remitente: el correo ya pide
+ * no responder y remite al gestor de flota, pero alguno responderá igual
+ * y conviene que ese alguno no se quede sin respuesta si tiene un
+ * problema real con la app.
+ */
+function responderA(): string | undefined {
+  return process.env.ALERTAS_TPH_REPLY_TO?.trim() || undefined;
+}
+
+/**
  * Ritmo de envío, en correos por minuto.
  *
  * La cuota que manda es `totalQueryCostPerMinutePerUser`: 6.000 unidades
@@ -147,7 +166,7 @@ export function plantillaAlertaTph(d: DestinatarioTph, fechaIso: string): string
 
   const parrafos = [
     'Esto incumple los estándares operativos y debe corregirse de inmediato. Ubícate en zonas de mayor demanda —áreas de restaurantes— y acepta los pedidos con agilidad para evitar tiempos muertos en tu jornada.',
-    'Haremos seguimiento de tu evolución en los próximos días. Si tienes un problema técnico con la aplicación que te impida trabajar con normalidad, avísanos de inmediato.',
+    'Haremos seguimiento de tu evolución en los próximos días. Si tienes un problema técnico con la aplicación que te impida trabajar con normalidad, comunícaselo a tu gestor de flota para que pueda revisarlo.',
   ]
     .map((p) => `<p style="margin:0 0 14px;color:#2C3E50;font-size:14px;line-height:1.6">${p}</p>`)
     .join('');
@@ -184,7 +203,7 @@ export function plantillaAlertaTph(d: DestinatarioTph, fechaIso: string): string
       </div>
 
       <div style="padding:12px 24px;background:#F4F7F8;border-top:1px solid #E1E8EB">
-        <p style="margin:0;font-size:11px;color:#94A3B8">Aviso automático generado a partir de tus métricas de conexión. Si crees que hay un error, contacta con tu gestor de flota.</p>
+        <p style="margin:0;font-size:11px;color:#94A3B8">Aviso automático generado a partir de tus métricas de conexión. <b>No respondas a este correo</b>, es un buzón que no se atiende: si crees que hay un error o tienes cualquier problema, contacta con tu gestor de flota.</p>
       </div>
     </div>
   </div>`;
@@ -448,7 +467,7 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
     }
 
     try {
-      await conReintento(() => enviarCorreoGmail([destino], asuntoAlertaTph(d.nombre), plantillaAlertaTph(d, fecha), { alias: ALIAS_REMITENTE }));
+      await conReintento(() => enviarCorreoGmail([destino], asuntoAlertaTph(d.nombre), plantillaAlertaTph(d, fecha), { alias: ALIAS_REMITENTE, responderA: responderA() }));
       enviados++;
     } catch (e) {
       fallidos++;

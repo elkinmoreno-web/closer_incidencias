@@ -6,6 +6,11 @@ npm-debug.log*
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
-supabase
+# Carpeta de la CLI de Supabase (schema.sql de referencia), SOLO la de la raíz.
+# Sin la barra inicial, git ignora CUALQUIER carpeta llamada 'supabase' a
+# cualquier profundidad — incluida lib/supabase/, donde vive el cliente de la
+# aplicación. Eso hizo que un fichero nuevo de lib/supabase/ no se commiteara
+# y el build de producción se cayera con "Module not found".
+/supabase/
 .claude
 

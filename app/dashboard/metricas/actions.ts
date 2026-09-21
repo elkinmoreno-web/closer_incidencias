@@ -86,6 +86,34 @@ function mapearFila(nombreCentro: string, d: DriverPerformance): FilaMetricaAdmi
  * por centro+semana (la respuesta puede pesar más de 1 MB por centro) —
  * si ya hay caché fresca, no vuelve a golpear la API para ese centro.
  */
+/**
+ * Momento a partir del cual una entrada de caché sigue valiendo.
+ *
+ * No basta con el TTL de 30 min. El pipeline de métricas es un escritor
+ * EXTERNO: si rellenamos la caché a las 10:58 con la jornada a medias y
+ * el pipeline termina a las 11:01, esa caché es basura durante media
+ * hora y el panel enseña una fracción de los riders. Pasó en producción
+ * el 21-sep: la caché del día 20 guardó 419 riders de los 3.223 reales.
+ *
+ * Un TTL no puede saber nada de un escritor externo, así que se toma el
+ * MÁS TARDÍO de los dos límites: la caché solo vale si además se creó
+ * después de la última escritura del pipeline.
+ */
+async function limiteCacheValida(admClient: ReturnType<typeof createAdminClient>): Promise<string> {
+  const porTtl = new Date(Date.now() - CACHE_TTL_MINUTOS * 60 * 1000).toISOString();
+
+  const { data } = await admClient
+    .from('driver_daily_stats')
+    .select('created_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const ultimaEscritura = data?.created_at;
+  if (!ultimaEscritura) return porTtl;
+  return ultimaEscritura > porTtl ? ultimaEscritura : porTtl;
+}
+
 export async function obtenerMetricasAdminSemanal(
   centroIds: number[],
   year: number,
@@ -103,7 +131,7 @@ export async function obtenerMetricasAdminSemanal(
 
   let cacheValida = new Map<number, DriverPerformance[]>();
   if (!forzar) {
-    const limite = new Date(Date.now() - CACHE_TTL_MINUTOS * 60 * 1000).toISOString();
+    const limite = await limiteCacheValida(admClient);
     const { data: cacheRows } = await admClient
       .from('fleet_metrics_cache')
       .select('centro_id, datos')
@@ -162,7 +190,7 @@ export async function obtenerMetricasAdminDiario(
 
   let cacheValida = new Map<number, DriverPerformance[]>();
   if (!forzar) {
-    const limite = new Date(Date.now() - CACHE_TTL_MINUTOS * 60 * 1000).toISOString();
+    const limite = await limiteCacheValida(admClient);
     const { data: cacheRows } = await admClient
       .from('fleet_metrics_cache_diario')
       .select('centro_id, datos')

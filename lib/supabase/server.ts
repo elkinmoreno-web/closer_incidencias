@@ -1,6 +1,7 @@
 import { cache } from 'react';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { opcionesCookieIframe } from '@/lib/supabase/cookiesIframe';
 import type { Database } from '@/lib/types';
 
 /**
@@ -21,7 +22,7 @@ export function createClient() {
         setAll(cookiesToSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...options, ...opcionesCookieIframe() })
             );
           } catch {
             // Se llama desde un Server Component sin permiso de escritura;

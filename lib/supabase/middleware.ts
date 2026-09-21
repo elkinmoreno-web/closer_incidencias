@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { opcionesCookieIframe } from '@/lib/supabase/cookiesIframe';
 
 /**
  * Refresca la sesión de Supabase en cada petición y la propaga tanto a la
@@ -44,7 +45,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, { ...options, ...opcionesCookieIframe() })
           );
         },
       },

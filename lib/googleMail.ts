@@ -12,8 +12,33 @@ import { obtenerAccessToken } from '@/lib/googleDrive';
 
 const ALIAS_REMITENTE = 'Stock Closer Logistics';
 
+/** Opciones por correo. El alias es el NOMBRE visible; la dirección no se puede cambiar (ver nota en cuentaGmail). */
+export interface OpcionesCorreo {
+  alias?: string;
+  responderA?: string;
+}
+
 function base64UrlDesdeMime(mime: string): string {
   return Buffer.from(mime, 'utf-8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Codifica una cabecera si hace falta (RFC 2047).
+ *
+ * Las cabeceras de correo solo admiten ASCII (RFC 5322). Si se mete un
+ * carácter fuera de ese rango tal cual, el cliente lo interpreta como
+ * Latin-1 y el remitente sale como "Closer Logistics Â· Operaciones".
+ * Pasaba solo con el From: el Subject ya se codificaba, y el alias de
+ * Stock era ASCII puro, así que el fallo no se veía hasta usar un alias
+ * con acentos, "·" o un emoji.
+ *
+ * Ojo: una palabra codificada NO puede ir entre comillas — el cliente
+ * no la decodifica dentro de una cadena entrecomillada. Por eso el
+ * nombre solo se entrecomilla cuando va en ASCII.
+ */
+function cabeceraCodificada(texto: string): string {
+  if (/^[\x20-\x7E]*$/.test(texto)) return `"${texto.replace(/"/g, '')}"`;
+  return `=?UTF-8?B?${Buffer.from(texto, 'utf-8').toString('base64')}?=`;
 }
 
 // La API de Gmail firma "From" con la cuenta autenticada — no se puede
@@ -28,14 +53,15 @@ function cuentaGmail(): string {
   return cuenta;
 }
 
-export async function enviarCorreoGmail(destinatarios: string[], asunto: string, htmlBody: string): Promise<void> {
+export async function enviarCorreoGmail(destinatarios: string[], asunto: string, htmlBody: string, opciones: OpcionesCorreo = {}): Promise<void> {
   const token = await obtenerAccessToken();
   const cuenta = cuentaGmail();
 
   const mime =
-    `From: "${ALIAS_REMITENTE}" <${cuenta}>\r\n` +
+    `From: ${cabeceraCodificada(opciones.alias ?? ALIAS_REMITENTE)} <${cuenta}>\r\n` +
+    (opciones.responderA ? `Reply-To: ${opciones.responderA}\r\n` : '') +
     `To: ${destinatarios.join(', ')}\r\n` +
-    `Subject: =?UTF-8?B?${Buffer.from(asunto, 'utf-8').toString('base64')}?=\r\n` +
+    `Subject: ${asunto.match(/^[\x20-\x7E]*$/) ? asunto : `=?UTF-8?B?${Buffer.from(asunto, 'utf-8').toString('base64')}?=`}\r\n` +
     'MIME-Version: 1.0\r\n' +
     'Content-Type: text/html; charset=UTF-8\r\n\r\n' +
     htmlBody;

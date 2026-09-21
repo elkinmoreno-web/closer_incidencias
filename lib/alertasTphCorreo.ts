@@ -28,8 +28,34 @@ import { mensajeError } from '@/lib/utils';
 /** Nombre visible del remitente. La dirección la fija GOOGLE_MAIL_FROM_ADDRESS (Gmail no deja suplantar otra). */
 const ALIAS_REMITENTE = 'Closer Logistics · Operaciones';
 
-/** Pausa entre correos. La cuota de Gmail son 250 unidades/segundo por usuario y un envío cuesta 100 → ~2,5/s como techo. */
-const PAUSA_ENTRE_ENVIOS_MS = 400;
+/**
+ * Ritmo de envío, en correos por minuto.
+ *
+ * La cuota que manda es `totalQueryCostPerMinutePerUser`: 6.000 unidades
+ * por minuto y por usuario, y un messages.send cuesta 100 → el techo
+ * duro son 60 correos/minuto. Se deja en 50 para tener margen: el
+ * contador es del PROYECTO de Google, así que los correos de Stock y
+ * cualquier otra cosa que envíe también consumen de ahí.
+ *
+ * Medido en producción el 21-sep: con una pausa fija de 400 ms salieron
+ * 64 y 62 correos en dos minutos seguidos y Gmail cortó con 403 en 19 de
+ * 209. Una pausa fija no sirve porque la latencia de la API varía; lo
+ * que hay que fijar es el hueco entre ARRANQUES de cada envío.
+ */
+const CORREOS_POR_MINUTO = 50;
+const MS_ENTRE_ENVIOS = Math.ceil(60000 / CORREOS_POR_MINUTO);
+
+/**
+ * Presupuesto de tiempo de la ejecución, por debajo del maxDuration de
+ * la función (300 s).
+ *
+ * Importa más de lo que parece: la fila se reserva ANTES de enviar, así
+ * que si la función muere entre el insert y el envío, ese rider queda
+ * marcado como avisado sin haber recibido nada — y nadie se entera. Al
+ * parar por las buenas antes del límite eso no puede pasar, y lo que
+ * quede lo recoge el siguiente disparo del cron, que es idempotente.
+ */
+const PRESUPUESTO_MS = 240000;
 
 /** Tope de seguridad por ejecución: si un día el criterio se afloja por error, no se mandan miles de correos de golpe. */
 const MAX_CORREOS_POR_EJECUCION = 800;
@@ -181,9 +207,16 @@ async function conReintento(accion: () => Promise<void>, intentos = 3): Promise<
       await accion();
       return;
     } catch (e) {
-      const temporal = /HTTP (429|5\d\d)/.test(String(e));
+      // Gmail devuelve el exceso de cuota como 403 con reason
+      // rateLimitExceeded, NO como 429. Buscar solo 429 hacía que el
+      // reintento no saltara nunca justo cuando más falta hacía.
+      const texto = String(e);
+      const temporal = /HTTP (429|5\d\d)/.test(texto) || /rateLimitExceeded|RATE_LIMIT_EXCEEDED/i.test(texto);
       if (!temporal || i >= intentos) throw e;
-      await esperar(i * 2000); // 2 s, 4 s
+      // Si es la cuota del minuto la que se agotó, no sirve esperar dos
+      // segundos: hay que dejar que la ventana se renueve.
+      const esCuota = /rateLimitExceeded|RATE_LIMIT_EXCEEDED/i.test(texto);
+      await esperar(esCuota ? 20000 * i : 2000 * i);
     }
   }
 }
@@ -376,8 +409,24 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
 
   let enviados = 0;
   let fallidos = 0;
+  let cortadoPorTiempo = 0;
+  const arranque = Date.now();
+  let siguienteEnvio = arranque;
 
-  for (const d of aEnviar) {
+  for (const [indice, d] of aEnviar.entries()) {
+    // Parada limpia antes de que la función se quede sin tiempo (ver
+    // PRESUPUESTO_MS). Lo que quede se manda en el siguiente disparo.
+    if (Date.now() - arranque > PRESUPUESTO_MS) {
+      cortadoPorTiempo = aEnviar.length - indice;
+      break;
+    }
+
+    // Ritmo por hueco entre arranques, no por pausa fija: si un envío
+    // tarda 900 ms, solo se espera lo que falte para el siguiente hueco.
+    const esperaNecesaria = siguienteEnvio - Date.now();
+    if (esperaNecesaria > 0) await esperar(esperaNecesaria);
+    siguienteEnvio = Date.now() + MS_ENTRE_ENVIOS;
+
     const destino = emailPrueba ?? d.email;
 
     // En producción se reserva el hueco ANTES de enviar: si el correo
@@ -407,15 +456,17 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
       // Se libera el hueco para poder reintentar este rider más tarde.
       if (!emailPrueba) await supabase.from('alertas_tph_correos').delete().eq('rider_id', d.rider_id).eq('fecha', fecha);
     }
-
-    await esperar(PAUSA_ENTRE_ENVIOS_MS);
   }
 
   return {
     ...base,
-    exito: fallidos === 0,
+    exito: fallidos === 0 && cortadoPorTiempo === 0,
     enviados,
     fallidos,
+    omitidos: base.omitidos + cortadoPorTiempo,
+    errores: cortadoPorTiempo
+      ? [...errores, `Quedan ${cortadoPorTiempo} sin enviar: se paró para no agotar el tiempo de la función. El siguiente disparo los recoge.`]
+      : errores,
     muestra: emailPrueba
       ? aEnviar.map((d) => ({ nombre: d.nombre, email: d.email, tph: d.tph, horas: d.online_hours, pedidos: d.num_of_trips }))
       : undefined,

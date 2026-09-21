@@ -1,5 +1,7 @@
 {
-  "regions": ["cdg1"],
+  "regions": [
+    "cdg1"
+  ],
   "crons": [
     {
       "path": "/api/cron/zonas-conexion",
@@ -11,7 +13,23 @@
     },
     {
       "path": "/api/cron/alertas-tph",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/alertas-tph",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/alertas-tph",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/alertas-tph",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/alertas-tph",
+      "schedule": "30 9 * * *"
     }
   ]
 }

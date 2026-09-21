@@ -108,7 +108,7 @@ export default async function ReclamacionesPage({
         {filas.length === 0 ? (
           <EmptyState title={t('admReclamaciones.sinResultadosTitulo')} description={t('admReclamaciones.sinResultadosDesc')} />
         ) : (
-          <table className="w-full min-w-[1000px] text-sm">
+          <table className="w-full min-w-[1200px] text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
                 <th className="px-4 py-3">{t('admIncidencias.colRider')}</th>
@@ -116,6 +116,8 @@ export default async function ReclamacionesPage({
                 <th className="px-4 py-3">{t('admReclamaciones.colPeriodo')}</th>
                 <th className="px-4 py-3">{t('admReclamaciones.colConcepto')}</th>
                 <th className="px-4 py-3 text-right">{t('admReclamaciones.colImporte')}</th>
+                <th className="px-4 py-3 text-right">{t('admReclamaciones.colImporteAprobado')}</th>
+                <th className="px-4 py-3">{t('admReclamaciones.colViaPago')}</th>
                 <th className="px-4 py-3">{t('admReclamaciones.colNomina')}</th>
                 <th className="px-4 py-3">{t('admIncidencias.colEstado')}</th>
                 <th className="px-4 py-3">{t('admReclamaciones.colRespuesta')}</th>
@@ -140,6 +142,22 @@ export default async function ReclamacionesPage({
                   </td>
                   <td className="px-4 py-3 text-right font-medium">
                     {r.importe === null ? '—' : `${Number(r.importe).toFixed(2).replace('.', ',')} €`}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
+                    {r.importe_aprobado === null ? '—' : `${Number(r.importe_aprobado).toFixed(2).replace('.', ',')} €`}
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {r.via_pago === 'primera_remesa' ? (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-800">
+                        {t('accReclamacion.primeraRemesa')}
+                      </span>
+                    ) : r.via_pago === 'siguiente_nomina' ? (
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-800">
+                        {t('accReclamacion.siguienteNomina')}
+                      </span>
+                    ) : (
+                      <span className="text-ink-muted">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {(r.archivo_ids ?? []).length === 0 ? (
@@ -186,7 +204,14 @@ export default async function ReclamacionesPage({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <ReclamacionActions id={r.id} estado={r.estado} respuesta={r.respuesta} />
+                    <ReclamacionActions
+                      id={r.id}
+                      estado={r.estado}
+                      respuesta={r.respuesta}
+                      importe={r.importe === null ? null : Number(r.importe)}
+                      importeAprobado={r.importe_aprobado === null ? null : Number(r.importe_aprobado)}
+                      viaPago={r.via_pago}
+                    />
                   </td>
                 </tr>
               ))}

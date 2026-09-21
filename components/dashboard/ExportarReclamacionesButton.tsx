@@ -40,6 +40,8 @@ export function ExportarReclamacionesButton() {
             [t('admReclamaciones.colConcepto')]: f.concepto,
             // Se deja como número para poder sumarlo en Excel.
             [t('admReclamaciones.colImporte')]: f.importe === '' ? '' : Number(f.importe),
+            [t('admReclamaciones.colImporteAprobado')]: f.importeAprobado === '' ? '' : Number(f.importeAprobado),
+            [t('admReclamaciones.colViaPago')]: f.viaPago,
             [t('exportar.colComentario')]: f.comentario ?? '',
             [t('exportar.colEstado')]: f.estado,
             [t('admReclamaciones.colRespuesta')]: f.respuesta ?? '',

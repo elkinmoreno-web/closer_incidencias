@@ -147,6 +147,9 @@ export interface Ausencia {
 
 export type EstadoReclamacion = 'pendiente' | 'en_tramite' | 'aprobada' | 'rechazada' | 'papelera';
 
+/** Cuándo se abona una reclamación aprobada. */
+export type ViaPagoReclamacion = 'primera_remesa' | 'siguiente_nomina';
+
 export interface MotivoReclamacion {
   id: number;
   nombre: string;
@@ -164,7 +167,12 @@ export interface Reclamacion {
   motivo_id: number;
   /** Mes de la nómina reclamada, guardado como el día 1 (aaaa-mm-01). */
   periodo: string;
+  /** Lo que reclamó el rider. El gestor NO lo modifica: es su declaración. */
   importe: number | null;
+  /** Lo que el gestor aprueba pagar. Puede diferir de lo reclamado. */
+  importe_aprobado: number | null;
+  /** Solo al aprobar: primera remesa o siguiente nómina. */
+  via_pago: ViaPagoReclamacion | null;
   comentario: string | null;
   archivo_ids: string[]; // la hoja de nómina en Google Drive
   estado: EstadoReclamacion;

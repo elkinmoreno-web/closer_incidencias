@@ -66,6 +66,36 @@ export function ReclamacionesList({ reclamaciones }: { reclamaciones: Reclamacio
 
           {r.comentario && <p className="mt-2 text-sm text-ink-muted">{r.comentario}</p>}
 
+          {/* Lo aprobado y cuándo se cobra va ANTES del texto: es lo que el
+              rider abre a buscar, y si queda enterrado bajo un párrafo
+              vuelve a preguntar por dónde ya preguntó. */}
+          {r.estado === 'aprobada' && (r.importe_aprobado !== null || r.via_pago) && (
+            <div className="mt-3 flex flex-wrap gap-4 rounded-lg bg-emerald-50 px-3 py-2">
+              {r.importe_aprobado !== null && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    {t('reclamacion.importeAprobado')}
+                  </p>
+                  <p className="text-base font-bold text-emerald-900">
+                    {Number(r.importe_aprobado).toFixed(2).replace('.', ',')} €
+                  </p>
+                </div>
+              )}
+              {r.via_pago && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    {t('reclamacion.seTePagaEn')}
+                  </p>
+                  <p className="text-base font-bold text-emerald-900">
+                    {r.via_pago === 'primera_remesa'
+                      ? t('accReclamacion.primeraRemesa')
+                      : t('accReclamacion.siguienteNomina')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           {r.respuesta && (
             <div className="mt-3 rounded-lg border-l-4 border-primary bg-bg px-3 py-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">

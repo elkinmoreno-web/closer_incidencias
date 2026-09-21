@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Check, X, Clock, Trash2 } from 'lucide-react';
 import { resolverReclamacion, enviarReclamacionAPapelera } from '@/app/dashboard/reclamaciones/actions';
-import type { EstadoReclamacion } from '@/lib/types';
+import type { EstadoReclamacion, ViaPagoReclamacion } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 
 /**
@@ -14,11 +14,32 @@ import { useIdioma } from '@/components/i18n/IdiomaProvider';
  * La respuesta es obligatoria al rechazar y opcional al aprobar (un
  * "aprobada" ya dice bastante por sí solo).
  */
-export function ReclamacionActions({ id, estado, respuesta }: { id: string; estado: EstadoReclamacion; respuesta: string | null }) {
+export function ReclamacionActions({
+  id,
+  estado,
+  respuesta,
+  importe,
+  importeAprobado,
+  viaPago,
+}: {
+  id: string;
+  estado: EstadoReclamacion;
+  respuesta: string | null;
+  importe: number | null;
+  importeAprobado: number | null;
+  viaPago: ViaPagoReclamacion | null;
+}) {
   const { t } = useIdioma();
   const [pending, startTransition] = useTransition();
   const [resolviendo, setResolviendo] = useState<EstadoReclamacion | null>(null);
   const [texto, setTexto] = useState(respuesta ?? '');
+  // Se parte de lo ya aprobado si lo hay, y si no de lo que reclamó el
+  // rider: en la mayoría de los casos se aprueba tal cual y así el gestor
+  // no tiene que teclear la misma cifra.
+  const [importeTexto, setImporteTexto] = useState(
+    String(importeAprobado ?? importe ?? '').replace('.', ',')
+  );
+  const [via, setVia] = useState<ViaPagoReclamacion | ''>(viaPago ?? '');
   const [error, setError] = useState<string | null>(null);
 
   function confirmar() {
@@ -27,9 +48,18 @@ export function ReclamacionActions({ id, estado, respuesta }: { id: string; esta
       setError(t('accReclamacion.respuestaObligatoria'));
       return;
     }
+    if (resolviendo === 'aprobada' && !via) {
+      setError(t('accReclamacion.viaPagoObligatoria'));
+      return;
+    }
     setError(null);
+    const limpio = importeTexto.trim().replace(',', '.');
+    const importeNum = limpio === '' ? null : Number(limpio);
     startTransition(async () => {
-      await resolverReclamacion(id, resolviendo, texto);
+      await resolverReclamacion(id, resolviendo, texto, {
+        importeAprobado: Number.isFinite(importeNum as number) ? importeNum : null,
+        viaPago: via || null,
+      });
       setResolviendo(null);
     });
   }
@@ -37,8 +67,39 @@ export function ReclamacionActions({ id, estado, respuesta }: { id: string; esta
   if (resolviendo) {
     return (
       <div className="flex flex-col gap-2">
+        {resolviendo === 'aprobada' && (
+          <>
+            <label className="text-xs font-semibold text-ink-muted">{t('accReclamacion.importeAprobado')}</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={importeTexto}
+              onChange={(e) => setImporteTexto(e.target.value)}
+              placeholder="0,00"
+              className="w-64 rounded-lg border border-border px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+            />
+            <span className="text-[10px] text-ink-muted">{t('accReclamacion.importeAyuda')}</span>
+
+            <label className="mt-1 text-xs font-semibold text-ink-muted">{t('accReclamacion.cuandoSePaga')}</label>
+            <div className="flex gap-1.5">
+              {(['primera_remesa', 'siguiente_nomina'] as ViaPagoReclamacion[]).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setVia(v)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                    via === v ? 'bg-primary text-white' : 'border border-border text-ink-muted hover:border-primary'
+                  }`}
+                >
+                  {v === 'primera_remesa' ? t('accReclamacion.primeraRemesa') : t('accReclamacion.siguienteNomina')}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
         <textarea
-          autoFocus
+          autoFocus={resolviendo !== 'aprobada'}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           placeholder={t('accReclamacion.respuestaPlaceholder')}

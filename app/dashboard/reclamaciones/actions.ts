@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { registrarError, formatFecha } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
-import type { EstadoReclamacion } from '@/lib/types';
+import type { EstadoReclamacion, ViaPagoReclamacion } from '@/lib/types';
 
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
@@ -40,19 +40,40 @@ const ETIQUETA_ESTADO: Record<EstadoReclamacion, string> = {
  * "pendiente" y no se distinguiría lo que nadie ha mirado de lo que está
  * en curso.
  */
-export async function resolverReclamacion(id: string, estado: EstadoReclamacion, respuesta: string) {
+export interface DatosResolucion {
+  /** Lo que se aprueba pagar. Solo aplica al aprobar; null deja lo que hubiera. */
+  importeAprobado?: number | null;
+  /** Primera remesa o siguiente nómina. Obligatorio al aprobar. */
+  viaPago?: ViaPagoReclamacion | null;
+}
+
+export async function resolverReclamacion(
+  id: string,
+  estado: EstadoReclamacion,
+  respuesta: string,
+  datos: DatosResolucion = {}
+) {
   const supabase = createClient();
   const adminId = await getCurrentAdmin(supabase);
 
   const texto = respuesta.trim();
   // Rechazar sin explicar deja al rider sin saber qué hacer después.
   if (estado === 'rechazada' && !texto) throw new Error('Explica al rider por qué se rechaza');
+  // Aprobar sin decir cuándo se paga deja la reclamación resuelta a medias:
+  // el rider sabe que le dan la razón pero no cuándo verá el dinero, y
+  // vuelve a preguntar. Es el dato que más se reclama después.
+  if (estado === 'aprobada' && !datos.viaPago) throw new Error('Indica si se paga en la primera remesa o en la siguiente nómina');
 
   const { data: fila, error } = await supabase
     .from('reclamaciones')
     .update({
       estado,
       respuesta: texto || null,
+      // Solo se tocan al aprobar: si luego se pasa a trámite o se rechaza,
+      // se limpian para no dejar un importe aprobado en una reclamación
+      // que ya no lo está.
+      importe_aprobado: estado === 'aprobada' ? (datos.importeAprobado ?? null) : null,
+      via_pago: estado === 'aprobada' ? (datos.viaPago ?? null) : null,
       revisado_por_id: adminId,
       fecha_gestion: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -128,6 +149,8 @@ export interface FilaExportReclamacion {
   centro: string;
   concepto: string;
   importe: string;
+  importeAprobado: string;
+  viaPago: string;
   comentario: string | null;
   estado: string;
   respuesta: string | null;
@@ -152,7 +175,7 @@ export async function exportarReclamaciones(filtros: {
 
   let query = supabase
     .from('reclamaciones')
-    .select('created_at, periodo, nombre_rider, dni, importe, comentario, estado, respuesta, centros(nombre), motivos_reclamacion(nombre, nombre_en), admins:revisado_por_id(usuario)')
+    .select('created_at, periodo, nombre_rider, dni, importe, importe_aprobado, via_pago, comentario, estado, respuesta, centros(nombre), motivos_reclamacion(nombre, nombre_en), admins:revisado_por_id(usuario)')
     .neq('estado', 'papelera')
     .order('created_at', { ascending: false });
 
@@ -186,6 +209,8 @@ export async function exportarReclamaciones(filtros: {
       concepto: motivo ? nombreSegunIdioma(idioma, motivo.nombre, motivo.nombre_en) : '—',
       // Sin separador de miles y con punto decimal: así Excel lo lee como número.
       importe: r.importe === null || r.importe === undefined ? '' : Number(r.importe).toFixed(2),
+      importeAprobado: r.importe_aprobado === null || r.importe_aprobado === undefined ? '' : Number(r.importe_aprobado).toFixed(2),
+      viaPago: r.via_pago === 'primera_remesa' ? 'Primera remesa' : r.via_pago === 'siguiente_nomina' ? 'Siguiente nómina' : '',
       comentario: r.comentario,
       estado: ETIQUETA_ESTADO[r.estado as EstadoReclamacion] ?? r.estado,
       respuesta: r.respuesta,

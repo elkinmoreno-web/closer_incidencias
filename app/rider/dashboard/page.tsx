@@ -5,6 +5,8 @@ import { IncidenciaForm } from '@/components/rider/IncidenciaForm';
 import { AusenciaForm } from '@/components/rider/AusenciaForm';
 import { IncidenciasSemanaList } from '@/components/rider/IncidenciasSemanaList';
 import { AusenciasSemanaList } from '@/components/rider/AusenciasSemanaList';
+import { ReclamacionForm } from '@/components/rider/ReclamacionForm';
+import { ReclamacionesList } from '@/components/rider/ReclamacionesList';
 import { MetricasPanel } from '@/components/rider/MetricasPanel';
 import { ZonaConexionPanel } from '@/components/rider/ZonaConexionPanel';
 import { inicioSemanaActualISO } from '@/lib/utils';
@@ -21,10 +23,22 @@ export default async function RiderDashboardPage() {
   const supabase = createClient();
   const inicioSemana = inicioSemanaActualISO();
 
-  const [motivos, motivosAusencia, { data: incidenciasSemana }, { data: ausenciasSemana }, { data: riderConCentro }] =
+  const [motivos, motivosAusencia, { data: motivosReclamacion }, { data: misReclamaciones }, { data: incidenciasSemana }, { data: ausenciasSemana }, { data: riderConCentro }] =
     await Promise.all([
       obtenerMotivosActivos(),
       obtenerMotivosAusenciaActivos(),
+      supabase.from('motivos_reclamacion').select('*').eq('activo', true).order('orden'),
+      // El historial de reclamaciones NO se limita a la semana como las
+      // incidencias: una reclamación de nómina tarda semanas en resolverse
+      // y el rider tiene que poder seguirla hasta el final.
+      supabase
+        .from('reclamaciones')
+        .select('*, motivos_reclamacion(id, nombre, nombre_en)')
+        .eq('rider_id', rider.id)
+        .neq('estado', 'papelera')
+        .order('periodo', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(50),
       supabase
         .from('incidencias')
         .select('id, estado, created_at, codigo_pedido, motivo_rechazo, motivos(nombre, nombre_en, instrucciones_aprobacion, instrucciones_aprobacion_en)')
@@ -61,6 +75,15 @@ export default async function RiderDashboardPage() {
             <div className="border-t border-border pt-4">
               <h2 className="mb-2 text-sm font-semibold text-ink">{t('riderPage.tusAusenciasSemana')}</h2>
               <AusenciasSemanaList ausencias={(ausenciasSemana ?? []) as any} />
+            </div>
+          </div>
+        }
+        reclamacionPanel={
+          <div className="flex flex-col gap-6">
+            <ReclamacionForm dni={rider.dni} motivos={motivosReclamacion ?? []} />
+            <div className="border-t border-border pt-4">
+              <h2 className="mb-2 text-sm font-semibold text-ink">{t('reclamacion.misReclamaciones')}</h2>
+              <ReclamacionesList reclamaciones={(misReclamaciones ?? []) as any} />
             </div>
           </div>
         }

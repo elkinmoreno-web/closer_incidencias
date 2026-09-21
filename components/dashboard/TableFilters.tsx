@@ -27,6 +27,7 @@ export function TableFilters({
   motivoLabel,
   gestores,
   showDateRange = false,
+  showMonth = false,
 }: {
   searchPlaceholder?: string;
   estados?: Opcion[];
@@ -37,6 +38,8 @@ export function TableFilters({
   motivoLabel?: string;
   gestores?: Gestor[];
   showDateRange?: boolean;
+  /** Selector de mes (aaaa-mm) para los módulos que van por periodo, como Reclamaciones. */
+  showMonth?: boolean;
 }) {
   const { t, idioma } = useIdioma();
   const router = useRouter();
@@ -109,6 +112,15 @@ export function TableFilters({
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
+      )}
+
+      {showMonth && (
+        <input
+          type="month"
+          defaultValue={searchParams.get('periodo') ?? ''}
+          onChange={(e) => setParam('periodo', e.target.value)}
+          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        />
       )}
 
       {estados && (

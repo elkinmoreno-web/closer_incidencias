@@ -22,6 +22,25 @@ export const incidenciaSchema = z.object({
   direccionEntrega: z.string().trim().max(300).optional().nullable(),
 });
 
+/**
+ * Reclamación de nómina.
+ *
+ * `periodo` es el mes al que se refiere la nómina, en formato aaaa-mm
+ * (lo que devuelve un <input type="month">). Se guarda como el día 1 de
+ * ese mes para poder filtrar y agrupar con operadores de fecha normales.
+ *
+ * `importe` es opcional a propósito: el rider muchas veces sabe que le
+ * falta un concepto pero no cuánto, y obligarle a poner una cifra le
+ * empujaría a inventarse una.
+ */
+export const reclamacionSchema = z.object({
+  dni: dniSchema,
+  motivoId: z.number().int().positive({ message: 'Selecciona qué reclamas' }),
+  periodo: z.string().regex(/^\d{4}-\d{2}$/, { message: 'Indica el mes de la nómina' }),
+  importe: z.number().nonnegative().max(99999999).optional().nullable(),
+  comentario: z.string().trim().max(1000).optional().nullable(),
+});
+
 export const ausenciaSchema = z
   .object({
     dni: dniSchema,

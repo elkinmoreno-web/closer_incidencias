@@ -145,6 +145,50 @@ export interface Ausencia {
   admins?: Pick<Admin, 'usuario'> | null;
 }
 
+export type EstadoReclamacion = 'pendiente' | 'en_tramite' | 'aprobada' | 'rechazada' | 'papelera';
+
+/** Cuándo se abona una reclamación aprobada. */
+export type ViaPagoReclamacion = 'primera_remesa' | 'siguiente_nomina';
+
+export interface MotivoReclamacion {
+  id: number;
+  nombre: string;
+  nombre_en: string | null;
+  activo: boolean;
+  orden: number;
+}
+
+export interface Reclamacion {
+  id: string;
+  rider_id: string | null;
+  dni: string;
+  nombre_rider: string;
+  centro_id: number | null;
+  motivo_id: number;
+  /** Mes de la nómina reclamada, guardado como el día 1 (aaaa-mm-01). */
+  periodo: string;
+  /** Lo que reclamó el rider. El gestor NO lo modifica: es su declaración. */
+  importe: number | null;
+  /** Lo que el gestor aprueba pagar. Puede diferir de lo reclamado. */
+  importe_aprobado: number | null;
+  /** Solo al aprobar: primera remesa o siguiente nómina. */
+  via_pago: ViaPagoReclamacion | null;
+  comentario: string | null;
+  archivo_ids: string[]; // la hoja de nómina en Google Drive
+  estado: EstadoReclamacion;
+  /** Respuesta del gestor. La ve el rider SIEMPRE, se apruebe o se rechace. */
+  respuesta: string | null;
+  revisado_por_id: string | null;
+  fecha_gestion: string | null;
+  eliminado_por_id: string | null;
+  fecha_eliminacion: string | null;
+  created_at: string;
+  updated_at: string;
+  centros?: Pick<Centro, 'id' | 'nombre'> | null;
+  motivos_reclamacion?: Pick<MotivoReclamacion, 'id' | 'nombre' | 'nombre_en'> | null;
+  admins?: Pick<Admin, 'usuario'> | null;
+}
+
 export interface ConexionFueraZona {
   id: string;
   rider_id: string | null;

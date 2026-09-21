@@ -37,7 +37,7 @@ export default async function PapeleraPage({
     .order('fecha_eliminacion', { ascending: false })
     .range(from, to);
 
-  if (searchParams.tipo === 'incidencia' || searchParams.tipo === 'ausencia') {
+  if (['incidencia', 'ausencia', 'reclamacion'].includes(searchParams.tipo ?? '')) {
     query = query.eq('tipo', searchParams.tipo);
   }
   if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
@@ -72,6 +72,7 @@ export default async function PapeleraPage({
         tipos={[
           { value: 'incidencia', label: t('papelera.tipoIncidencia') },
           { value: 'ausencia', label: t('papelera.tipoAusencia') },
+          { value: 'reclamacion', label: t('papelera.tipoReclamacion') },
         ]}
         ciudades={ciudades ?? []}
         centros={centros ?? []}
@@ -103,7 +104,11 @@ export default async function PapeleraPage({
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${i.tipo === 'ausencia' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>
-                      {i.tipo === 'ausencia' ? t('papelera.tipoAusencia') : t('papelera.tipoIncidencia')}
+                      {i.tipo === 'ausencia'
+                        ? t('papelera.tipoAusencia')
+                        : i.tipo === 'reclamacion'
+                          ? t('papelera.tipoReclamacion')
+                          : t('papelera.tipoIncidencia')}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs">{i.centro_nombre ?? '—'}</td>

@@ -6,16 +6,18 @@ import { useIdioma } from '@/components/i18n/IdiomaProvider';
 export function Tabs({
   incidenciaPanel,
   ausenciaPanel,
+  reclamacionPanel,
   metricasPanel,
   zonaPanel,
 }: {
   incidenciaPanel: React.ReactNode;
   ausenciaPanel: React.ReactNode;
+  reclamacionPanel: React.ReactNode;
   metricasPanel: React.ReactNode;
   zonaPanel: React.ReactNode;
 }) {
   const { t } = useIdioma();
-  const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'metricas' | 'zona'>('incidencia');
+  const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'reclamacion' | 'metricas' | 'zona'>('incidencia');
 
   return (
     <div>
@@ -37,6 +39,14 @@ export function Tabs({
           {t('tabs.ausencia')}
         </button>
         <button
+          onClick={() => setTab('reclamacion')}
+          className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
+            tab === 'reclamacion' ? 'bg-primary text-white' : 'text-ink-muted'
+          }`}
+        >
+          {t('tabs.reclamacion')}
+        </button>
+        <button
           onClick={() => setTab('metricas')}
           className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
             tab === 'metricas' ? 'bg-primary text-white' : 'text-ink-muted'
@@ -55,6 +65,7 @@ export function Tabs({
       </div>
       {tab === 'incidencia' && incidenciaPanel}
       {tab === 'ausencia' && ausenciaPanel}
+      {tab === 'reclamacion' && reclamacionPanel}
       {tab === 'metricas' && metricasPanel}
       {tab === 'zona' && zonaPanel}
     </div>

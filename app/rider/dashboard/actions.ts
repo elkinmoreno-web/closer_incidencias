@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo } from '@/lib/validations';
+import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo, reclamacionSchema } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { mensajeError, registrarError, canonicalEmail } from '@/lib/utils';
@@ -278,6 +278,93 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
     return { success: true };
   } catch (e) {
     return { error: registrarError('enviarAusencia', e) };
+  }
+}
+
+/**
+ * Reclamación de nómina enviada por el rider.
+ *
+ * Mismo esqueleto que enviarAusencia: valida, comprueba duplicados,
+ * sube el fichero a Drive y guarda. La hoja de nómina es obligatoria —
+ * sin ella el gestor no puede resolver nada.
+ */
+export async function enviarReclamacion(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  try {
+    const { supabase, rider } = await getCurrentRider();
+
+    const importeCrudo = String(formData.get('importe') ?? '').trim().replace(',', '.');
+    const parsed = reclamacionSchema.safeParse({
+      dni: formData.get('dni'),
+      motivoId: Number(formData.get('motivoId')),
+      periodo: formData.get('periodo'),
+      importe: importeCrudo === '' ? null : Number(importeCrudo),
+      comentario: formData.get('comentario') || null,
+    });
+
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos no válidos' };
+    if (parsed.data.dni !== rider.dni) return { error: 'El DNI no coincide con tu cuenta' };
+
+    // El periodo llega como aaaa-mm y se guarda como el día 1 de ese mes.
+    const periodoFecha = `${parsed.data.periodo}-01`;
+
+    const files = formData.getAll('nomina') as File[];
+    const validos = files.filter((f) => f && f.size > 0);
+    if (validos.length === 0) return { error: 'Adjunta tu hoja de nómina' };
+    if (validos.length > 5) return { error: 'Máximo 5 archivos' };
+    for (const f of validos) {
+      const err = validarArchivo(f, ALLOWED_DOC_MIME);
+      if (err) return { error: err };
+    }
+
+    // Misma guarda anti-duplicados que en ausencias: un reintento
+    // automático no puede abrir dos reclamaciones del mismo concepto y
+    // mes (ver el comentario de VENTANA_ANTIDUPLICADOS_MS).
+    const { data: yaExiste } = await supabase
+      .from('reclamaciones')
+      .select('id')
+      .eq('rider_id', rider.id)
+      .eq('motivo_id', parsed.data.motivoId)
+      .eq('periodo', periodoFecha)
+      .gte('created_at', new Date(Date.now() - VENTANA_ANTIDUPLICADOS_MS).toISOString())
+      .limit(1)
+      .maybeSingle();
+
+    if (yaExiste) {
+      revalidatePath('/rider/dashboard');
+      return { success: true };
+    }
+
+    const nombreBase = `${rider.dni}_${parsed.data.periodo}_${Date.now()}`;
+    const archivoIds: string[] = [];
+    for (let i = 0; i < validos.length; i++) {
+      const nombre = `${nombreBase}_nomina_${i + 1}.${extFromMime(validos[i].type)}`;
+      try {
+        const buffer = Buffer.from(await validos[i].arrayBuffer());
+        archivoIds.push(await subirArchivoDrive('Reclamaciones', nombre, buffer, validos[i].type));
+      } catch (e) {
+        return { error: registrarError('enviarReclamacion:nomina', e, 'No se pudo subir la nómina. Inténtalo de nuevo en unos minutos.') };
+      }
+    }
+
+    const { error: insertError } = await supabase.from('reclamaciones').insert({
+      rider_id: rider.id,
+      dni: rider.dni,
+      nombre_rider: rider.nombre,
+      centro_id: rider.centro_id,
+      motivo_id: parsed.data.motivoId,
+      periodo: periodoFecha,
+      importe: parsed.data.importe,
+      comentario: parsed.data.comentario,
+      archivo_ids: archivoIds,
+      estado: 'pendiente',
+    });
+
+    if (insertError) return { error: 'No se pudo guardar la reclamación. Inténtalo de nuevo.' };
+
+    revalidatePath('/rider/dashboard');
+    return { success: true };
+  } catch (e) {
+    return { error: registrarError('enviarReclamacion', e) };
   }
 }
 

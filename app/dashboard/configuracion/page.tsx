@@ -8,6 +8,9 @@ import { AliasEmailPanel } from '@/components/config/AliasEmailPanel';
 import { listarAliasEmail } from '@/app/dashboard/configuracion/alias-email-actions';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
+import { ModulosPanel } from '@/components/config/ModulosPanel';
+import { listarModulos } from '@/app/dashboard/configuracion/modulos-actions';
+import { CORREOS_GESTION_MODULOS } from '@/lib/utils';
 
 
 export default async function ConfiguracionPage() {
@@ -22,6 +25,9 @@ export default async function ConfiguracionPage() {
   if (yo?.rol !== 'super_admin' && yo?.rol !== 'administrador') redirect('/dashboard');
 
   const esSuperAdmin = yo.rol === 'super_admin';
+  // Los interruptores de módulos NO son para cualquier super admin (hay 8):
+  // solo para quien mantiene el panel. Ver CORREOS_GESTION_MODULOS.
+  const puedeGestionarModulos = esSuperAdmin && !!user.email && CORREOS_GESTION_MODULOS.includes(user.email);
   const aliasEmail = esSuperAdmin ? await listarAliasEmail() : [];
 
   // Ciudades del Administrador actual (para filtrar qué usuarios ve).
@@ -101,6 +107,18 @@ export default async function ConfiguracionPage() {
         <p className="mb-4 text-sm text-ink-muted">{t('config.anuncioGlobalDesc')}</p>
         <AnuncioForm anunciosActivos={anunciosVisibles} ciudadesAsignables={ciudadesAsignables} esSuperAdmin={esSuperAdmin} />
       </div>
+
+      {puedeGestionarModulos && (
+        <div className="rounded-card border border-border bg-surface p-5">
+          <h2 className="mb-1 font-semibold text-ink">{t('config.modulos')}</h2>
+          <p className="mb-4 text-sm text-ink-muted">{t('config.modulosDesc')}</p>
+          <ModulosPanel
+            modulos={await listarModulos()}
+            admins={(admins ?? []).filter((a) => a.activo).map((a) => ({ id: String(a.id), nombre: a.usuario }))}
+            centros={(centros ?? []).map((c) => ({ id: String(c.id), nombre: c.nombre }))}
+          />
+        </div>
+      )}
 
       {esSuperAdmin && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">

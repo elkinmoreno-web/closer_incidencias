@@ -650,6 +650,8 @@ const en: Record<ClaveTraduccion, string> = {
   'config.titulo': 'Settings',
   'config.accesoCompleto': 'Full access (Super Admin).',
   'config.soloAnuncioYModeradores': 'As an Administrator, here you only manage the global announcement and add moderators.',
+  'config.modulos': 'Visible modules',
+  'config.modulosDesc': 'Turn parts of the panel on and off without deploying. Useful to keep something finished but hidden, or to pilot it with a few managers or centers before opening it up.',
   'config.anuncioGlobal': 'Global announcement',
   'config.anuncioGlobalDesc': 'Shown as a banner at the top of both portals (admin and riders).',
   'config.centros': 'Centers',

@@ -9,19 +9,35 @@ export function Tabs({
   reclamacionPanel,
   metricasPanel,
   zonaPanel,
+  visibles,
 }: {
   incidenciaPanel: React.ReactNode;
   ausenciaPanel: React.ReactNode;
   reclamacionPanel: React.ReactNode;
   metricasPanel: React.ReactNode;
   zonaPanel: React.ReactNode;
+  /** Claves de pestaña encendidas (ver lib/modulos.ts). */
+  visibles: string[];
 }) {
   const { t } = useIdioma();
-  const [tab, setTab] = useState<'incidencia' | 'ausencia' | 'reclamacion' | 'metricas' | 'zona'>('incidencia');
+  const orden = ['incidencia', 'ausencia', 'reclamacion', 'metricas', 'zona'] as const;
+  type Pestana = (typeof orden)[number];
+  const CLAVE_MODULO: Record<Pestana, string> = {
+    incidencia: 'rider_incidencia',
+    ausencia: 'rider_ausencia',
+    reclamacion: 'rider_reclamacion',
+    metricas: 'rider_metricas',
+    zona: 'rider_zona',
+  };
+  const encendidas = orden.filter((p) => visibles.includes(CLAVE_MODULO[p]));
+  // La primera encendida es la de inicio: si "incidencia" estuviera
+  // apagada, arrancar en ella dejaría el panel en blanco.
+  const [tab, setTab] = useState<Pestana>(encendidas[0] ?? 'incidencia');
 
   return (
     <div>
       <div className="mb-5 flex gap-1 rounded-full bg-bg p-1">
+        {encendidas.includes('incidencia') && (
         <button
           onClick={() => setTab('incidencia')}
           className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
@@ -30,6 +46,8 @@ export function Tabs({
         >
           {t('tabs.incidencia')}
         </button>
+        )}
+        {encendidas.includes('ausencia') && (
         <button
           onClick={() => setTab('ausencia')}
           className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
@@ -38,6 +56,8 @@ export function Tabs({
         >
           {t('tabs.ausencia')}
         </button>
+        )}
+        {encendidas.includes('reclamacion') && (
         <button
           onClick={() => setTab('reclamacion')}
           className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
@@ -46,6 +66,8 @@ export function Tabs({
         >
           {t('tabs.reclamacion')}
         </button>
+        )}
+        {encendidas.includes('metricas') && (
         <button
           onClick={() => setTab('metricas')}
           className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
@@ -54,6 +76,8 @@ export function Tabs({
         >
           {t('tabs.metricas')}
         </button>
+        )}
+        {encendidas.includes('zona') && (
         <button
           onClick={() => setTab('zona')}
           className={`flex-1 rounded-full py-2.5 text-xs font-semibold transition sm:text-sm ${
@@ -62,6 +86,7 @@ export function Tabs({
         >
           {t('tabs.zona')}
         </button>
+        )}
       </div>
       {tab === 'incidencia' && incidenciaPanel}
       {tab === 'ausencia' && ausenciaPanel}

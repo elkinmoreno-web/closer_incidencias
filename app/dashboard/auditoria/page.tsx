@@ -5,6 +5,7 @@ import { TableFilters } from '@/components/dashboard/TableFilters';
 import { formatFecha } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
+import { exigirModuloAdmin } from '@/lib/modulos';
 
 const PAGE_SIZE = 30;
 
@@ -13,6 +14,10 @@ export default async function AuditoriaPage({
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
+  // El super admin puede apagar este módulo desde Configuración.
+  // Esconderlo del menú no basta: sin esto se entraría por la URL.
+  await exigirModuloAdmin('auditoria');
+
   const t = crearTraductor(await resolverIdioma());
   const supabase = createClient();
   const page = Math.max(1, Number(searchParams.page) || 1);

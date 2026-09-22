@@ -278,4 +278,21 @@ export function normalizarNombreCentro(s: string): string {
  * lista cuando Stock esté listo para todo el equipo (el control de
  * acceso por rol de siempre lo sigue aplicando el layout/Sidebar aparte).
  */
+/**
+ * Quién puede encender y apagar módulos del panel (Configuración →
+ * Módulos visibles).
+ *
+ * Va como constante en el código y NO en base de datos a propósito, al
+ * revés que todo lo demás de este proyecto. Es el interruptor que
+ * controla a los otros interruptores: si viviera en una tabla,
+ * cualquiera con acceso a la base podría añadirse, y un error al
+ * editarla dejaría a todo el mundo fuera sin forma de arreglarlo desde
+ * el panel. Aquí hace falta un despliegue para cambiarlo, que es
+ * justamente la fricción que se quiere.
+ *
+ * No basta con ser super_admin: hay 8 activos y esto solo lo maneja
+ * quien construye el panel.
+ */
+export const CORREOS_GESTION_MODULOS = ['elkin.moreno@closerlogistics.com'];
+
 export const CORREOS_ACCESO_STOCK_TEMPORAL = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com', 'nicolas.correa@closerlogistics.com', 'cesar.buitrago@closerlogistics.com'];

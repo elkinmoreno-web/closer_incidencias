@@ -1,3 +1,4 @@
+import { tipoDeArchivo } from '@/lib/validations';
 /**
  * Valida tipo y tamaño de un archivo ANTES de intentar subirlo — al
  * instante, en el propio teléfono, sin tocar la red. Sin esto, un
@@ -7,9 +8,13 @@
  * que algo se estaba moviendo — parecía que la app se había congelado.
  */
 export function validarArchivoCliente(file: File, allowed: string[], maxBytes = 10 * 1024 * 1024): string | null {
-  if (!allowed.includes(file.type)) {
+  // Se usa el tipo DEDUCIDO, no el que declara el navegador: los
+  // selectores de Android entregan muchos archivos con `type` vacío y un
+  // JPG normal se rechazaba como "formato desconocido" (ver tipoDeArchivo).
+  const tipo = tipoDeArchivo(file);
+  if (!allowed.includes(tipo)) {
     const tipos = allowed.includes('application/pdf') ? 'una imagen (JPG/PNG) o un PDF' : 'una imagen (JPG/PNG)';
-    return `Este archivo no se puede subir (${file.type || 'formato desconocido'}). Selecciona ${tipos}.`;
+    return `Este archivo no se puede subir (${tipo || 'formato desconocido'}). Selecciona ${tipos}.`;
   }
   if (file.size > maxBytes) {
     return `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB — el máximo permitido es ${(maxBytes / 1024 / 1024).toFixed(0)} MB.`;

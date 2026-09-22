@@ -184,6 +184,7 @@ const en: Record<ClaveTraduccion, string> = {
   'tabs.reclamacion': 'Payroll',
   'tabs.metricas': 'My metrics',
   'tabs.zona': 'My zone',
+  'tabs.combustible': 'Fuel',
   'zonaConexion.titulo': 'My connection zone',
   'zonaConexion.sinImagenTitulo': "There's no image for your center yet",
   'zonaConexion.sinImagenDesc': "You'll see it here as soon as it's uploaded.",

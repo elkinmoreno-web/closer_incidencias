@@ -80,11 +80,20 @@ export async function guardarModulo(
       return { error: 'Elige al menos uno, o usa "Nadie" para apagarlo del todo.' };
     }
 
-    const { error } = await supabase
+    // Se pide de vuelta la fila actualizada a propósito. Un UPDATE que el
+    // RLS bloquea NO da error: simplemente no afecta a ninguna fila, y el
+    // cambio parece guardarse sin guardarse. Ya ha pasado dos veces en
+    // este proyecto (el pdf_url_epi de las fichas y estas mismas tablas),
+    // así que aquí se comprueba que de verdad se escribió algo.
+    const { data: actualizado, error } = await supabase
       .from('modulos')
       .update({ visibilidad, actualizado_en: new Date().toISOString() })
-      .eq('clave', clave);
+      .eq('clave', clave)
+      .select('clave');
     if (error) return { error: error.message };
+    if (!actualizado || actualizado.length === 0) {
+      return { error: 'No se pudo guardar: la base de datos rechazó el cambio (permisos).' };
+    }
 
     const tabla = modulo.ambito === 'admin' ? 'modulo_admins' : 'modulo_centros';
     const columna = modulo.ambito === 'admin' ? 'admin_id' : 'centro_id';

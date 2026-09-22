@@ -5,13 +5,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
-import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity, Package, Receipt } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity, Package, Receipt, Fuel, ExternalLink } from 'lucide-react';
 import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { SelectorIdioma } from '@/components/i18n/SelectorIdioma';
 import type { ClaveTraduccion } from '@/lib/i18n/dictionaries/es';
 import { CORREOS_ACCESO_STOCK_TEMPORAL } from '@/lib/utils';
+
+/**
+ * Formulario de combustible (Google Forms). No es una pantalla del panel:
+ * la entrada del menú solo lo abre en otra pestaña del navegador.
+ */
+const URL_COMBUSTIBLE =
+  'https://docs.google.com/forms/d/e/1FAIpQLSdSAG6gMfwtNBhtJFszCiG8ZRyZQghx-DTGZlpeTGM6EPYx4w/viewform?usp=dialog';
 
 const NAV = [
   { href: '/dashboard', clave: 'nav.resumen' as ClaveTraduccion, icon: LayoutDashboard, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
@@ -27,6 +34,9 @@ const NAV = [
   { modulo: 'reportes', href: '/dashboard/reportes', clave: 'nav.reportes' as ClaveTraduccion, icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { modulo: 'auditoria', href: '/dashboard/auditoria', clave: 'nav.auditoria' as ClaveTraduccion, icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { modulo: 'papelera', href: '/dashboard/papelera', clave: 'nav.papelera' as ClaveTraduccion, icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  // `externo`: vive fuera del panel, así que se abre en otra pestaña en vez
+  // de navegar por dentro (un <Link> de Next intentaría enrutarlo).
+  { modulo: 'combustible', href: URL_COMBUSTIBLE, externo: true, clave: 'nav.combustible' as ClaveTraduccion, icon: Fuel, roles: ['super_admin', 'administrador'] },
   { href: '/dashboard/configuracion', clave: 'nav.configuracion' as ClaveTraduccion, icon: Settings, roles: ['super_admin', 'administrador'] },
 ] as const;
 
@@ -77,16 +87,32 @@ export function Sidebar({
       {items.map((item) => {
         const active = pathname === item.href;
         const Icon = item.icon;
+        const clase = clsx(
+          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
+          active ? 'bg-primary text-white' : 'text-ink-muted hover:bg-bg hover:text-ink'
+        );
+
+        if ('externo' in item) {
+          return (
+            <a
+              key={item.href}
+              href={item.href}
+              target="_blank"
+              // noopener/noreferrer: el formulario no debe poder tocar la
+              // ventana del panel ni saber de dónde viene quien entra.
+              rel="noopener noreferrer"
+              onClick={() => setAbierto(false)}
+              className={clase}
+            >
+              <Icon size={18} />
+              {t(item.clave)}
+              <ExternalLink size={13} className="shrink-0 opacity-60" />
+            </a>
+          );
+        }
+
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setAbierto(false)}
-            className={clsx(
-              'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
-              active ? 'bg-primary text-white' : 'text-ink-muted hover:bg-bg hover:text-ink'
-            )}
-          >
+          <Link key={item.href} href={item.href} onClick={() => setAbierto(false)} className={clase}>
             <Icon size={18} />
             {t(item.clave)}
             {item.href === '/dashboard/incidencias' && <PendingBadge tabla="incidencias" initialCount={pendientesCount} />}

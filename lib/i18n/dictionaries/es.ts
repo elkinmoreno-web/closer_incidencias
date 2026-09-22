@@ -89,6 +89,7 @@ const es = {
   'nav.reportes': 'Reportes',
   'nav.auditoria': 'Auditoría',
   'nav.papelera': 'Papelera',
+  'nav.combustible': 'Combustible',
   'nav.configuracion': 'Configuración',
   'nav.cerrarMenu': 'Cerrar menú',
 
@@ -181,7 +182,6 @@ const es = {
   'tabs.reclamacion': 'Nómina',
   'tabs.metricas': 'Mis métricas',
   'tabs.zona': 'Mi zona',
-  'tabs.combustible': 'Combustible',
   'zonaConexion.titulo': 'Mi zona de conexión',
   'zonaConexion.sinImagenTitulo': 'Todavía no hay una imagen para tu centro',
   'zonaConexion.sinImagenDesc': 'En cuanto se suba, la verás aquí.',

@@ -1,20 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ExternalLink } from 'lucide-react';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import type { ClaveTraduccion } from '@/lib/i18n/dictionaries/es';
-
-/**
- * Formulario de combustible (Google Forms).
- *
- * Vive fuera de la app, así que "Combustible" no es una pestaña de
- * verdad: no tiene panel, es un enlace disfrazado de pestaña que abre el
- * formulario en otra ventana. Así el rider no pierde lo que tuviera a
- * medias en la pestaña en la que estaba.
- */
-const URL_COMBUSTIBLE =
-  'https://docs.google.com/forms/d/e/1FAIpQLSdSAG6gMfwtNBhtJFszCiG8ZRyZQghx-DTGZlpeTGM6EPYx4w/viewform?usp=dialog';
 
 /** Pestañas con panel, en el orden en que se pintan. */
 const PESTANAS = [
@@ -37,8 +25,8 @@ type Pestana = (typeof PESTANAS)[number]['id'];
  * barra entera y, al ser `rounded-full`, las píldoras cortas se convertían
  * en círculos. Así bajan de fila las que no caben en vez de aplastarse.
  *
- * El tamaño de letra NO sube en pantallas grandes a propósito: con 6
- * pestañas encendidas, `text-sm` hacía que "Combustible" cayera sola a una
+ * El tamaño de letra no sube en pantallas grandes a propósito: con todas
+ * las pestañas encendidas, `text-sm` hacía que la última cayera sola a una
  * segunda fila y se estirara de lado a lado como una banda.
  */
 const CLASE_PILDORA =
@@ -87,19 +75,6 @@ export function Tabs({
             {t(p.etiqueta)}
           </button>
         ))}
-        {visibles.includes('rider_combustible') && (
-          <a
-            href={URL_COMBUSTIBLE}
-            target="_blank"
-            // noopener/noreferrer: el formulario no debe poder tocar la
-            // ventana del panel ni saber de dónde viene el rider.
-            rel="noopener noreferrer"
-            className={`${CLASE_PILDORA} flex items-center justify-center gap-1 text-ink-muted`}
-          >
-            {t('tabs.combustible')}
-            <ExternalLink size={12} className="shrink-0" />
-          </a>
-        )}
       </div>
       {paneles[tab]}
     </div>

@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { enviarAusencia, type FormActionState } from '@/app/rider/dashboard/actions';
-import { compressImageIfNeeded, validarArchivoCliente } from '@/lib/compressImage';
+import { compressImageIfNeeded } from '@/lib/compressImage';
+import { useArchivosAdjuntos } from '@/components/rider/useArchivosAdjuntos';
 import type { MotivoAusencia } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
-const TIPOS_JUSTIFICANTE = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+// HEIC/HEIF: formato por defecto de las fotos de iPhone. Si el navegador
+// no sabe convertirlas, se suben tal cual en vez de rechazar la foto.
+const TIPOS_JUSTIFICANTE = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'image/heic', 'image/heif'];
 
 function EstadoEnvio({ comprimiendo }: { comprimiendo: boolean }) {
   const { pending } = useFormStatus();
@@ -47,9 +50,9 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
   const { t, idioma } = useIdioma();
   const [state, formAction] = useFormState<FormActionState, FormData>(enviarAusencia, undefined);
   const [fechaInicio, setFechaInicio] = useState('');
-  const [archivos, setArchivos] = useState<File[]>([]);
-  const [errorArchivos, setErrorArchivos] = useState<string | null>(null);
+  const { archivos, error: errorArchivos, alElegir, quitar } = useArchivosAdjuntos(TIPOS_JUSTIFICANTE, 10);
   const [comprimiendo, setComprimiendo] = useState(false);
+  const [errorSinArchivos, setErrorSinArchivos] = useState<string | null>(null);
 
   /**
    * Valida TODOS los archivos elegidos al instante — antes de comprimir
@@ -58,28 +61,21 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
    * un archivo inválido (ej. un video) se suba entero antes de que el
    * servidor pueda rechazarlo.
    */
-  function alElegirArchivos(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    const errores = files.map((f) => validarArchivoCliente(f, TIPOS_JUSTIFICANTE)).filter((err): err is string => !!err);
-    if (errores.length > 0) {
-      setErrorArchivos(errores[0]);
-      setArchivos([]);
-      e.target.value = '';
+  async function handleSubmit(formData: FormData) {
+    // El input ya no lleva `required` (los archivos viven en el estado,
+    // no en él), así que el aviso de "falta adjuntar" lo damos aquí.
+    if (archivos.length === 0) {
+      setErrorSinArchivos('Adjunta al menos un justificante');
       return;
     }
-    setErrorArchivos(null);
-    setArchivos(files);
-  }
-
-  async function handleSubmit(formData: FormData) {
+    setErrorSinArchivos(null);
     setComprimiendo(true);
     try {
-      const files = formData.getAll('justificantes') as File[];
+      // Los archivos salen del ESTADO, no del input: el input solo
+      // guarda la ÚLTIMA selección, y aquí se han ido acumulando.
       formData.delete('justificantes');
-      for (const f of files) {
-        if (f && f.size > 0) {
-          formData.append('justificantes', await compressImageIfNeeded(f));
-        }
+      for (const f of archivos) {
+        formData.append('justificantes', await compressImageIfNeeded(f));
       }
     } finally {
       setComprimiendo(false);
@@ -152,16 +148,24 @@ export function AusenciaForm({ dni, motivos }: { dni: string; motivos: MotivoAus
           name="justificantes"
           accept="image/jpeg,image/png,image/webp,application/pdf"
           multiple
-          required
-          onChange={alElegirArchivos}
+          onChange={alElegir}
           className="text-sm"
         />
         <span className="text-xs text-ink-muted">{t('ausenciaForm.justificantesAyuda')}</span>
-        {errorArchivos && <p className="text-xs text-danger">{errorArchivos}</p>}
+        {(errorArchivos || errorSinArchivos) && <p className="text-xs text-danger">{errorArchivos ?? errorSinArchivos}</p>}
         {archivos.length > 0 && (
-          <ul className="mt-1 text-xs text-ink-muted">
-            {archivos.map((f) => (
-              <li key={f.name}>· {f.name}</li>
+          <ul className="mt-1 flex flex-col gap-1 text-xs text-ink-muted">
+            {archivos.map((f, i) => (
+              <li key={`${f.name}-${f.size}`} className="flex items-center gap-2">
+                <span className="truncate">· {f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => quitar(i)}
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger hover:bg-red-50"
+                >
+                  quitar
+                </button>
+              </li>
             ))}
           </ul>
         )}

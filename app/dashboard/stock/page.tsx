@@ -6,8 +6,13 @@ import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
 import { getAdminActual } from '@/lib/supabase/server';
 import { CORREOS_ACCESO_STOCK_TEMPORAL } from '@/lib/utils';
+import { exigirModuloAdmin } from '@/lib/modulos';
 
 export default async function StockPage() {
+  // El super admin puede apagar este módulo desde Configuración.
+  // Esconderlo del menú no basta: sin esto se entraría por la URL.
+  await exigirModuloAdmin('stock');
+
   // TEMPORAL: ver CORREOS_ACCESO_STOCK_TEMPORAL en lib/utils.ts.
   const admin = await getAdminActual();
   if (!admin?.email || !CORREOS_ACCESO_STOCK_TEMPORAL.includes(admin.email)) redirect('/dashboard');

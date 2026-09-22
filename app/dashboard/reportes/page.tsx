@@ -5,8 +5,13 @@ import { MotivosChart } from '@/components/reportes/MotivosChart';
 import { daysAgoISO } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
+import { exigirModuloAdmin } from '@/lib/modulos';
 
 export default async function ReportesPage() {
+  // El super admin puede apagar este módulo desde Configuración.
+  // Esconderlo del menú no basta: sin esto se entraría por la URL.
+  await exigirModuloAdmin('reportes');
+
   const idioma = await resolverIdioma();
   const t = crearTraductor(idioma);
   const supabase = createClient();

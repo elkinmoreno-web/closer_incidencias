@@ -7,6 +7,7 @@ import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME,
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
 import { mensajeError, registrarError, canonicalEmail } from '@/lib/utils';
+import { moduloRiderActivo } from '@/lib/modulos';
 
 /**
  * Ventana en la que un envío idéntico del mismo rider se considera un
@@ -291,6 +292,13 @@ export async function enviarAusencia(_prev: FormActionState, formData: FormData)
 export async function enviarReclamacion(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   try {
     const { supabase, rider } = await getCurrentRider();
+
+    // Esconder la pestaña no es seguridad: quien conozca la acción podría
+    // llamarla igual. Se comprueba aquí que el módulo esté encendido para
+    // el centro de este rider.
+    if (!(await moduloRiderActivo('rider_reclamacion'))) {
+      return { error: 'Esta opción no está disponible' };
+    }
 
     const importeCrudo = String(formData.get('importe') ?? '').trim().replace(',', '.');
     const parsed = reclamacionSchema.safeParse({

@@ -13,6 +13,7 @@ import { inicioSemanaActualISO } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
 import { obtenerMotivosActivos, obtenerMotivosAusenciaActivos } from '@/lib/catalogosCache';
+import { modulosVisiblesRider } from '@/lib/modulos';
 
 export default async function RiderDashboardPage() {
   const rider = await getRiderActual();
@@ -54,12 +55,17 @@ export default async function RiderDashboardPage() {
       supabase.from('riders').select('centros(nombre, zonas_conexion(nombre, poligonos))').eq('id', rider.id).maybeSingle(),
     ]);
 
+  // Pestañas encendidas para el centro de este rider (ver lib/modulos.ts).
+  const { data: miCentro } = await supabase.from('riders').select('centro_id').eq('id', rider.id).maybeSingle();
+  const visibles = Array.from(await modulosVisiblesRider(miCentro?.centro_id ?? null));
+
   const centroRider = riderConCentro?.centros as unknown as { nombre: string; zonas_conexion: { nombre: string; poligonos: [number, number][][] } | null } | null;
   const zona = centroRider?.zonas_conexion ?? null;
 
   return (
     <div className="rounded-card bg-surface p-6 shadow-sm">
       <Tabs
+        visibles={visibles}
         incidenciaPanel={
           <div className="flex flex-col gap-6">
             <IncidenciaForm dni={rider.dni} motivos={motivos ?? []} />

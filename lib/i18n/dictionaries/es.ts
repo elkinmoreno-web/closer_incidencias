@@ -647,6 +647,8 @@ const es = {
   'config.titulo': 'Configuración',
   'config.accesoCompleto': 'Acceso completo (Super Admin).',
   'config.soloAnuncioYModeradores': 'Como Administrador, aquí solo gestionas el anuncio global y das de alta moderadores.',
+  'config.modulos': 'Módulos visibles',
+  'config.modulosDesc': 'Enciende o apaga partes del panel sin desplegar. Útil para tener algo terminado y no enseñarlo todavía, o para probarlo con unos pocos gestores o centros antes de abrirlo a todos.',
   'config.anuncioGlobal': 'Anuncio global',
   'config.anuncioGlobalDesc': 'Se muestra como aviso en la parte superior de ambos portales (admin y riders).',
   'config.centros': 'Centros',

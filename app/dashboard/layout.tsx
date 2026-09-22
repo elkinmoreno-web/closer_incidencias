@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient, getAdminActual } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/dashboard/Sidebar';
+import { modulosVisiblesAdmin } from '@/lib/modulos';
 import { Topbar } from '@/components/dashboard/Topbar';
 import { AnnouncementBanner } from '@/components/shared/AnnouncementBanner';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
@@ -19,10 +20,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   ]);
   const misCiudadesNombres = (misCiudades ?? []).map((c: any) => c.ciudades?.nombre).filter(Boolean) as string[];
 
+  const modulosVisibles = Array.from(await modulosVisiblesAdmin(admin.id));
+
   return (
     <IdiomaProvider idioma={idioma}>
       <div className="flex min-h-screen">
-        <Sidebar rol={admin.rol} email={admin.email} pendientesCount={pendientesCount ?? 0} ausenciasPendientesCount={ausenciasPendientesCount ?? 0} />
+        <Sidebar rol={admin.rol} email={admin.email} pendientesCount={pendientesCount ?? 0} ausenciasPendientesCount={ausenciasPendientesCount ?? 0} modulosVisibles={modulosVisibles} />
         <div className="flex flex-1 flex-col">
           <Topbar adminId={admin.id} usuario={admin.usuario} rol={admin.rol} misCiudades={misCiudadesNombres} idioma={idioma} />
           <AnnouncementBanner />

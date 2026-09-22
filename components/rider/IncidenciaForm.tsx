@@ -8,7 +8,9 @@ import type { Motivo } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 
-const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp'];
+// HEIC/HEIF: formato por defecto de las fotos de iPhone. Si el navegador
+// no sabe convertirlas, se suben tal cual en vez de rechazar la foto.
+const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 /**
  * Botón de envío + indicador de "sigue trabajando". Necesita estar

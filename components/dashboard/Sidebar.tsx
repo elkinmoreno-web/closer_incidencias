@@ -15,18 +15,18 @@ import { CORREOS_ACCESO_STOCK_TEMPORAL } from '@/lib/utils';
 
 const NAV = [
   { href: '/dashboard', clave: 'nav.resumen' as ClaveTraduccion, icon: LayoutDashboard, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/incidencias', clave: 'nav.incidencias' as ClaveTraduccion, icon: AlertTriangle, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/ausencias', clave: 'nav.ausencias' as ClaveTraduccion, icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/reclamaciones', clave: 'nav.reclamaciones' as ClaveTraduccion, icon: Receipt, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/riders', clave: 'nav.riders' as ClaveTraduccion, icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/stock', clave: 'nav.stock' as ClaveTraduccion, icon: Package, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/conexiones', clave: 'nav.conexiones' as ClaveTraduccion, icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/overtime', clave: 'nav.horasExtra' as ClaveTraduccion, icon: Clock, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/ch-vs-wh', clave: 'nav.chVsWh' as ClaveTraduccion, icon: Scale, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/metricas', clave: 'nav.metricas' as ClaveTraduccion, icon: Activity, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/reportes', clave: 'nav.reportes' as ClaveTraduccion, icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/auditoria', clave: 'nav.auditoria' as ClaveTraduccion, icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
-  { href: '/dashboard/papelera', clave: 'nav.papelera' as ClaveTraduccion, icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'incidencias', href: '/dashboard/incidencias', clave: 'nav.incidencias' as ClaveTraduccion, icon: AlertTriangle, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'ausencias', href: '/dashboard/ausencias', clave: 'nav.ausencias' as ClaveTraduccion, icon: CalendarOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'reclamaciones', href: '/dashboard/reclamaciones', clave: 'nav.reclamaciones' as ClaveTraduccion, icon: Receipt, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'riders', href: '/dashboard/riders', clave: 'nav.riders' as ClaveTraduccion, icon: Users, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'stock', href: '/dashboard/stock', clave: 'nav.stock' as ClaveTraduccion, icon: Package, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'conexiones', href: '/dashboard/conexiones', clave: 'nav.conexiones' as ClaveTraduccion, icon: MapPinOff, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'overtime', href: '/dashboard/overtime', clave: 'nav.horasExtra' as ClaveTraduccion, icon: Clock, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'ch-vs-wh', href: '/dashboard/ch-vs-wh', clave: 'nav.chVsWh' as ClaveTraduccion, icon: Scale, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'metricas', href: '/dashboard/metricas', clave: 'nav.metricas' as ClaveTraduccion, icon: Activity, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'reportes', href: '/dashboard/reportes', clave: 'nav.reportes' as ClaveTraduccion, icon: BarChart3, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'auditoria', href: '/dashboard/auditoria', clave: 'nav.auditoria' as ClaveTraduccion, icon: ClipboardList, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
+  { modulo: 'papelera', href: '/dashboard/papelera', clave: 'nav.papelera' as ClaveTraduccion, icon: Trash2, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/configuracion', clave: 'nav.configuracion' as ClaveTraduccion, icon: Settings, roles: ['super_admin', 'administrador'] },
 ] as const;
 
@@ -35,11 +35,14 @@ export function Sidebar({
   email,
   pendientesCount,
   ausenciasPendientesCount,
+  modulosVisibles,
 }: {
   rol: RolAdmin;
   email: string | null;
   pendientesCount: number;
   ausenciasPendientesCount: number;
+  /** Claves de módulo encendidas para este admin (ver lib/modulos.ts). */
+  modulosVisibles: string[];
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
@@ -50,8 +53,13 @@ export function Sidebar({
   // validar en producción. Quitar esta condición (dejando solo el
   // filtro por rol de siempre) cuando Stock esté listo para todo el
   // equipo.
+  const encendidos = new Set(modulosVisibles);
   const items = NAV.filter((item) => {
     if (item.href === '/dashboard/stock' && (!email || !CORREOS_ACCESO_STOCK_TEMPORAL.includes(email))) return false;
+    // Las entradas con `modulo` se pueden apagar desde Configuración. Las
+    // que no lo llevan (Resumen y Configuración) están siempre: apagar
+    // Configuración dejaría al super admin sin poder volver a encenderla.
+    if ('modulo' in item && !encendidos.has((item as { modulo: string }).modulo)) return false;
     return (item.roles as readonly string[]).includes(rol);
   });
 

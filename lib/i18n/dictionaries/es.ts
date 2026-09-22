@@ -181,6 +181,7 @@ const es = {
   'tabs.reclamacion': 'Nómina',
   'tabs.metricas': 'Mis métricas',
   'tabs.zona': 'Mi zona',
+  'tabs.combustible': 'Combustible',
   'zonaConexion.titulo': 'Mi zona de conexión',
   'zonaConexion.sinImagenTitulo': 'Todavía no hay una imagen para tu centro',
   'zonaConexion.sinImagenDesc': 'En cuanto se suba, la verás aquí.',

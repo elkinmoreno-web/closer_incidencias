@@ -6,6 +6,7 @@ import { registrarError, formatFecha } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 import type { EstadoReclamacion, ViaPagoReclamacion } from '@/lib/types';
+import { moduloAdminActivo } from '@/lib/modulos';
 
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
@@ -15,6 +16,12 @@ async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
 
   const { data: admin } = await supabase.from('admins').select('id').eq('auth_user_id', user.id).single();
   if (!admin) throw new Error('Sin acceso');
+
+  // No basta con que sea admin: el módulo puede estar apagado para él.
+  // Sin esto, el interruptor de Configuración solo escondía la pantalla
+  // y cualquier gestor podía seguir resolviendo o mandando a papelera
+  // llamando a la acción directamente.
+  if (!(await moduloAdminActivo('reclamaciones'))) throw new Error('Sin acceso a este módulo');
   return admin.id as string;
 }
 
@@ -171,6 +178,8 @@ export async function exportarReclamaciones(filtros: {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return [];
+  // Esta acción no pasa por getCurrentAdmin, así que comprueba el módulo aparte.
+  if (!(await moduloAdminActivo('reclamaciones'))) return [];
   const idioma = await resolverIdioma();
 
   let query = supabase

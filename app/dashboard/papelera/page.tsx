@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getAdminActual } from '@/lib/supabase/server';
 import { ciudadesYCentrosDeMiZona } from '@/lib/zonaFiltros';
 import { RecoverButton } from '@/components/dashboard/RecoverButton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -7,7 +7,7 @@ import { Pagination } from '@/components/dashboard/Pagination';
 import { formatFecha } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
-import { exigirModuloAdmin } from '@/lib/modulos';
+import { exigirModuloAdmin, modulosVisiblesAdmin } from '@/lib/modulos';
 
 const PAGE_SIZE = 20;
 
@@ -36,13 +36,30 @@ export default async function PapeleraPage({
   // incidencias en papelera, el resto no se veía.
   // La vista es security_invoker, así que sigue aplicando el RLS de
   // incidencias/ausencias: cada gestor solo ve lo de sus centros.
+  // La papelera CRUZA módulos: junta incidencias, ausencias y
+  // reclamaciones en una sola tabla. Eso abría una puerta trasera al
+  // interruptor de Configuración — un gestor sin el módulo de
+  // Reclamaciones no veía el menú ni podía abrir la pantalla, pero aquí
+  // le aparecían igual, con nombre y DNI del rider y el concepto
+  // reclamado, y con el botón de Recuperar. Así que cada tipo solo se
+  // lista si su módulo está encendido para quien mira.
+  const admin = await getAdminActual();
+  const modulosDelAdmin = admin ? await modulosVisiblesAdmin(admin.id) : new Set<string>();
+  const MODULO_DE_TIPO: Record<string, string> = {
+    incidencia: 'incidencias',
+    ausencia: 'ausencias',
+    reclamacion: 'reclamaciones',
+  };
+  const tiposPermitidos = Object.keys(MODULO_DE_TIPO).filter((tipo) => modulosDelAdmin.has(MODULO_DE_TIPO[tipo]));
+
   let query = supabase
     .from('papelera_items')
     .select('*', { count: 'exact' })
+    .in('tipo', tiposPermitidos)
     .order('fecha_eliminacion', { ascending: false })
     .range(from, to);
 
-  if (['incidencia', 'ausencia', 'reclamacion'].includes(searchParams.tipo ?? '')) {
+  if (tiposPermitidos.includes(searchParams.tipo ?? '')) {
     query = query.eq('tipo', searchParams.tipo);
   }
   if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
@@ -78,7 +95,7 @@ export default async function PapeleraPage({
           { value: 'incidencia', label: t('papelera.tipoIncidencia') },
           { value: 'ausencia', label: t('papelera.tipoAusencia') },
           { value: 'reclamacion', label: t('papelera.tipoReclamacion') },
-        ]}
+        ].filter((o) => tiposPermitidos.includes(o.value))}
         ciudades={ciudades ?? []}
         centros={centros ?? []}
         showDateRange

@@ -241,18 +241,49 @@ async function conReintento(accion: () => Promise<void>, intentos = 3): Promise<
 }
 
 /**
- * Comprueba que los datos del día que vamos a analizar estén asentados.
- *
- * El pipeline externo escribe a lo largo de la mañana, y un día entra
- * PARCIAL y se completa al día siguiente. Si el cron se adelanta al
- * pipeline, calcularíamos el TPH sobre una jornada a medias y le
- * escribiríamos a riders que en realidad cumplieron: un falso positivo
- * que no se puede retirar una vez enviado el correo.
- *
- * Por eso se exige que driver_daily_stats se haya escrito HOY antes de
- * mandar nada.
+ * Cobertura mínima exigida para dar un día por completo, respecto al mismo
+ * día de la semana de semanas anteriores. Por debajo de esto no se envía.
  */
-async function datosFrescos(supabase: ReturnType<typeof createAdminClient>): Promise<{ ok: boolean; ultima: string | null }> {
+const COBERTURA_MINIMA = 0.85;
+
+/** Cuántas filas hay cargadas de un día concreto. */
+async function filasDelDia(supabase: ReturnType<typeof createAdminClient>, dia: string): Promise<number> {
+  const { count } = await supabase
+    .from('driver_daily_stats')
+    .select('*', { count: 'exact', head: true })
+    .eq('day', dia);
+  return count ?? 0;
+}
+
+function diaMenos(fecha: string, dias: number): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Comprueba que los datos del día que vamos a analizar estén COMPLETOS.
+ *
+ * Antes solo se miraba que driver_daily_stats se hubiera escrito hoy. No
+ * bastaba: el pipeline sube por lotes de 1.000 filas con UPSERT, así que
+ * en cuanto aterriza el primer lote la comprobación ya daba verde mientras
+ * quedaban miles de filas por subir. El resultado real del 22-sep fue que
+ * solo 42 de 306 riders en rojo recibieron su aviso — a los otros 264 se
+ * les calculó el TPH sobre una jornada a medias, o ni se les miró.
+ *
+ * Ahora se compara el volumen del día contra el MISMO DÍA DE LA SEMANA de
+ * las 3 semanas anteriores. Tiene que ser el mismo día: la demanda sigue un
+ * patrón semanal fuerte y estable — un domingo mueve ~3.100 filas y un
+ * martes ~1.950 — así que comparar contra "ayer" daría falsos positivos
+ * cada lunes y cada sábado.
+ *
+ * Se usa la MEDIANA de las tres semanas para que un festivo suelto no
+ * desplace el listón.
+ */
+async function datosFrescos(
+  supabase: ReturnType<typeof createAdminClient>,
+  fecha: string
+): Promise<{ ok: boolean; ultima: string | null; motivo: string | null }> {
   const { data } = await supabase
     .from('driver_daily_stats')
     .select('created_at')
@@ -260,12 +291,64 @@ async function datosFrescos(supabase: ReturnType<typeof createAdminClient>): Pro
     .limit(1)
     .maybeSingle();
 
-  if (!data?.created_at) return { ok: false, ultima: null };
+  const ultima = data?.created_at ?? null;
+  if (!ultima) return { ok: false, ultima: null, motivo: 'No hay ningún dato de métricas en la base.' };
 
-  const ultima = new Date(data.created_at);
+  // Primer filtro, el barato: ¿ha corrido el pipeline hoy?
   const hoyMadrid = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-  const ultimaMadrid = ultima.toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-  return { ok: ultimaMadrid >= hoyMadrid, ultima: data.created_at };
+  const ultimaMadrid = new Date(ultima).toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+  if (ultimaMadrid < hoyMadrid) {
+    return { ok: false, ultima, motivo: 'El pipeline no ha escrito nada hoy.' };
+  }
+
+  // Segundo filtro: ¿está COMPLETO el día que se va a analizar?
+  //
+  // Vía preferente: la marca que escribe el pipeline en pipeline_cargas
+  // cuando ha terminado de subir TODOS los lotes. Es una respuesta exacta,
+  // no una estimación. Si el pipeline todavía no la escribe (versión
+  // antigua del script), se cae al recuento por volumen de más abajo.
+  const { data: marca } = await supabase
+    .from('pipeline_cargas')
+    .select('cerrado_en, filas')
+    .eq('dia', fecha)
+    .maybeSingle();
+
+  if (marca?.cerrado_en) {
+    const cerradoMadrid = new Date(marca.cerrado_en).toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    if (cerradoMadrid >= hoyMadrid) return { ok: true, ultima, motivo: null };
+    return {
+      ok: false,
+      ultima,
+      motivo: `El pipeline no ha cerrado hoy el día ${fecha}: la última carga completa fue el ${cerradoMadrid}.`,
+    };
+  }
+
+  const [actual, ...referencias] = await Promise.all([
+    filasDelDia(supabase, fecha),
+    filasDelDia(supabase, diaMenos(fecha, 7)),
+    filasDelDia(supabase, diaMenos(fecha, 14)),
+    filasDelDia(supabase, diaMenos(fecha, 21)),
+  ]);
+
+  const validas = referencias.filter((n) => n > 0).sort((a, b) => a - b);
+  // Sin histórico con qué comparar (instalación nueva, o un hueco largo) no
+  // se bloquea el envío: el primer filtro ya ha pasado.
+  if (validas.length === 0) return { ok: true, ultima, motivo: null };
+
+  const mediana = validas[Math.floor(validas.length / 2)];
+  const cobertura = actual / mediana;
+  if (cobertura < COBERTURA_MINIMA) {
+    return {
+      ok: false,
+      ultima,
+      motivo:
+        `La carga del día está incompleta: ${actual} filas frente a las ~${mediana} habituales de ` +
+        `un ${new Date(`${fecha}T00:00:00Z`).toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' })} ` +
+        `(${Math.round(cobertura * 100)}%).`,
+    };
+  }
+
+  return { ok: true, ultima, motivo: null };
 }
 
 /**
@@ -285,7 +368,8 @@ async function datosFrescos(supabase: ReturnType<typeof createAdminClient>): Pro
 async function avisarPipelineParado(
   supabase: ReturnType<typeof createAdminClient>,
   fechaDatos: string,
-  ultimaEscritura: string | null
+  ultimaEscritura: string | null,
+  motivo: string | null
 ): Promise<boolean> {
   const destino = process.env.ALERTAS_PIPELINE_EMAIL?.trim();
   if (!destino) return false;
@@ -310,7 +394,8 @@ async function avisarPipelineParado(
         <p style="margin:0;color:#FFFFFF;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Closer Logistics · Aviso interno</p>
       </div>
       <div style="padding:24px;color:#2C3E50;font-size:14px;line-height:1.6">
-        <p style="margin:0 0 14px;font-weight:700">El pipeline de métricas no ha escrito hoy, así que NO se ha enviado el aviso de TPH a los riders.</p>
+        <p style="margin:0 0 14px;font-weight:700">NO se ha enviado el aviso de TPH a los riders.</p>
+        <p style="margin:0 0 14px">${esc(motivo ?? 'El pipeline de métricas no ha escrito hoy.')}</p>
         <table style="width:100%;border-collapse:collapse;font-size:13px">
           <tr><td style="padding:5px 0;color:#64748B;width:170px">Última escritura</td><td style="padding:5px 0;font-weight:600">${esc(ultima)}</td></tr>
           <tr><td style="padding:5px 0;color:#64748B">Día que se iba a analizar</td><td style="padding:5px 0;font-weight:600">${fmtDMY(fechaDatos)}</td></tr>
@@ -321,7 +406,7 @@ async function avisarPipelineParado(
   </div>`;
 
   try {
-    await enviarCorreoGmail([destino], '⚠️ El pipeline de métricas no ha corrido hoy', html, { alias: ALIAS_REMITENTE });
+    await enviarCorreoGmail([destino], '⚠️ No se ha enviado el aviso de TPH a los riders', html, { alias: ALIAS_REMITENTE });
     return true;
   } catch (e) {
     // Si el aviso no sale, se libera el hueco para poder reintentarlo.
@@ -332,6 +417,13 @@ async function avisarPipelineParado(
 }
 
 export interface OpcionesEnvioTph {
+  /**
+   * Cierto solo en el ÚLTIMO disparo de cron del día. El aviso de
+   * "pipeline parado" se manda únicamente entonces: en los intentos
+   * anteriores todavía quedan oportunidades por delante y avisar sería
+   * una falsa alarma (lo era a diario).
+   */
+  ultimoIntento?: boolean;
   /** Día de los datos a analizar (yyyy-mm-dd). Por defecto, ayer en Madrid. */
   fecha?: string;
   /** Calcula y devuelve los destinatarios sin enviar ni registrar nada. */
@@ -385,14 +477,14 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
   }
 
   if (!opciones.simular && !opciones.ignorarFrescura) {
-    const frescura = await datosFrescos(supabase);
+    const frescura = await datosFrescos(supabase, fecha);
     if (!frescura.ok) {
-      const avisado = await avisarPipelineParado(supabase, fecha, frescura.ultima);
+      const avisado = opciones.ultimoIntento ? await avisarPipelineParado(supabase, fecha, frescura.ultima, frescura.motivo) : false;
       return {
         ...base,
         exito: false,
         errores: [
-          `Los datos de métricas no se han actualizado hoy (última escritura: ${frescura.ultima ?? 'ninguna'}). No se envía nada para no avisar sobre una jornada incompleta.`,
+          `${frescura.motivo ?? 'Los datos de métricas no están listos.'} (Última escritura: ${frescura.ultima ?? 'ninguna'}.) No se envía nada para no avisar sobre una jornada incompleta.`,
           avisado
             ? 'Se ha avisado por correo para que se lance el pipeline a mano.'
             : 'Aviso por correo no enviado (ya se avisó hoy, o falta ALERTAS_PIPELINE_EMAIL).',

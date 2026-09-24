@@ -6,12 +6,7 @@
 const es = {
   'comun.guardar': 'Guardar',
   'comun.cancelar': 'Cancelar',
-  'comun.cerrar': 'Cerrar',
   'comun.editar': 'Editar',
-  'comun.eliminar': 'Eliminar',
-  'comun.buscar': 'Buscar',
-  'comun.cargando': 'Cargando...',
-  'comun.error': 'Ocurrió un error. Inténtalo de nuevo en unos minutos.',
 
 
   // Reclamaciones de nómina — formulario del rider
@@ -33,7 +28,6 @@ const es = {
   'reclamacionForm.comentarioPlaceholder': 'Cuéntanos qué crees que falta o está mal...',
 
   // Reclamaciones — vista del rider
-  'reclamacion.titulo': 'Reclamaciones de nómina',
   'reclamacion.misReclamaciones': 'Tus reclamaciones',
   'reclamacion.sinReclamaciones': 'Todavía no has hecho ninguna reclamación.',
   'reclamacion.respuesta': 'Respuesta',
@@ -45,7 +39,6 @@ const es = {
   // Reclamaciones — panel del gestor
   'nav.reclamaciones': 'Reclamaciones',
   'admReclamaciones.titulo': 'Reclamaciones de nómina',
-  'admReclamaciones.descripcion': 'Reclamaciones de nómina enviadas por los riders, con la hoja adjunta.',
   'admReclamaciones.buscarPlaceholder': 'Buscar rider o DNI...',
   'admReclamaciones.colPeriodo': 'Mes',
   'admReclamaciones.colConcepto': 'Concepto',
@@ -67,7 +60,6 @@ const es = {
   'admReclamaciones.sinResultadosTitulo': 'No hay reclamaciones con estos filtros',
   'admReclamaciones.sinResultadosDesc': 'Prueba a ampliar la búsqueda.',
   'admReclamaciones.totalReclamado': 'Total reclamado',
-  'accReclamacion.resolver': 'Resolver',
   'accReclamacion.aprobar': 'Aprobar',
   'accReclamacion.rechazar': 'Rechazar',
   'accReclamacion.enTramite': 'Pasar a trámite',
@@ -185,7 +177,6 @@ const es = {
   'zonaConexion.titulo': 'Mi zona de conexión',
   'zonaConexion.sinImagenTitulo': 'Todavía no hay una imagen para tu centro',
   'zonaConexion.sinImagenDesc': 'En cuanto se suba, la verás aquí.',
-  'zonaConexion.verEnGrande': 'Ver en grande',
   'riderPage.tusIncidenciasSemana': 'Tus incidencias de esta semana',
   'riderPage.tusAusenciasSemana': 'Tus ausencias de esta semana',
   'riderPage.sinIncidenciasSemana': 'No has reportado incidencias esta semana.',
@@ -574,7 +565,6 @@ const es = {
   'admAlertas.filtros': 'Filtros',
   'admAlertas.aplicarFiltros': 'Aplicar filtros',
   'admAlertas.quitarFiltros': 'Quitar filtros',
-  'admAlertas.mostrandoTodos': 'Mostrando todos (sin filtros aplicados)',
   'admAlertas.resumenRojos': '{n} riders con TPH bajo (menos de 1 viaje por hora)',
   'admAlertas.resumenResto': '{naranja} en naranja · {verde} en verde',
   'admAlertas.verSoloRojos': 'Ver solo estos',
@@ -712,7 +702,6 @@ const es = {
   'catalogo.motivo': 'Motivo',
   'catalogo.tituloNombreEn': 'Nombre en inglés (para la sede de Alemania)',
   'catalogo.sinNombreEnUsa': 'Sin nombre en inglés (usa',
-  'catalogo.imagenZona': 'Imagen de zona',
   'catalogo.subirImagenZona': 'Subir imagen de zona',
   'catalogo.cambiarImagenZona': 'Cambiar',
   'catalogo.quitarImagenZona': 'Quitar',
@@ -802,7 +791,6 @@ const es = {
   'stock.centroDestino': 'Centro de destino',
   'stock.cantidad': 'Cantidad',
   'stock.riderOpcional': 'Rider (opcional)',
-  'stock.riderPlaceholder': 'Nombre o DNI del rider',
   'stock.riderPlaceholderLibre': 'O escribe el nombre a mano si no está en el sistema',
   'stock.notas': 'Notas',
   'stock.notasPlaceholder': 'Detalle opcional del movimiento...',
@@ -823,7 +811,6 @@ const es = {
   'stock.notaTipoNeutro': 'Este movimiento no afecta el stock — solo queda registrado como referencia.',
   'stock.usaCorreos': 'Enviado por Correos (mensajería)',
   'stock.cancelar': 'Cancelar',
-  'stock.movimientoRegistrado': 'Movimiento registrado.',
 
   // Importar stock inicial desde CSV
   'stockImport.boton': 'Importar CSV',
@@ -863,7 +850,6 @@ const es = {
   'stock.kpiRotasPerdidas': 'Rotas / perdidas',
   'stock.kpiRotasPerdidasDesc': 'rotas o no recuperadas',
   'stock.buscarPlaceholder': 'Buscar centro o gestor...',
-  'stock.todosLosGestores': 'Todos los gestores',
   'stock.stockMenorQue': 'Stock menor que...',
   'stock.limpiarFiltros': 'Limpiar filtros',
   'stock.colGestor': 'Gestor',
@@ -882,7 +868,6 @@ const es = {
   'stock.vaciarStockBoton': 'Vaciar Stock definitivamente',
   'stock.vaciarStockExito': 'Módulo vaciado: {movimientos} movimientos y {fichas} fichas borrados.',
   // Ficha de detalle por centro
-  'stockFicha.title': 'Detalle del centro',
   'stockFicha.disponible': 'Disponible en el centro',
   'stockFicha.enCaminoHaciaAlli': 'En camino hacia allí',
   'stockFicha.enManosRiders': 'En manos de riders',
@@ -902,7 +887,6 @@ const es = {
   'stockFicha.ultimosMovimientos': 'Últimos movimientos aquí',
   'stockFicha.cerrar': 'Cerrar',
   // Parámetros del semáforo (configuración)
-  'stockParams.titulo': 'Parámetros del semáforo de stock',
   'stockParams.descripcion': 'Controlan cuándo un centro se marca como crítico, bajo, parado o de sobra. Solo Super Admin puede cambiarlos.',
   'stockParams.soloSuperAdmin': 'Solo un Super Admin puede ver y ajustar estos parámetros.',
   'stockParams.leadTime': 'Días de espera del proveedor (lead time)',
@@ -924,11 +908,8 @@ const es = {
   'stockFicha.tituloModal': 'Ficha de entrega / devolución',
   'stockFicha.rider': 'Rider',
   'stockFicha.centro': 'Centro',
-  'stockFicha.estadoFicha': 'Tipo de ficha',
   'stockFicha.asignacion': 'Asignación (entrega)',
   'stockFicha.asignacionCorta': 'Asignación',
-  'stockFicha.devolucionOk': 'Devolución en buen estado',
-  'stockFicha.devolucionMal': 'Devolución en mal estado',
   'stockFicha.itemLabel': 'Material',
   'stockFicha.devolucionOkCorta': 'Dev. OK',
   'stockFicha.devolucionMalCorta': 'Dev. mal estado',
@@ -936,8 +917,6 @@ const es = {
   'stockFicha.fotoPendiente': 'Foto pendiente',
   'stockFicha.fotoEnviada': 'Foto enviada',
   'stockFicha.materiales': 'Materiales',
-  'stockFicha.anadirMaterial': 'Añadir material',
-  'stockFicha.quitarMaterial': 'Quitar',
   'stockFicha.observacionesMaterial': 'Observaciones (opcional)',
   'stockFicha.firmaDelRider': 'Firma del rider (opcional)',
   'stockFicha.faltaRider': 'Elige un rider o escribe su nombre y DNI/NIE.',
@@ -977,7 +956,6 @@ const es = {
   'stockTab.solicitudes': 'Solicitudes',
   'stockTab.historial': 'Historial',
   'stockTab.fichas': 'Fichas',
-  'stockTab.configuracion': 'Configuración',
 
   // Solicitudes (traslados en tránsito)
   'stockSolicitudes.titulo': 'Traslados en camino',
@@ -997,11 +975,9 @@ const es = {
   'stockSolicitudes.coincideConLoEnviado': 'Coincide con lo enviado.',
   'stockSolicitudes.recepcionGuardada': 'Recepción registrada correctamente.',
   'stockSolicitudes.cerrar': 'Cerrar',
-  'stockSolicitudes.recibidoOk': 'Recepción confirmada.',
   'stockSolicitudes.observacionesOpcional': 'Observaciones (opcional)',
   'stockSolicitudes.observacionesPlaceholder': 'Ej: llegó una unidad rota, no llegó nada, etc.',
   'stockSolicitudes.confirmarAnulacion': 'Confirmar anulación',
-  'stockSolicitudes.envio': 'Envío',
 } as const;
 
 export default es;

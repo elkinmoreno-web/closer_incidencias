@@ -58,6 +58,11 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
   try {
     const { supabase, rider } = await getCurrentRider();
 
+    // Igual que en enviarReclamacion: esconder la pestaña no es seguridad.
+    if (!(await moduloRiderActivo('rider_incidencia'))) {
+      return { error: 'Esta opción no está disponible' };
+    }
+
     const parsed = incidenciaSchema.safeParse({
       dni: formData.get('dni'),
       motivoId: Number(formData.get('motivoId')),
@@ -199,6 +204,11 @@ export async function enviarIncidencia(_prev: FormActionState, formData: FormDat
 export async function enviarAusencia(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   try {
     const { supabase, rider } = await getCurrentRider();
+
+    // Igual que en enviarReclamacion: esconder la pestaña no es seguridad.
+    if (!(await moduloRiderActivo('rider_ausencia'))) {
+      return { error: 'Esta opción no está disponible' };
+    }
 
     const parsed = ausenciaSchema.safeParse({
       dni: formData.get('dni'),

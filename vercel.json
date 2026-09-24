@@ -9,27 +9,23 @@
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "0 7 * * *"
+      "schedule": "30 12 * * *"
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "30 7 * * *"
+      "schedule": "30 13 * * *"
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "0 8 * * *"
+      "schedule": "30 14 * * *"
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "30 8 * * *"
+      "schedule": "30 15 * * *"
     },
     {
-      "path": "/api/cron/alertas-tph",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/alertas-tph",
-      "schedule": "30 9 * * *"
+      "path": "/api/cron/alertas-tph?ultimo=1",
+      "schedule": "30 16 * * *"
     }
   ]
 }

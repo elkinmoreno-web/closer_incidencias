@@ -7,8 +7,24 @@ import type { Database } from '@/lib/types';
 /**
  * Cliente de Supabase para Server Components, Server Actions y Route Handlers.
  * Lee/escribe la sesión desde las cookies HTTP-only de la petición.
+ *
+ * Va envuelto en React.cache() a propósito: dentro de UNA petición todas
+ * las llamadas devuelven el MISMO cliente.
+ *
+ * Sin esto, una sola carga del panel creaba ocho o más clientes
+ * independientes (el layout, la page, cada helper de lib/modulos.ts, cada
+ * getRiderActual...). Cada cliente monta su propio gestor de sesión y, al
+ * usarse por primera vez, lee la sesión de las cookies; si el token está
+ * a punto de caducar, TODOS lanzan un refresco a la vez. Supabase rota el
+ * token de refresco en cada uno, así que solo el primero vale y los demás
+ * se descartan con `AuthRefreshDiscardedError` (409) — el error que salía
+ * repetido en los logs de producción.
+ *
+ * Además de callar ese ruido, evita el riesgo de fondo: con refrescos
+ * simultáneos se puede perder el token bueno y echar al usuario a la
+ * pantalla de login sin motivo.
  */
-export function createClient() {
+export const createClient = cache(() => {
   const cookieStore = cookies();
 
   return createServerClient<Database>(
@@ -32,7 +48,7 @@ export function createClient() {
       },
     }
   );
-}
+});
 
 /**
  * Cliente con privilegios de administrador total (service_role).

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { enviarIncidencia, type FormActionState } from '@/app/rider/dashboard/actions';
-import { compressImageIfNeeded, validarArchivoCliente } from '@/lib/compressImage';
+import { prepararArchivoParaSubir, ArchivoNoDisponibleError, validarArchivoCliente } from '@/lib/compressImage';
+import { useArchivosAdjuntos } from '@/components/rider/useArchivosAdjuntos';
 import type { Motivo } from '@/lib/types';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
@@ -56,8 +57,12 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
   const [state, formAction] = useFormState<FormActionState, FormData>(enviarIncidencia, undefined);
   const [motivoId, setMotivoId] = useState('');
   const [comprimiendo, setComprimiendo] = useState(false);
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
   const [errorScreenshot, setErrorScreenshot] = useState<string | null>(null);
-  const [errorEvidencia, setErrorEvidencia] = useState<string | null>(null);
+  // Las evidencias pasan por el mismo hook que Ausencias y Reclamaciones:
+  // conserva las válidas cuando una falla y acumula entre selecciones.
+  const { archivos: evidencias, error: errorEvidencia, alElegir: alElegirEvidencias, quitar: quitarEvidencia } =
+    useArchivosAdjuntos(TIPOS_IMAGEN, 3);
   const ultimoFormData = useRef<FormData | null>(null);
 
   const motivoSeleccionado = useMemo(() => motivos.find((m) => String(m.id) === motivoId), [motivoId, motivos]);
@@ -85,46 +90,42 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
     setError(null);
   }
 
-  /** Igual que alElegirArchivo, pero para el campo de evidencia (hasta 3 archivos). */
-  function alElegirEvidencias(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) {
-      setErrorEvidencia(null);
-      return;
-    }
-    if (files.length > 3) {
-      setErrorEvidencia('Máximo 3 archivos');
-      e.target.value = '';
-      return;
-    }
-    const errores = files.map((f) => validarArchivoCliente(f, TIPOS_IMAGEN)).filter((err): err is string => !!err);
-    if (errores.length > 0) {
-      setErrorEvidencia(errores[0]);
-      e.target.value = '';
-      return;
-    }
-    setErrorEvidencia(null);
-  }
-
   async function handleSubmit(formData: FormData) {
     ultimoFormData.current = formData;
+    setErrorEnvio(null);
     setComprimiendo(true);
     try {
       const screenshot = formData.get('screenshot') as File | null;
       if (screenshot && screenshot.size > 0) {
-        formData.set('screenshot', await compressImageIfNeeded(screenshot));
+        formData.set('screenshot', await prepararArchivoParaSubir(screenshot));
       }
-      const evidencias = formData.getAll('evidencia') as File[];
+      // Las evidencias salen del ESTADO, no del input: el input solo
+      // guarda la ÚLTIMA selección, y en el estado se han ido acumulando.
       formData.delete('evidencia');
       for (const f of evidencias) {
-        if (f && f.size > 0) {
-          formData.append('evidencia', await compressImageIfNeeded(f));
-        }
+        formData.append('evidencia', await prepararArchivoParaSubir(f));
       }
+    } catch (e) {
+      // El teléfono ya no puede entregar los bytes (la foto se movió, la
+      // borraron, o la galería la reescribió). Antes esto llegaba al rider
+      // como un `Failed to fetch` en blanco y no sabía qué hacer.
+      setErrorEnvio(
+        e instanceof ArchivoNoDisponibleError
+          ? `No se pudo leer «${e.nombre}». Vuelve a seleccionarlo e inténtalo de nuevo.`
+          : 'No se pudieron preparar los archivos. Vuelve a seleccionarlos e inténtalo de nuevo.'
+      );
+      return;
     } finally {
       setComprimiendo(false);
     }
-    await formAction(formData);
+
+    try {
+      await formAction(formData);
+    } catch {
+      // Corte de cobertura a mitad del envío: muy habitual en un rider en
+      // la calle.
+      setErrorEnvio('No se pudo enviar. Comprueba tu conexión e inténtalo de nuevo.');
+    }
   }
 
   /** El rider confirma que sí quiere crear otra pese al aviso de posible duplicado: reenvía lo mismo, marcado para saltar la comprobación. */
@@ -243,7 +244,7 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
           <input
             type="file"
             name="screenshot"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             required
             onChange={(e) => alElegirArchivo(e, setErrorScreenshot)}
             className="text-sm"
@@ -257,18 +258,39 @@ export function IncidenciaForm({ dni, motivos }: { dni: string; motivos: Motivo[
         <input
           type="file"
           name="evidencia"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           multiple
           onChange={alElegirEvidencias}
           className="text-sm"
         />
         <span className="text-xs text-ink-muted">{t('incidenciaForm.hastaTresImagenes')}</span>
         {errorEvidencia && <p className="text-xs text-danger">{errorEvidencia}</p>}
+        {evidencias.length > 0 && (
+          <ul className="mt-1 flex flex-col gap-1 text-xs text-ink-muted">
+            {evidencias.map((f, i) => (
+              <li key={`${f.name}-${f.size}`} className="flex items-center gap-2">
+                <span className="truncate">· {f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => quitarEvidencia(i)}
+                  className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold text-danger hover:bg-red-50"
+                >
+                  quitar
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {state?.error && (
         <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-danger">
           {state.error}
+        </p>
+      )}
+      {errorEnvio && (
+        <p role="alert" className="rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-danger">
+          {errorEnvio}
         </p>
       )}
 

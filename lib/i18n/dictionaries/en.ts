@@ -9,12 +9,7 @@ import type { ClaveTraduccion } from './es';
 const en: Record<ClaveTraduccion, string> = {
   'comun.guardar': 'Save',
   'comun.cancelar': 'Cancel',
-  'comun.cerrar': 'Close',
   'comun.editar': 'Edit',
-  'comun.eliminar': 'Delete',
-  'comun.buscar': 'Search',
-  'comun.cargando': 'Loading...',
-  'comun.error': 'Something went wrong. Please try again in a few minutes.',
 
 
   // Reclamaciones de nómina — formulario del rider
@@ -36,7 +31,6 @@ const en: Record<ClaveTraduccion, string> = {
   'reclamacionForm.comentarioPlaceholder': 'Tell us what you think is missing or wrong...',
 
   // Reclamaciones — vista del rider
-  'reclamacion.titulo': 'Payroll claims',
   'reclamacion.misReclamaciones': 'Your claims',
   'reclamacion.sinReclamaciones': "You haven't made any claims yet.",
   'reclamacion.respuesta': 'Reply',
@@ -48,7 +42,6 @@ const en: Record<ClaveTraduccion, string> = {
   // Reclamaciones — panel del gestor
   'nav.reclamaciones': 'Payroll claims',
   'admReclamaciones.titulo': 'Payroll claims',
-  'admReclamaciones.descripcion': 'Payroll claims submitted by riders, with the payslip attached.',
   'admReclamaciones.buscarPlaceholder': 'Search rider or ID...',
   'admReclamaciones.colPeriodo': 'Month',
   'admReclamaciones.colConcepto': 'Item',
@@ -70,7 +63,6 @@ const en: Record<ClaveTraduccion, string> = {
   'admReclamaciones.sinResultadosTitulo': 'No claims match these filters',
   'admReclamaciones.sinResultadosDesc': 'Try broadening the search.',
   'admReclamaciones.totalReclamado': 'Total claimed',
-  'accReclamacion.resolver': 'Resolve',
   'accReclamacion.aprobar': 'Approve',
   'accReclamacion.rechazar': 'Reject',
   'accReclamacion.enTramite': 'Move to in progress',
@@ -188,7 +180,6 @@ const en: Record<ClaveTraduccion, string> = {
   'zonaConexion.titulo': 'My connection zone',
   'zonaConexion.sinImagenTitulo': "There's no image for your center yet",
   'zonaConexion.sinImagenDesc': "You'll see it here as soon as it's uploaded.",
-  'zonaConexion.verEnGrande': 'View full size',
   'riderPage.tusIncidenciasSemana': 'Your incidents this week',
   'riderPage.tusAusenciasSemana': 'Your absences this week',
   'riderPage.sinIncidenciasSemana': "You haven't reported any incidents this week.",
@@ -577,7 +568,6 @@ const en: Record<ClaveTraduccion, string> = {
   'admAlertas.filtros': 'Filters',
   'admAlertas.aplicarFiltros': 'Apply filters',
   'admAlertas.quitarFiltros': 'Clear filters',
-  'admAlertas.mostrandoTodos': 'Showing everyone (no filters applied)',
   'admAlertas.resumenRojos': '{n} riders with low TPH (under 1 trip per hour)',
   'admAlertas.resumenResto': '{naranja} orange · {verde} green',
   'admAlertas.verSoloRojos': 'Show only these',
@@ -715,7 +705,6 @@ const en: Record<ClaveTraduccion, string> = {
   'catalogo.motivo': 'Reason',
   'catalogo.tituloNombreEn': 'English name (for the Germany office)',
   'catalogo.sinNombreEnUsa': 'No English name (uses',
-  'catalogo.imagenZona': 'Zone image',
   'catalogo.subirImagenZona': 'Upload zone image',
   'catalogo.cambiarImagenZona': 'Change',
   'catalogo.quitarImagenZona': 'Remove',
@@ -805,7 +794,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stock.centroDestino': 'To center',
   'stock.cantidad': 'Quantity',
   'stock.riderOpcional': 'Rider (optional)',
-  'stock.riderPlaceholder': "Rider's name or ID",
   'stock.riderPlaceholderLibre': "Or type the name by hand if they're not in the system",
   'stock.notas': 'Notes',
   'stock.notasPlaceholder': 'Optional detail about the movement...',
@@ -826,7 +814,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stock.notaTipoNeutro': "This movement doesn't affect stock — it's only logged for reference.",
   'stock.usaCorreos': 'Sent by courier (postal service)',
   'stock.cancelar': 'Cancel',
-  'stock.movimientoRegistrado': 'Movement logged.',
 
   // Importar stock inicial desde CSV
   'stockImport.boton': 'Import CSV',
@@ -866,7 +853,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stock.kpiRotasPerdidas': 'Broken / lost',
   'stock.kpiRotasPerdidasDesc': 'broken or not recovered',
   'stock.buscarPlaceholder': 'Search center or manager...',
-  'stock.todosLosGestores': 'All managers',
   'stock.stockMenorQue': 'Stock less than...',
   'stock.limpiarFiltros': 'Clear filters',
   'stock.colGestor': 'Manager',
@@ -885,7 +871,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stock.vaciarStockBoton': 'Clear Stock permanently',
   'stock.vaciarStockExito': 'Module cleared: {movimientos} movements and {fichas} slips deleted.',
   // Ficha de detalle por centro
-  'stockFicha.title': 'Center detail',
   'stockFicha.disponible': 'Available at this center',
   'stockFicha.enCaminoHaciaAlli': 'On its way there',
   'stockFicha.enManosRiders': 'With riders',
@@ -905,7 +890,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFicha.ultimosMovimientos': 'Latest movements here',
   'stockFicha.cerrar': 'Close',
   // Parámetros del semáforo (configuración)
-  'stockParams.titulo': 'Stock traffic-light parameters',
   'stockParams.descripcion': 'Control when a center is flagged as critical, low, stale, or overstocked. Only a Super Admin can change these.',
   'stockParams.soloSuperAdmin': 'Only a Super Admin can view and adjust these parameters.',
   'stockParams.leadTime': 'Supplier lead time (days)',
@@ -927,11 +911,8 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFicha.tituloModal': 'Delivery / return slip',
   'stockFicha.rider': 'Rider',
   'stockFicha.centro': 'Center',
-  'stockFicha.estadoFicha': 'Slip type',
   'stockFicha.asignacion': 'Assignment (delivery)',
   'stockFicha.asignacionCorta': 'Assigned',
-  'stockFicha.devolucionOk': 'Returned in good condition',
-  'stockFicha.devolucionMal': 'Returned in bad condition',
   'stockFicha.itemLabel': 'Material',
   'stockFicha.devolucionOkCorta': 'Returned OK',
   'stockFicha.devolucionMalCorta': 'Returned damaged',
@@ -939,8 +920,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stockFicha.fotoPendiente': 'Photo pending',
   'stockFicha.fotoEnviada': 'Photo sent',
   'stockFicha.materiales': 'Materials',
-  'stockFicha.anadirMaterial': 'Add material',
-  'stockFicha.quitarMaterial': 'Remove',
   'stockFicha.observacionesMaterial': 'Notes (optional)',
   'stockFicha.firmaDelRider': "Rider's signature (optional)",
   'stockFicha.faltaRider': 'Choose a rider or type their name and ID number.',
@@ -980,7 +959,6 @@ const en: Record<ClaveTraduccion, string> = {
   'stockTab.solicitudes': 'Requests',
   'stockTab.historial': 'History',
   'stockTab.fichas': 'Slips',
-  'stockTab.configuracion': 'Settings',
 
   // Solicitudes (traslados en tránsito)
   'stockSolicitudes.titulo': 'Shipments in transit',
@@ -1000,11 +978,9 @@ const en: Record<ClaveTraduccion, string> = {
   'stockSolicitudes.coincideConLoEnviado': 'Matches what was shipped.',
   'stockSolicitudes.recepcionGuardada': 'Arrival logged successfully.',
   'stockSolicitudes.cerrar': 'Close',
-  'stockSolicitudes.recibidoOk': 'Arrival confirmed.',
   'stockSolicitudes.observacionesOpcional': 'Notes (optional)',
   'stockSolicitudes.observacionesPlaceholder': 'E.g: one unit arrived broken, nothing arrived, etc.',
   'stockSolicitudes.confirmarAnulacion': 'Confirm cancellation',
-  'stockSolicitudes.envio': 'Shipment',
 };
 
 export default en;

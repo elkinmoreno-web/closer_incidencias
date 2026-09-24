@@ -2,7 +2,6 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { obtenerRendimientoSemanalVarios, obtenerRendimientoDiarioVarios, type DriverPerformance } from '@/lib/fleetMetricsSupabase';
-import { semanaIsoDe } from '@/lib/metricas';
 import type { AlertasParametros } from '@/lib/types';
 
 import { registrarError } from '@/lib/utils';
@@ -245,11 +244,6 @@ export async function buscarRiderPorTexto(texto: string): Promise<RiderEncontrad
 
   const { data } = await supabase.from('riders').select('nombre, dni, email').or(`dni.ilike.%${q}%,nombre.ilike.%${q}%,email.ilike.%${q}%`).limit(10);
   return (data ?? []).map((r) => ({ nombre: r.nombre, dni: r.dni, email: r.email }));
-}
-
-/** Semana ISO actual (para el selector). */
-export async function semanaActual(): Promise<{ year: number; week: number }> {
-  return semanaIsoDe(new Date());
 }
 
 /**

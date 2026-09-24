@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
@@ -18,11 +19,12 @@ const COOKIE_IDIOMA = 'closer_idioma_manual';
  *    español como valor por defecto — nunca debe romper una pantalla
  *    por no encontrar idioma.
  *
- * Se llama una sola vez por request (Server Component/Server Action),
- * nunca dentro de un bucle sobre filas — mismo principio de rendimiento
- * que ya aplicamos para las zonas de admin.
+ * Envuelto en React.cache() para que de verdad se resuelva UNA vez por
+ * petición. El comentario decía que ya era así, pero no lo era: el layout,
+ * la page y cada server action lo llamaban por su cuenta, y cada llamada
+ * hacía hasta tres viajes a la base (auth.getUser + riders + admins).
  */
-export async function resolverIdioma(): Promise<Idioma> {
+export const resolverIdioma = cache(async (): Promise<Idioma> => {
   const cookieStore = cookies();
   const manual = cookieStore.get(COOKIE_IDIOMA)?.value;
   if (manual === 'es' || manual === 'en') return manual;
@@ -68,7 +70,7 @@ export async function resolverIdioma(): Promise<Idioma> {
     // español como respaldo seguro.
     return 'es';
   }
-}
+});
 
 /** Guarda la preferencia manual de idioma para esta sesión/navegador (no toca el país real de la persona en la base de datos). */
 export async function establecerIdiomaManual(idioma: Idioma) {

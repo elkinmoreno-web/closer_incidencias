@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient, getAdminActual, getRiderActual } from '@/lib/supabase/server';
 
@@ -36,7 +37,7 @@ export interface Modulo {
  * 'configuracion' nunca está en la tabla: si se pudiera apagar, el super
  * admin se quedaría sin la pantalla desde la que volver a encenderlo.
  */
-export async function modulosVisiblesAdmin(adminId: string): Promise<Set<string>> {
+export const modulosVisiblesAdmin = cache(async (adminId: string): Promise<Set<string>> => {
   const supabase = createClient();
 
   const [{ data: modulos }, { data: asignados }] = await Promise.all([
@@ -52,10 +53,10 @@ export async function modulosVisiblesAdmin(adminId: string): Promise<Set<string>
     else if (m.visibilidad === 'seleccionados' && mios.has(m.clave)) visibles.add(m.clave);
   }
   return visibles;
-}
+});
 
 /** Igual, pero para las pestañas del panel del rider (se eligen por centro). */
-export async function modulosVisiblesRider(centroId: number | null): Promise<Set<string>> {
+export const modulosVisiblesRider = cache(async (centroId: number | null): Promise<Set<string>> => {
   const supabase = createClient();
 
   const [{ data: modulos }, { data: porCentro }] = await Promise.all([
@@ -73,7 +74,7 @@ export async function modulosVisiblesRider(centroId: number | null): Promise<Set
     else if (m.visibilidad === 'seleccionados' && deMiCentro.has(m.clave)) visibles.add(m.clave);
   }
   return visibles;
-}
+});
 
 /**
  * Corta el renderizado de una página del panel si su módulo está apagado
@@ -88,6 +89,23 @@ export async function exigirModuloAdmin(clave: string): Promise<void> {
 
   const visibles = await modulosVisiblesAdmin(admin.id);
   if (!visibles.has(clave)) redirect('/dashboard');
+}
+
+/**
+ * Comprueba, desde una server action del PANEL, que el módulo está
+ * encendido para quien la invoca.
+ *
+ * Hace falta ADEMÁS de `exigirModuloAdmin` en la página: Next ejecuta la
+ * server action ANTES de renderizar el árbol, así que el guarda de la
+ * page no llega a frenarla. Y los identificadores de las actions viajan
+ * en el bundle del navegador, de modo que un gestor al que se le haya
+ * apagado el módulo podría invocarla igualmente aunque no vea el menú
+ * ni pueda abrir la pantalla.
+ */
+export async function moduloAdminActivo(clave: string): Promise<boolean> {
+  const admin = await getAdminActual();
+  if (!admin) return false;
+  return (await modulosVisiblesAdmin(admin.id)).has(clave);
 }
 
 /**

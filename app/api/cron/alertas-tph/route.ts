@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { enviarAlertasTphDiarias } from '@/lib/alertasTphCorreo';
+import { enviarAlertasTphSemanales } from '@/lib/alertasTphCorreo';
 
 /**
  * Aviso diario por correo a los riders con TPH bajo del día anterior.
@@ -39,7 +39,7 @@ import { enviarAlertasTphDiarias } from '@/lib/alertasTphCorreo';
  * Parámetros (para pruebas manuales, no los usa el cron):
  *   ?forzar=1        salta SOLO la comprobación de la hora, para lanzarlo a mano
  *   ?simular=1       calcula los destinatarios y NO envía ni registra nada
- *   ?fecha=...       analiza otro día (yyyy-mm-dd) en vez de ayer
+ *   ?fecha=...       analiza otra semana: el LUNES de esa semana (yyyy-mm-dd)
  *   ?limite=N        envía como mucho a N riders — para la primera salida
  *                    real a un grupo pequeño antes de abrirlo a todos
  *   ?sin_frescura=1  salta la comprobación de que el pipeline haya escrito hoy
@@ -79,6 +79,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ omitido: true, motivo: `En Madrid son las ${horaMadrid}:00, fuera de la ventana de envío (9:00-11:59).` });
   }
 
-  const resultado = await enviarAlertasTphDiarias({ fecha, simular, limite, ignorarFrescura: sinFrescura, ultimoIntento });
+  const resultado = await enviarAlertasTphSemanales({ fecha, simular, limite, ignorarFrescura: sinFrescura, ultimoIntento });
   return NextResponse.json(resultado, { status: resultado.exito ? 200 : 500 });
 }

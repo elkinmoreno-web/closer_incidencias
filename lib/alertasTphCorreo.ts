@@ -106,6 +106,41 @@ export interface ResultadoAlertaTph {
   muestra?: { nombre: string; email: string; tph: number; horas: number; pedidos: number }[];
 }
 
+/**
+ * Semana COMPLETA anterior (lunes a domingo) en horario de Madrid.
+ *
+ * El aviso pasó de diario a semanal: en vez de juzgar una jornada suelta
+ * —donde un mal día puntual dispara un correo— se mira el TPH acumulado
+ * de toda la semana, que es el indicador con el que de verdad se evalúa
+ * al rider.
+ *
+ * Se manda los lunes: el domingo termina de cargarse el lunes sobre las
+ * 13:30 (los datos de un día los completa el pipeline al día siguiente),
+ * así que el lunes por la tarde es el primer momento en que la semana
+ * está entera.
+ */
+export function semanaAnteriorEnMadrid(): { lunes: string; domingo: string } {
+  const ahora = new Date();
+  const madrid = new Date(ahora.toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // getDay(): 0 = domingo. Se convierte a 1 = lunes ... 7 = domingo.
+  const diaSemana = madrid.getDay() === 0 ? 7 : madrid.getDay();
+  const domingo = new Date(madrid);
+  domingo.setDate(domingo.getDate() - diaSemana); // domingo de la semana pasada
+  const lunes = new Date(domingo);
+  lunes.setDate(lunes.getDate() - 6);
+  return { lunes: ymd(lunes), domingo: ymd(domingo) };
+}
+
+/** Domingo (fin de semana) a partir del lunes dado. */
+function domingoDe(lunesIso: string): string {
+  const d = new Date(`${lunesIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 6);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Fecha de ayer en horario de Madrid, en yyyy-mm-dd. */
 export function ayerEnMadrid(): string {
   const ahora = new Date();
@@ -155,18 +190,18 @@ export function asuntoAlertaTph(_nombre: string): string {
  * reales del rider, para que el aviso sea comprobable y no una frase
  * genérica que se pueda ignorar.
  */
-export function plantillaAlertaTph(d: DestinatarioTph, fechaIso: string): string {
+export function plantillaAlertaTph(d: DestinatarioTph, lunesIso: string, domingoIso: string): string {
   // Versión corta y en tono de advertencia. El primer párrafo va en
   // negrita y va solo: es lo único que se lee seguro, así que tiene que
   // bastar por sí mismo para que el rider entienda que esto es un aviso
   // y no un boletín. Justo debajo van sus cifras, y solo después el
   // detalle de qué hacer.
   const aviso =
-    'Tu TPH (pedidos por hora) está por debajo del mínimo exigido: completas muy pocos pedidos para el tiempo que pasas activo.';
+    'Tu TPH (pedidos por hora) de la semana pasada está por debajo del mínimo exigido: completas muy pocos pedidos para el tiempo que pasas activo.';
 
   const parrafos = [
     'Esto incumple los estándares operativos y debe corregirse de inmediato. Ubícate en zonas de mayor demanda —áreas de restaurantes— y acepta los pedidos con agilidad para evitar tiempos muertos en tu jornada.',
-    'Haremos seguimiento de tu evolución en los próximos días. Si tienes un problema técnico con la aplicación que te impida trabajar con normalidad, comunícaselo a tu gestor de flota para que pueda revisarlo.',
+    'Haremos seguimiento de tu evolución la próxima semana. Si tienes un problema técnico con la aplicación que te impida trabajar con normalidad, comunícaselo a tu gestor de flota para que pueda revisarlo.',
   ]
     .map((p) => `<p style="margin:0 0 14px;color:#2C3E50;font-size:14px;line-height:1.6">${p}</p>`)
     .join('');
@@ -188,7 +223,7 @@ export function plantillaAlertaTph(d: DestinatarioTph, fechaIso: string): string
         <p style="margin:0 0 14px;color:#2C3E50;font-size:14px;line-height:1.6">Hola ${esc(nombrePila(d.nombre))},</p>
         <p style="margin:0 0 18px;color:#2C3E50;font-size:15px;font-weight:700;line-height:1.55">${aviso}</p>
 
-        <div style="margin:0 0 6px;font-size:12px;color:#64748B">Tus datos del ${fmtDMY(fechaIso)}</div>
+        <div style="margin:0 0 6px;font-size:12px;color:#64748B">Tus datos de la semana del ${fmtDMY(lunesIso)} al ${fmtDMY(domingoIso)}</div>
         <table style="width:100%;border-collapse:collapse;border:1px solid #E1E8EB;border-left:3px solid #D6402F;border-radius:10px;overflow:hidden;background:#F9FBFB;margin-bottom:18px">
           <tr>
             ${dato('Horas online', num(d.online_hours, 1))}
@@ -246,12 +281,13 @@ async function conReintento(accion: () => Promise<void>, intentos = 3): Promise<
  */
 const COBERTURA_MINIMA = 0.85;
 
-/** Cuántas filas hay cargadas de un día concreto. */
-async function filasDelDia(supabase: ReturnType<typeof createAdminClient>, dia: string): Promise<number> {
+/** Cuántas filas hay cargadas en un rango de días (ambos incluidos). */
+async function filasDelRango(supabase: ReturnType<typeof createAdminClient>, desde: string, hasta: string): Promise<number> {
   const { count } = await supabase
     .from('driver_daily_stats')
     .select('*', { count: 'exact', head: true })
-    .eq('day', dia);
+    .gte('day', desde)
+    .lte('day', hasta);
   return count ?? 0;
 }
 
@@ -282,7 +318,8 @@ function diaMenos(fecha: string, dias: number): string {
  */
 async function datosFrescos(
   supabase: ReturnType<typeof createAdminClient>,
-  fecha: string
+  desde: string,
+  hasta: string
 ): Promise<{ ok: boolean; ultima: string | null; motivo: string | null }> {
   const { data } = await supabase
     .from('driver_daily_stats')
@@ -307,27 +344,45 @@ async function datosFrescos(
   // cuando ha terminado de subir TODOS los lotes. Es una respuesta exacta,
   // no una estimación. Si el pipeline todavía no la escribe (versión
   // antigua del script), se cae al recuento por volumen de más abajo.
-  const { data: marca } = await supabase
-    .from('pipeline_cargas')
-    .select('cerrado_en, filas')
-    .eq('dia', fecha)
-    .maybeSingle();
+  const diasSemana: string[] = [];
+  for (let d = new Date(`${desde}T00:00:00Z`); d <= new Date(`${hasta}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
+    diasSemana.push(d.toISOString().slice(0, 10));
+  }
 
-  if (marca?.cerrado_en) {
-    const cerradoMadrid = new Date(marca.cerrado_en).toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-    if (cerradoMadrid >= hoyMadrid) return { ok: true, ultima, motivo: null };
+  const { data: marcas } = await supabase
+    .from('pipeline_cargas')
+    .select('dia, cerrado_en')
+    .gte('dia', desde)
+    .lte('dia', hasta);
+
+  // Se exige que los SIETE días estén cerrados hoy. Basta con que falte
+  // uno para que el TPH de la semana salga bajo por un hueco de datos y
+  // no por el rendimiento del rider — y un correo enviado no se retira.
+  if (marcas && marcas.length > 0) {
+    const cerradosHoy = new Set(
+      marcas
+        .filter((m) => m.cerrado_en && new Date(m.cerrado_en).toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) >= hoyMadrid)
+        .map((m) => m.dia as string)
+    );
+    const faltan = diasSemana.filter((d) => !cerradosHoy.has(d));
+    if (faltan.length === 0) return { ok: true, ultima, motivo: null };
     return {
       ok: false,
       ultima,
-      motivo: `El pipeline no ha cerrado hoy el día ${fecha}: la última carga completa fue el ${cerradoMadrid}.`,
+      motivo: `El pipeline no ha cerrado hoy ${faltan.length} de los 7 días de la semana (${faltan.join(', ')}).`,
     };
   }
 
+  // Respaldo por volumen, para cuando el pipeline aún no escribe la marca:
+  // se compara el total de la semana con el de las 3 semanas anteriores.
+  // Al ser semanas completas ya no hace falta cuadrar el día de la semana
+  // —cada una contiene un lunes, un domingo, etc.—, que era lo que obligaba
+  // a comparar contra el mismo día cuando esto era diario.
   const [actual, ...referencias] = await Promise.all([
-    filasDelDia(supabase, fecha),
-    filasDelDia(supabase, diaMenos(fecha, 7)),
-    filasDelDia(supabase, diaMenos(fecha, 14)),
-    filasDelDia(supabase, diaMenos(fecha, 21)),
+    filasDelRango(supabase, desde, hasta),
+    filasDelRango(supabase, diaMenos(desde, 7), diaMenos(hasta, 7)),
+    filasDelRango(supabase, diaMenos(desde, 14), diaMenos(hasta, 14)),
+    filasDelRango(supabase, diaMenos(desde, 21), diaMenos(hasta, 21)),
   ]);
 
   const validas = referencias.filter((n) => n > 0).sort((a, b) => a - b);
@@ -342,8 +397,7 @@ async function datosFrescos(
       ok: false,
       ultima,
       motivo:
-        `La carga del día está incompleta: ${actual} filas frente a las ~${mediana} habituales de ` +
-        `un ${new Date(`${fecha}T00:00:00Z`).toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' })} ` +
+        `La carga de la semana está incompleta: ${actual} filas frente a las ~${mediana} habituales ` +
         `(${Math.round(cobertura * 100)}%).`,
     };
   }
@@ -442,9 +496,16 @@ export interface OpcionesEnvioTph {
  * ningún rider y no se registra nada en alertas_tph_correos — así el
  * envío real del día siguiente no se queda bloqueado por las pruebas.
  */
-export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): Promise<ResultadoAlertaTph> {
+export async function enviarAlertasTphSemanales(opciones: OpcionesEnvioTph = {}): Promise<ResultadoAlertaTph> {
   const supabase = createAdminClient();
-  const fecha = opciones.fecha ?? ayerEnMadrid();
+  // `fecha`, cuando viene, es el LUNES de la semana a analizar.
+  const semana = semanaAnteriorEnMadrid();
+  const lunes = opciones.fecha ?? semana.lunes;
+  const domingo = opciones.fecha ? domingoDe(opciones.fecha) : semana.domingo;
+  // Se sigue llamando `fecha` en el resultado y en alertas_tph_correos: es
+  // el lunes de la semana, y hace de clave para que un rider reciba como
+  // mucho UN correo por semana (unique rider_id + fecha).
+  const fecha = lunes;
   const emailPrueba = process.env.ALERTAS_TPH_EMAIL_PRUEBA?.trim() || null;
   const errores: string[] = [];
 
@@ -461,12 +522,15 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
 
   const { data: params } = await supabase
     .from('alertas_parametros')
-    .select('correo_tph_max, correo_horas_min, correo_activo')
+    .select('correo_tph_max, correo_horas_min_semanal, correo_activo')
     .eq('id', 1)
     .maybeSingle();
 
   const tphMax = Number(params?.correo_tph_max ?? 1);
-  const horasMin = Number(params?.correo_horas_min ?? 0.75);
+  // Mínimo SEMANAL, no el diario: 5 h en toda la semana. Se eligió así
+  // porque hay riders con contrato de 10 h — con un umbral más alto se
+  // quedarían fuera precisamente los de media jornada.
+  const horasMin = Number(params?.correo_horas_min_semanal ?? 5);
   const activo = params?.correo_activo ?? false;
 
   // El interruptor maestro solo frena el envío REAL. En modo de pruebas
@@ -477,14 +541,14 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
   }
 
   if (!opciones.simular && !opciones.ignorarFrescura) {
-    const frescura = await datosFrescos(supabase, fecha);
+    const frescura = await datosFrescos(supabase, lunes, domingo);
     if (!frescura.ok) {
       const avisado = opciones.ultimoIntento ? await avisarPipelineParado(supabase, fecha, frescura.ultima, frescura.motivo) : false;
       return {
         ...base,
         exito: false,
         errores: [
-          `${frescura.motivo ?? 'Los datos de métricas no están listos.'} (Última escritura: ${frescura.ultima ?? 'ninguna'}.) No se envía nada para no avisar sobre una jornada incompleta.`,
+          `${frescura.motivo ?? 'Los datos de métricas no están listos.'} (Última escritura: ${frescura.ultima ?? 'ninguna'}.) No se envía nada para no avisar sobre una semana incompleta.`,
           avisado
             ? 'Se ha avisado por correo para que se lance el pipeline a mano.'
             : 'Aviso por correo no enviado (ya se avisó hoy, o falta ALERTAS_PIPELINE_EMAIL).',
@@ -493,8 +557,9 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
     }
   }
 
-  const { data: destinatarios, error } = await supabase.rpc('destinatarios_alerta_tph', {
-    p_fecha: fecha,
+  const { data: destinatarios, error } = await supabase.rpc('destinatarios_alerta_tph_semanal', {
+    p_desde: lunes,
+    p_hasta: domingo,
     p_tph_max: tphMax,
     p_horas_min: horasMin,
   });
@@ -559,7 +624,7 @@ export async function enviarAlertasTphDiarias(opciones: OpcionesEnvioTph = {}): 
     }
 
     try {
-      await conReintento(() => enviarCorreoGmail([destino], asuntoAlertaTph(d.nombre), plantillaAlertaTph(d, fecha), { alias: ALIAS_REMITENTE, responderA: responderA() }));
+      await conReintento(() => enviarCorreoGmail([destino], asuntoAlertaTph(d.nombre), plantillaAlertaTph(d, lunes, domingo), { alias: ALIAS_REMITENTE, responderA: responderA() }));
       enviados++;
     } catch (e) {
       fallidos++;

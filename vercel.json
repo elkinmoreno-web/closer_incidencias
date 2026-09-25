@@ -9,23 +9,23 @@
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "30 12 * * *"
+      "schedule": "30 12 * * 1"
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "30 13 * * *"
+      "schedule": "30 13 * * 1"
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "30 14 * * *"
+      "schedule": "30 14 * * 1"
     },
     {
       "path": "/api/cron/alertas-tph",
-      "schedule": "30 15 * * *"
+      "schedule": "30 15 * * 1"
     },
     {
       "path": "/api/cron/alertas-tph?ultimo=1",
-      "schedule": "30 16 * * *"
+      "schedule": "30 16 * * 1"
     }
   ]
 }

@@ -17,7 +17,37 @@ import { updateSession } from '@/lib/supabase/middleware';
  * para nada. Confirmado como causa real de un 504
  * MIDDLEWARE_INVOCATION_TIMEOUT en /rider/login.
  */
+/**
+ * Decide quién puede empotrar el panel en un <iframe>.
+ *
+ * Vive AQUÍ y no en next.config.mjs a propósito: el middleware lee el
+ * entorno en CADA PETICIÓN, mientras que next.config se evalúa al
+ * COMPILAR. Con la versión anterior, cambiar FRAME_ANCESTORS exigía
+ * redesplegar, y si la variable no estaba presente en ese build exacto el
+ * panel seguía bloqueado SIN NINGUNA PISTA de por qué — que es justo lo
+ * que nos pasó. El comentario del config ya decía que esto no debería
+ * necesitar un despliegue; ahora es cierto.
+ *
+ * Vacío = nadie puede empotrarlo (X-Frame-Options: DENY, como siempre).
+ * Con orígenes, se manda frame-ancestors, que es la única cabecera que
+ * admite una lista.
+ */
+function aplicarCabeceraIframe(res: NextResponse): NextResponse {
+  const permitidos = (process.env.FRAME_ANCESTORS ?? '').trim();
+  if (permitidos) {
+    res.headers.set('Content-Security-Policy', `frame-ancestors 'self' ${permitidos}`);
+    res.headers.delete('X-Frame-Options');
+  } else {
+    res.headers.set('X-Frame-Options', 'DENY');
+  }
+  return res;
+}
+
 export async function middleware(request: NextRequest) {
+  return aplicarCabeceraIframe(await controlDeAcceso(request));
+}
+
+async function controlDeAcceso(request: NextRequest): Promise<NextResponse> {
   const path = request.nextUrl.pathname;
 
   const isDashboardRoute = path.startsWith('/dashboard');

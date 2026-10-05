@@ -46,6 +46,7 @@ export function ExportarReclamacionesButton() {
             [t('exportar.colEstado')]: f.estado,
             [t('admReclamaciones.colRespuesta')]: f.respuesta ?? '',
             [t('admReclamaciones.colResueltaPor')]: f.resueltaPor ?? '',
+            [t('admReclamaciones.colFechaResolucion')]: f.fechaResolucion ?? '',
           }))
         );
         const libro = XLSX.utils.book_new();

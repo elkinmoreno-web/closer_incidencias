@@ -162,6 +162,7 @@ export interface FilaExportReclamacion {
   estado: string;
   respuesta: string | null;
   resueltaPor: string | null;
+  fechaResolucion: string | null;
 }
 
 /** Exporta TODAS las que coinciden con los filtros activos, no solo la página visible. */
@@ -184,7 +185,7 @@ export async function exportarReclamaciones(filtros: {
 
   let query = supabase
     .from('reclamaciones')
-    .select('created_at, periodo, nombre_rider, dni, importe, importe_aprobado, via_pago, comentario, estado, respuesta, centros(nombre), motivos_reclamacion(nombre, nombre_en), admins:revisado_por_id(usuario)')
+    .select('created_at, periodo, nombre_rider, dni, importe, importe_aprobado, via_pago, comentario, estado, respuesta, fecha_gestion, centros(nombre), motivos_reclamacion(nombre, nombre_en), admins:revisado_por_id(usuario)')
     .neq('estado', 'papelera')
     .order('created_at', { ascending: false });
 
@@ -224,6 +225,7 @@ export async function exportarReclamaciones(filtros: {
       estado: ETIQUETA_ESTADO[r.estado as EstadoReclamacion] ?? r.estado,
       respuesta: r.respuesta,
       resueltaPor: (r.admins as unknown as { usuario: string } | null)?.usuario ?? null,
+      fechaResolucion: r.fecha_gestion ? formatFecha(r.fecha_gestion) : null,
     };
   });
 }

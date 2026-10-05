@@ -6,6 +6,7 @@ import { Pagination } from '@/components/dashboard/Pagination';
 import { ReclamacionActions } from '@/components/dashboard/ReclamacionActions';
 import { ExportarReclamacionesButton } from '@/components/dashboard/ExportarReclamacionesButton';
 import { formatFecha } from '@/lib/utils';
+import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { urlArchivoDrive } from '@/lib/driveUrl';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor, nombreSegunIdioma } from '@/lib/i18n/traducir';
@@ -113,59 +114,69 @@ export default async function ReclamacionesPage({
         {filas.length === 0 ? (
           <EmptyState title={t('admReclamaciones.sinResultadosTitulo')} description={t('admReclamaciones.sinResultadosDesc')} />
         ) : (
-          <table className="w-full min-w-[1200px] text-sm">
+          // 7 columnas, no 12: con todo en su propia columna la tabla pedía
+          // 1.200 px y obligaba a hacer scroll horizontal. Lo que va junto
+          // (centro con el rider, mes con el concepto, importes con su vía de
+          // pago, revisor con el estado) se agrupa en la misma celda.
+          <table className="w-full text-sm">
             <thead className="border-b border-border bg-bg/60 text-left text-xs font-semibold uppercase tracking-wide text-ink-muted">
               <tr>
-                <th className="px-4 py-3">{t('admIncidencias.colRider')}</th>
-                <th className="px-4 py-3">{t('admIncidencias.colCentro')}</th>
-                <th className="px-4 py-3">{t('admReclamaciones.colPeriodo')}</th>
-                <th className="px-4 py-3">{t('admReclamaciones.colConcepto')}</th>
-                <th className="px-4 py-3 text-right">{t('admReclamaciones.colImporte')}</th>
-                <th className="px-4 py-3 text-right">{t('admReclamaciones.colImporteAprobado')}</th>
-                <th className="px-4 py-3">{t('admReclamaciones.colViaPago')}</th>
-                <th className="px-4 py-3">{t('admReclamaciones.colNomina')}</th>
-                <th className="px-4 py-3">{t('admIncidencias.colEstado')}</th>
-                <th className="px-4 py-3">{t('admReclamaciones.colRespuesta')}</th>
-                <th className="px-4 py-3">{t('admReclamaciones.colResueltaPor')}</th>
-                <th className="px-4 py-3 text-right">{t('admIncidencias.colAcciones')}</th>
+                <th className="px-3 py-3">{t('admIncidencias.colRider')}</th>
+                <th className="px-3 py-3">{t('admReclamaciones.colConcepto')}</th>
+                <th className="px-3 py-3 text-right">{t('admReclamaciones.colImporte')}</th>
+                <th className="px-3 py-3">{t('admReclamaciones.colNomina')}</th>
+                <th className="px-3 py-3">{t('admIncidencias.colEstado')}</th>
+                <th className="px-3 py-3">{t('admReclamaciones.colRespuesta')}</th>
+                <th className="px-3 py-3 text-right">{t('admIncidencias.colAcciones')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filas.map((r: any) => (
-                <tr key={r.id}>
-                  <td className="px-4 py-3">
+                <tr key={r.id} className="align-top">
+                  <td className="px-3 py-3">
                     <div className="font-medium text-ink">{r.nombre_rider}</div>
                     <div className="text-xs text-ink-muted">{r.dni}</div>
+                    <div className="text-xs text-ink-muted">{r.centros?.nombre ?? '—'}</div>
                     <div className="text-xs text-ink-muted">{formatFecha(r.created_at)}</div>
                   </td>
-                  <td className="px-4 py-3 text-xs">{r.centros?.nombre ?? '—'}</td>
-                  <td className="px-4 py-3 text-xs">{String(r.periodo).slice(0, 7)}</td>
-                  <td className="px-4 py-3">
-                    {r.motivos_reclamacion
-                      ? nombreSegunIdioma(idioma, r.motivos_reclamacion.nombre, r.motivos_reclamacion.nombre_en)
-                      : '—'}
-                    {r.comentario && <div className="mt-0.5 text-xs text-ink-muted">{r.comentario}</div>}
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
-                    {r.importe === null ? '—' : `${Number(r.importe).toFixed(2).replace('.', ',')} €`}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-                    {r.importe_aprobado === null ? '—' : `${Number(r.importe_aprobado).toFixed(2).replace('.', ',')} €`}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {r.via_pago === 'primera_remesa' ? (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-800">
-                        {t('accReclamacion.primeraRemesa')}
-                      </span>
-                    ) : r.via_pago === 'siguiente_nomina' ? (
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-semibold text-indigo-800">
-                        {t('accReclamacion.siguienteNomina')}
-                      </span>
-                    ) : (
-                      <span className="text-ink-muted">—</span>
+                  <td className="max-w-[18rem] px-3 py-3">
+                    <div className="font-medium text-ink">
+                      {r.motivos_reclamacion
+                        ? nombreSegunIdioma(idioma, r.motivos_reclamacion.nombre, r.motivos_reclamacion.nombre_en)
+                        : '—'}
+                    </div>
+                    <div className="text-xs text-ink-muted">
+                      {t('admReclamaciones.colPeriodo')}: {String(r.periodo).slice(0, 7)}
+                    </div>
+                    {r.comentario && (
+                      <>
+                        <div className="mt-1 line-clamp-2 text-xs text-ink-muted">{r.comentario}</div>
+                        {r.comentario.length > 90 && (
+                          <VerTextoCompleto titulo={t('admReclamaciones.colConcepto')} texto={r.comentario} />
+                        )}
+                      </>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                    <div className="font-medium">
+                      {r.importe === null ? '—' : `${Number(r.importe).toFixed(2).replace('.', ',')} €`}
+                    </div>
+                    {r.importe_aprobado !== null && (
+                      <div className="text-xs font-semibold text-emerald-700">
+                        {t('admReclamaciones.colImporteAprobado')}: {Number(r.importe_aprobado).toFixed(2).replace('.', ',')} €
+                      </div>
+                    )}
+                    {r.via_pago && (
+                      <span
+                        className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          r.via_pago === 'primera_remesa' ? 'bg-violet-100 text-violet-800' : 'bg-indigo-100 text-indigo-800'
+                        }`}
+                      >
+                        {r.via_pago === 'primera_remesa' ? t('accReclamacion.primeraRemesa') : t('accReclamacion.siguienteNomina')}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
                     {(r.archivo_ids ?? []).length === 0 ? (
                       <span className="text-xs text-ink-muted">—</span>
                     ) : (
@@ -176,7 +187,7 @@ export default async function ReclamacionesPage({
                             href={urlArchivoDrive(id) ?? '#'}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs font-medium text-primary hover:underline"
+                            className="whitespace-nowrap text-xs font-medium text-primary hover:underline"
                           >
                             {t('admReclamaciones.verNomina')} {i + 1}
                           </a>
@@ -184,8 +195,10 @@ export default async function ReclamacionesPage({
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${COLOR_ESTADO[r.estado as EstadoReclamacion]}`}>
+                  <td className="px-3 py-3">
+                    <span
+                      className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${COLOR_ESTADO[r.estado as EstadoReclamacion]}`}
+                    >
                       {t(
                         r.estado === 'aprobada'
                           ? 'reclamacion.estadoAprobada'
@@ -196,28 +209,28 @@ export default async function ReclamacionesPage({
                               : 'reclamacion.estadoPendiente'
                       )}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {r.respuesta ? (
-                      <div className="max-w-[16rem] text-ink">{r.respuesta}</div>
-                    ) : (
-                      <span className="text-ink-muted">—</span>
-                    )}
-                  </td>
-                  {/* Columna propia: antes el gestor solo se veía debajo de la
-                      respuesta, así que una reclamación resuelta sin comentario
-                      no decía quién la había aprobado o rechazado. */}
-                  <td className="px-4 py-3 text-xs">
-                    {r.admins?.usuario ? (
-                      <>
+                    {/* Quién la resolvió va con el estado, y siempre se ve: antes
+                        solo aparecía debajo de la respuesta escrita. */}
+                    {r.admins?.usuario && (
+                      <div className="mt-1 text-xs">
                         <div className="font-medium text-ink">{r.admins.usuario}</div>
                         {r.fecha_gestion && <div className="text-ink-muted">{formatFecha(r.fecha_gestion)}</div>}
+                      </div>
+                    )}
+                  </td>
+                  <td className="max-w-[14rem] px-3 py-3 text-xs">
+                    {r.respuesta ? (
+                      <>
+                        <div className="line-clamp-2 text-ink">{r.respuesta}</div>
+                        {r.respuesta.length > 70 && (
+                          <VerTextoCompleto titulo={t('admReclamaciones.colRespuesta')} texto={r.respuesta} />
+                        )}
                       </>
                     ) : (
                       <span className="text-ink-muted">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <ReclamacionActions
                       id={r.id}
                       estado={r.estado}

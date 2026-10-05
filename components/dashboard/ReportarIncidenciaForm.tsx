@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { crearTicket, type ReportarState } from '@/app/dashboard/reportar/actions';
 
@@ -21,36 +20,30 @@ function Enviar() {
       disabled={pending}
       className="w-full rounded-full bg-primary py-3 font-semibold text-white transition hover:bg-primary-dark disabled:opacity-60"
     >
-      {pending ? 'Enviando…' : 'Enviar reporte'}
+      {pending ? 'Enviando…' : 'Enviar a soporte'}
     </button>
   );
 }
 
-export function ReportarIncidenciaForm() {
+/**
+ * `pagina` es donde estaba el gestor al abrir la ventana. Viaja oculta en el
+ * correo para que soporte sepa dónde mirar; no se le enseña al gestor.
+ */
+export function ReportarIncidenciaForm({ pagina }: { pagina: string }) {
   const [state, formAction] = useFormState<ReportarState, FormData>(crearTicket, undefined);
-  // La página desde la que se venía, para que soporte sepa dónde mirar. Se
-  // lee en el navegador porque es la URL anterior, no la de este formulario.
-  const [pagina, setPagina] = useState('');
-  useEffect(() => {
-    if (document.referrer && document.referrer.startsWith(window.location.origin)) {
-      setPagina(new URL(document.referrer).pathname + new URL(document.referrer).search);
-    }
-  }, []);
 
   if (state && 'success' in state) {
     return (
       <div className="flex flex-col gap-3">
         <div className="rounded-xl bg-emerald-50 px-4 py-4 text-sm font-medium text-emerald-800">
-          Ticket #{state.id} enviado. El equipo de soporte te responderá a tu correo.
+          Mensaje #{state.id} enviado. El equipo de soporte te responderá a tu correo.
         </div>
         {!state.correoEnviado && (
           <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            El reporte se ha guardado, pero el correo no ha salido. Avisa a soporte del ticket #{state.id}.
+            El reporte se ha guardado, pero el correo no ha salido. Avisa a soporte del mensaje #{state.id}.
           </div>
         )}
-        <button onClick={() => window.location.reload()} className="self-start text-sm font-semibold text-primary underline">
-          Reportar otra
-        </button>
+
       </div>
     );
   }
@@ -90,8 +83,6 @@ export function ReportarIncidenciaForm() {
           className={CAMPO}
         />
       </div>
-
-      {pagina && <p className="text-xs text-ink-muted">Se adjuntará la página desde la que vienes: {pagina}</p>}
 
       {state && 'error' in state && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-danger">{state.error}</p>}
 

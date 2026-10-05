@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import clsx from 'clsx';
-import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity, Package, Receipt, Fuel, ExternalLink, LifeBuoy } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, CalendarOff, Trash2, Settings, Users, BarChart3, ClipboardList, MapPinOff, Menu, X, Clock, Scale, Activity, Package, Receipt, Fuel, ExternalLink } from 'lucide-react';
 import type { RolAdmin } from '@/lib/types';
 import { PendingBadge } from '@/components/dashboard/PendingBadge';
 import { useIdioma } from '@/components/i18n/IdiomaProvider';
@@ -37,9 +37,6 @@ const NAV = [
   // `externo`: vive fuera del panel, así que se abre en otra pestaña en vez
   // de navegar por dentro (un <Link> de Next intentaría enrutarlo).
   { modulo: 'combustible', href: URL_COMBUSTIBLE, externo: true, clave: 'nav.combustible' as ClaveTraduccion, icon: Fuel, roles: ['super_admin', 'administrador'] },
-  // Sin `modulo`: siempre visible para estos roles. Es la vía para avisar de
-  // que algo falla, así que no debería poder apagarse por error.
-  { href: '/dashboard/reportar', clave: 'nav.reportar' as ClaveTraduccion, icon: LifeBuoy, roles: ['super_admin', 'administrador', 'moderador', 'admin_zona'] },
   { href: '/dashboard/configuracion', clave: 'nav.configuracion' as ClaveTraduccion, icon: Settings, roles: ['super_admin', 'administrador'] },
 ] as const;
 

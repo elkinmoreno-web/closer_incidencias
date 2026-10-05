@@ -86,7 +86,6 @@ const en: Record<ClaveTraduccion, string> = {
   'nav.auditoria': 'Audit log',
   'nav.papelera': 'Trash',
   'nav.combustible': 'Fuel',
-  'nav.reportar': 'Report an issue',
   'nav.configuracion': 'Settings',
   'nav.cerrarMenu': 'Close menu',
 

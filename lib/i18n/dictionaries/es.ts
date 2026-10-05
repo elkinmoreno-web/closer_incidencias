@@ -83,7 +83,6 @@ const es = {
   'nav.auditoria': 'Auditoría',
   'nav.papelera': 'Papelera',
   'nav.combustible': 'Combustible',
-  'nav.reportar': 'Reportar incidencia',
   'nav.configuracion': 'Configuración',
   'nav.cerrarMenu': 'Cerrar menú',
 

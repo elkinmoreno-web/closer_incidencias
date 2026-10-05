@@ -1,6 +1,7 @@
 import { LogOut } from 'lucide-react';
 import { ConnectedAdmins } from '@/components/dashboard/ConnectedAdmins';
 import { NotificationCenter } from '@/components/dashboard/NotificationCenter';
+import { BotonSoporte } from '@/components/dashboard/BotonSoporte';
 import { signOut } from '@/app/dashboard/actions';
 import type { Idioma } from '@/lib/i18n/resolverIdioma';
 import { crearTraductor } from '@/lib/i18n/traducir';
@@ -37,6 +38,7 @@ export function Topbar({
         <div className="hidden md:block">
           <SelectorIdioma />
         </div>
+        <BotonSoporte />
         <NotificationCenter />
         <form action={signOut}>
           <button

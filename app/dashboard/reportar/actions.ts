@@ -55,7 +55,7 @@ function plantillaTicket(d: {
   <div style="font-family:'Segoe UI',Helvetica,Arial,sans-serif;background:#F4F7F8;padding:32px 16px">
     <div style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E1E8EB">
       <div style="background:#2C3E50;padding:16px 24px">
-        <p style="margin:0;color:#FFFFFF;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Closer CRM · Ticket #${d.id}</p>
+        <p style="margin:0;color:#FFFFFF;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Closer CRM · Soporte #${d.id}</p>
       </div>
       <div style="padding:24px;color:#2C3E50;font-size:14px;line-height:1.6">
         <p style="margin:0 0 16px;font-size:17px;font-weight:700">${esc(d.asunto)}</p>
@@ -120,7 +120,7 @@ export async function crearTicket(_prev: ReportarState, formData: FormData): Pro
     try {
       await enviarCorreoGmail(
         DESTINATARIOS_SOPORTE,
-        `[Ticket #${ticket.id}] ${ETIQUETA_TIPO[parsed.data.tipo]}: ${parsed.data.asunto}`,
+        `[Soporte CRM #${ticket.id}] ${ETIQUETA_TIPO[parsed.data.tipo]}: ${parsed.data.asunto}`,
         plantillaTicket({
           id: ticket.id,
           ...parsed.data,

@@ -56,6 +56,7 @@ const es = {
   'admReclamaciones.colNomina': 'Nómina',
   'admReclamaciones.colRespuesta': 'Respuesta',
   'admReclamaciones.colResueltaPor': 'Resuelta por',
+  'admReclamaciones.colFechaResolucion': 'Fecha de resolución',
   'admReclamaciones.verNomina': 'Ver nómina',
   'admReclamaciones.sinResultadosTitulo': 'No hay reclamaciones con estos filtros',
   'admReclamaciones.sinResultadosDesc': 'Prueba a ampliar la búsqueda.',
@@ -82,6 +83,7 @@ const es = {
   'nav.auditoria': 'Auditoría',
   'nav.papelera': 'Papelera',
   'nav.combustible': 'Combustible',
+  'nav.reportar': 'Reportar incidencia',
   'nav.configuracion': 'Configuración',
   'nav.cerrarMenu': 'Cerrar menú',
 

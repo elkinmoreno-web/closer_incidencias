@@ -126,6 +126,7 @@ export default async function ReclamacionesPage({
                 <th className="px-4 py-3">{t('admReclamaciones.colNomina')}</th>
                 <th className="px-4 py-3">{t('admIncidencias.colEstado')}</th>
                 <th className="px-4 py-3">{t('admReclamaciones.colRespuesta')}</th>
+                <th className="px-4 py-3">{t('admReclamaciones.colResueltaPor')}</th>
                 <th className="px-4 py-3 text-right">{t('admIncidencias.colAcciones')}</th>
               </tr>
             </thead>
@@ -198,11 +199,19 @@ export default async function ReclamacionesPage({
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {r.respuesta ? (
+                      <div className="max-w-[16rem] text-ink">{r.respuesta}</div>
+                    ) : (
+                      <span className="text-ink-muted">—</span>
+                    )}
+                  </td>
+                  {/* Columna propia: antes el gestor solo se veía debajo de la
+                      respuesta, así que una reclamación resuelta sin comentario
+                      no decía quién la había aprobado o rechazado. */}
+                  <td className="px-4 py-3 text-xs">
+                    {r.admins?.usuario ? (
                       <>
-                        <div className="max-w-[16rem] text-ink">{r.respuesta}</div>
-                        {r.admins?.usuario && (
-                          <div className="mt-0.5 text-ink-muted">— {r.admins.usuario}</div>
-                        )}
+                        <div className="font-medium text-ink">{r.admins.usuario}</div>
+                        {r.fecha_gestion && <div className="text-ink-muted">{formatFecha(r.fecha_gestion)}</div>}
                       </>
                     ) : (
                       <span className="text-ink-muted">—</span>

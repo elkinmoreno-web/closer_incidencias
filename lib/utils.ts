@@ -293,6 +293,15 @@ export function normalizarNombreCentro(s: string): string {
  * No basta con ser super_admin: hay 8 activos y esto solo lo maneja
  * quien construye el panel.
  */
+/**
+ * Roles que ven "Reportar incidencia" y pueden enviar tickets de soporte:
+ * TODO el panel de gestión. Los únicos que no pueden son los riders, que ni
+ * siquiera tienen fila en `admins`.
+ * Vive aquí y no en el actions.ts porque un fichero 'use server' solo puede
+ * exportar funciones async.
+ */
+export const ROLES_PUEDEN_REPORTAR = ['super_admin', 'administrador', 'moderador', 'admin_zona'] as const;
+
 export const CORREOS_GESTION_MODULOS = ['elkin.moreno@closerlogistics.com'];
 
 export const CORREOS_ACCESO_STOCK_TEMPORAL = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com', 'nicolas.correa@closerlogistics.com', 'cesar.buitrago@closerlogistics.com'];

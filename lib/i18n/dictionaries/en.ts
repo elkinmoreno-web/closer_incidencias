@@ -59,6 +59,7 @@ const en: Record<ClaveTraduccion, string> = {
   'admReclamaciones.colNomina': 'Payslip',
   'admReclamaciones.colRespuesta': 'Reply',
   'admReclamaciones.colResueltaPor': 'Resolved by',
+  'admReclamaciones.colFechaResolucion': 'Resolved on',
   'admReclamaciones.verNomina': 'View payslip',
   'admReclamaciones.sinResultadosTitulo': 'No claims match these filters',
   'admReclamaciones.sinResultadosDesc': 'Try broadening the search.',
@@ -85,6 +86,7 @@ const en: Record<ClaveTraduccion, string> = {
   'nav.auditoria': 'Audit log',
   'nav.papelera': 'Trash',
   'nav.combustible': 'Fuel',
+  'nav.reportar': 'Report an issue',
   'nav.configuracion': 'Settings',
   'nav.cerrarMenu': 'Close menu',
 

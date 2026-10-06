@@ -303,11 +303,11 @@ export function normalizarNombreCentro(s: string): string {
 export const ROLES_PUEDEN_REPORTAR = ['super_admin', 'administrador', 'moderador', 'admin_zona'] as const;
 
 /**
- * Quién ve el botón "Avisar al gestor" en Reclamaciones de nómina: RRHH.
- * Sirve para decirle al gestor que aprobó o rechazó una reclamación que eso
- * no le correspondía (o lo que haga falta), con el mensaje que RRHH quiera.
+ * Quién ve el botón "Avisar al gestor" en Reclamaciones de nómina. Sirve
+ * para escribir al gestor que aprobó o rechazó una reclamación (por ejemplo,
+ * para decirle que no le correspondía) con el mensaje que se quiera.
  */
-export const CORREOS_AVISO_RRHH = [
+export const CORREOS_AVISO_GESTOR = [
   'nicolas.correa@closerlogistics.com',
   'rodrigo.heredero@closerlogistics.com',
   'elkin.moreno@closerlogistics.com',

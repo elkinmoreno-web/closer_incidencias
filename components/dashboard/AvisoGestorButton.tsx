@@ -2,16 +2,16 @@
 
 import { useState, useTransition } from 'react';
 import { Send, X, Loader2 } from 'lucide-react';
-import { avisarGestorReclamacion, type AvisoRrhhState } from '@/app/dashboard/reclamaciones/actions';
+import { avisarGestorReclamacion, type AvisoGestorState } from '@/app/dashboard/reclamaciones/actions';
 
 /**
- * Botón de RRHH en cada reclamación: escribe al gestor que la aprobó o
+ * Botón en cada reclamación para escribir al gestor que la aprobó o
  * rechazó. Si nadie la ha gestionado todavía, sale desactivado.
  */
-export function AvisoRrhhButton({ id, gestor }: { id: string; gestor: string | null }) {
+export function AvisoGestorButton({ id, gestor }: { id: string; gestor: string | null }) {
   const [abierto, setAbierto] = useState(false);
   const [mensaje, setMensaje] = useState('');
-  const [estado, setEstado] = useState<AvisoRrhhState>(undefined);
+  const [estado, setEstado] = useState<AvisoGestorState>(undefined);
   const [pending, startTransition] = useTransition();
 
   if (!gestor) {
@@ -87,7 +87,7 @@ export function AvisoRrhhButton({ id, gestor }: { id: string; gestor: string | n
                   onChange={(e) => setMensaje(e.target.value)}
                   rows={5}
                   maxLength={5000}
-                  placeholder="Ej: Esta reclamación es de RRHH, no hace falta que la gestionéis desde el centro. Ya nos encargamos nosotros."
+                  placeholder="Escribe aquí el mensaje para el gestor."
                   className="rounded-xl border-2 border-border px-4 py-3 text-sm focus:border-primary focus:outline-none"
                 />
                 {estado && 'error' in estado && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-danger">{estado.error}</p>}

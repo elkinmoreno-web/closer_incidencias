@@ -7,8 +7,8 @@ import { ReclamacionActions } from '@/components/dashboard/ReclamacionActions';
 import { ExportarReclamacionesButton } from '@/components/dashboard/ExportarReclamacionesButton';
 import { formatFecha } from '@/lib/utils';
 import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
-import { AvisoRrhhButton } from '@/components/dashboard/AvisoRrhhButton';
-import { CORREOS_AVISO_RRHH } from '@/lib/utils';
+import { AvisoGestorButton } from '@/components/dashboard/AvisoGestorButton';
+import { CORREOS_AVISO_GESTOR } from '@/lib/utils';
 import { getAdminActual } from '@/lib/supabase/server';
 import { urlArchivoDrive } from '@/lib/driveUrl';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
@@ -31,9 +31,9 @@ export default async function ReclamacionesPage({
 }: {
   searchParams: { [key: string]: string | undefined };
 }) {
-  // Solo RRHH ve el botón de avisar al gestor (la acción lo comprueba otra vez).
+  // Solo unos pocos ven el botón de avisar al gestor (la acción lo comprueba otra vez).
   const yo = await getAdminActual();
-  const puedeAvisarRrhh = !!yo?.email && CORREOS_AVISO_RRHH.includes(yo.email);
+  const puedeAvisarGestor = !!yo?.email && CORREOS_AVISO_GESTOR.includes(yo.email);
 
   // El super admin puede apagar este módulo desde Configuración.
   // Esconderlo del menú no basta: sin esto se entraría por la URL.
@@ -239,7 +239,7 @@ export default async function ReclamacionesPage({
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                    {puedeAvisarRrhh && <AvisoRrhhButton id={r.id} gestor={r.admins?.usuario ?? null} />}
+                    {puedeAvisarGestor && <AvisoGestorButton id={r.id} gestor={r.admins?.usuario ?? null} />}
                     <ReclamacionActions
                       id={r.id}
                       estado={r.estado}

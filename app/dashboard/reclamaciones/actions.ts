@@ -1,8 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
-import { registrarError, formatFecha } from '@/lib/utils';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { enviarCorreoGmail } from '@/lib/googleMail';
+import { registrarError, formatFecha, CORREOS_AVISO_RRHH } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 import type { EstadoReclamacion, ViaPagoReclamacion } from '@/lib/types';
@@ -228,4 +229,114 @@ export async function exportarReclamaciones(filtros: {
       fechaResolucion: r.fecha_gestion ? formatFecha(r.fecha_gestion) : null,
     };
   });
+}
+
+export type AvisoRrhhState = { error: string } | { success: true; para: string; correoEnviado: boolean } | undefined;
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * RRHH (Nicolás) escribe al gestor que APROBÓ O RECHAZÓ una reclamación.
+ *
+ * Caso típico: un gestor resuelve algo que no le toca porque es de RRHH, y
+ * Nicolás le avisa desde la propia reclamación. El destinatario es siempre
+ * `revisado_por_id`, el que sale en "Resuelta por"; si nadie la ha
+ * gestionado todavía no hay a quién avisar y se rechaza.
+ *
+ * Se GUARDA antes de enviar: si Gmail falla, el aviso queda registrado en
+ * reclamacion_avisos_rrhh y Nicolás sabe que el correo no ha salido.
+ */
+export async function avisarGestorReclamacion(id: string, mensaje: string): Promise<AvisoRrhhState> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    // Comprobación en el servidor: esconder el botón no basta, la acción se
+    // podría invocar directamente.
+    if (!user?.email || !CORREOS_AVISO_RRHH.includes(user.email)) {
+      return { error: 'No tienes permiso para enviar avisos de RRHH.' };
+    }
+    const deAdminId = await getCurrentAdmin(supabase);
+
+    const texto = mensaje.trim();
+    if (texto.length < 3) return { error: 'Escribe el mensaje para el gestor.' };
+    if (texto.length > 5000) return { error: 'El mensaje es demasiado largo.' };
+
+    const adm = createAdminClient();
+    const { data: r } = await adm
+      .from('reclamaciones')
+      .select('id, nombre_rider, dni, periodo, importe, importe_aprobado, estado, respuesta, revisado_por_id, centros(nombre), motivos_reclamacion(nombre)')
+      .eq('id', id)
+      .maybeSingle();
+    if (!r) return { error: 'Esa reclamación no existe.' };
+    if (!r.revisado_por_id) return { error: 'Nadie ha gestionado todavía esta reclamación: no hay a quién avisar.' };
+
+    const { data: gestor } = await adm.from('admins').select('id, usuario, auth_user_id').eq('id', r.revisado_por_id).maybeSingle();
+    if (!gestor?.auth_user_id) return { error: 'No se encuentra al gestor que la resolvió.' };
+    const { data: authGestor } = await adm.auth.admin.getUserById(gestor.auth_user_id);
+    const emailGestor = authGestor?.user?.email;
+    if (!emailGestor) return { error: `${gestor.usuario} no tiene correo registrado.` };
+
+    const { data: aviso, error } = await adm
+      .from('reclamacion_avisos_rrhh')
+      .insert({ reclamacion_id: r.id, de_admin_id: deAdminId, para_admin_id: gestor.id, mensaje: texto })
+      .select('id')
+      .single();
+    if (error || !aviso) return { error: registrarError('reclamaciones:avisoRrhh', error, 'No se pudo guardar el aviso') };
+
+    const centro = (r.centros as unknown as { nombre: string } | null)?.nombre ?? '—';
+    const concepto = (r.motivos_reclamacion as unknown as { nombre: string } | null)?.nombre ?? '—';
+    const euros = (n: unknown) => (n === null || n === undefined ? '—' : `${Number(n).toFixed(2).replace('.', ',')} €`);
+    const fila = (k: string, v: string) =>
+      `<tr><td style="padding:4px 0;color:#64748B;width:140px">${k}</td><td style="padding:4px 0;font-weight:600">${escHtml(v)}</td></tr>`;
+    const html = `
+  <div style="font-family:'Segoe UI',Helvetica,Arial,sans-serif;background:#F4F7F8;padding:32px 16px">
+    <div style="max-width:600px;margin:0 auto;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E1E8EB">
+      <div style="background:#2C3E50;padding:16px 24px">
+        <p style="margin:0;color:#FFFFFF;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">RRHH · Reclamación de nómina</p>
+      </div>
+      <div style="padding:24px;color:#2C3E50;font-size:14px;line-height:1.6">
+        <p style="margin:0 0 14px">Hola ${escHtml(gestor.usuario)},</p>
+        <p style="margin:0 0 6px;color:#64748B;font-size:12px">Mensaje de RRHH sobre una reclamación que gestionaste:</p>
+        <div style="padding:14px 16px;background:#FFF8E6;border:1px solid #F3D58A;border-radius:10px;white-space:pre-wrap;margin-bottom:18px">${escHtml(texto)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          ${fila('Rider', `${r.nombre_rider} (${r.dni})`)}
+          ${fila('Centro', centro)}
+          ${fila('Concepto', concepto)}
+          ${fila('Mes', String(r.periodo).slice(0, 7))}
+          ${fila('Importe reclamado', euros(r.importe))}
+          ${fila('Estado', ETIQUETA_ESTADO[r.estado as EstadoReclamacion] ?? r.estado)}
+          ${r.respuesta ? fila('Tu respuesta', r.respuesta) : ''}
+        </table>
+        <p style="margin:16px 0 0;font-size:12px;color:#64748B">Responde a este correo para contestar directamente a RRHH.</p>
+      </div>
+    </div>
+  </div>`;
+
+    let correoEnviado = false;
+    try {
+      await enviarCorreoGmail([emailGestor], `RRHH · Reclamación de ${r.nombre_rider} (${concepto})`, html, {
+        alias: 'Closer CRM · RRHH',
+        responderA: user.email,
+      });
+      correoEnviado = true;
+      await adm.from('reclamacion_avisos_rrhh').update({ correo_enviado: true }).eq('id', aviso.id);
+    } catch (e) {
+      registrarError('reclamaciones:avisoRrhhCorreo', e, 'No se pudo enviar el correo al gestor');
+    }
+
+    await supabase.from('auditoria').insert({
+      admin_id: deAdminId,
+      accion: 'Aviso de RRHH sobre reclamación',
+      detalles: `A ${gestor.usuario} sobre la reclamación de ${r.nombre_rider} (${concepto})`,
+      centro_id: null,
+    });
+
+    return { success: true, para: gestor.usuario, correoEnviado };
+  } catch (e) {
+    return { error: registrarError('reclamaciones:avisoRrhh', e, 'No se pudo enviar el aviso') };
+  }
 }

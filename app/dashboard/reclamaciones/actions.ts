@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { enviarCorreoGmail } from '@/lib/googleMail';
 import { plantillaAvisoGestor, asuntoAvisoGestor } from '@/lib/avisoGestorCorreo';
-import { registrarError, formatFecha, CORREOS_AVISO_GESTOR } from '@/lib/utils';
+import { registrarError, formatFecha, leerImporte, CORREOS_GESTION_RECLAMACIONES } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 import type { EstadoReclamacion, ViaPagoReclamacion } from '@/lib/types';
@@ -50,8 +50,13 @@ const ETIQUETA_ESTADO: Record<EstadoReclamacion, string> = {
  * en curso.
  */
 export interface DatosResolucion {
-  /** Lo que se aprueba pagar. Solo aplica al aprobar; null deja lo que hubiera. */
-  importeAprobado?: number | null;
+  /**
+   * Lo que se aprueba pagar, TAL CUAL lo escribió el gestor ("1.234,50").
+   * Se interpreta aquí, en el servidor, con leerImporte(): antes el
+   * navegador solo cambiaba la coma por un punto, así que "1.234,50" no era
+   * un número y la reclamación quedaba aprobada sin importe.
+   */
+  importeAprobadoTexto?: string | null;
   /** Primera remesa o siguiente nómina. Obligatorio al aprobar. */
   viaPago?: ViaPagoReclamacion | null;
 }
@@ -61,17 +66,27 @@ export async function resolverReclamacion(
   estado: EstadoReclamacion,
   respuesta: string,
   datos: DatosResolucion = {}
-) {
+): Promise<{ error: string } | { success: true }> {
   const supabase = createClient();
   const adminId = await getCurrentAdmin(supabase);
 
   const texto = respuesta.trim();
   // Rechazar sin explicar deja al rider sin saber qué hacer después.
-  if (estado === 'rechazada' && !texto) throw new Error('Explica al rider por qué se rechaza');
+  if (estado === 'rechazada' && !texto) return { error: 'Explica al rider por qué se rechaza' };
   // Aprobar sin decir cuándo se paga deja la reclamación resuelta a medias:
   // el rider sabe que le dan la razón pero no cuándo verá el dinero, y
   // vuelve a preguntar. Es el dato que más se reclama después.
-  if (estado === 'aprobada' && !datos.viaPago) throw new Error('Indica si se paga en la primera remesa o en la siguiente nómina');
+  if (estado === 'aprobada' && !datos.viaPago) return { error: 'Indica si se paga en la primera remesa o en la siguiente nómina' };
+
+  // Una aprobada SIN importe deja al rider sabiendo que le dan la razón pero
+  // no cuánto cobra. Había 10 así el 7-oct-2026.
+  let importeAprobado: number | null = null;
+  if (estado === 'aprobada') {
+    importeAprobado = leerImporte(datos.importeAprobadoTexto ?? '');
+    if (importeAprobado === null) return { error: 'Indica el importe aprobado' };
+    if (Number.isNaN(importeAprobado)) return { error: 'El importe aprobado no es un número válido (ej: 19,85 o 1.234,50)' };
+    if (importeAprobado > 99_999_999) return { error: 'El importe aprobado es demasiado grande' };
+  }
 
   const { data: fila, error } = await supabase
     .from('reclamaciones')
@@ -81,7 +96,7 @@ export async function resolverReclamacion(
       // Solo se tocan al aprobar: si luego se pasa a trámite o se rechaza,
       // se limpian para no dejar un importe aprobado en una reclamación
       // que ya no lo está.
-      importe_aprobado: estado === 'aprobada' ? (datos.importeAprobado ?? null) : null,
+      importe_aprobado: estado === 'aprobada' ? importeAprobado : null,
       via_pago: estado === 'aprobada' ? (datos.viaPago ?? null) : null,
       revisado_por_id: adminId,
       fecha_gestion: new Date().toISOString(),
@@ -91,7 +106,7 @@ export async function resolverReclamacion(
     .select('centro_id')
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   await supabase.from('auditoria').insert({
     admin_id: adminId,
@@ -102,6 +117,7 @@ export async function resolverReclamacion(
 
   revalidatePath('/dashboard/reclamaciones');
   revalidatePath('/rider/dashboard');
+  return { success: true };
 }
 
 /** Manda una reclamación a la papelera (no se borra: se recupera desde /dashboard/papelera). */
@@ -253,7 +269,7 @@ export async function avisarGestorReclamacion(id: string, mensaje: string): Prom
     } = await supabase.auth.getUser();
     // Comprobación en el servidor: esconder el botón no basta, la acción se
     // podría invocar directamente.
-    if (!user?.email || !CORREOS_AVISO_GESTOR.includes(user.email)) {
+    if (!user?.email || !CORREOS_GESTION_RECLAMACIONES.includes(user.email)) {
       return { error: 'No tienes permiso para enviar avisos a los gestores.' };
     }
     const deAdminId = await getCurrentAdmin(supabase);
@@ -323,5 +339,86 @@ export async function avisarGestorReclamacion(id: string, mensaje: string): Prom
     return { success: true, para: gestor.usuario, correoEnviado };
   } catch (e) {
     return { error: registrarError('reclamaciones:avisoGestor', e, 'No se pudo enviar el aviso') };
+  }
+}
+
+
+export type EditarImporteState = { error: string } | { success: true } | undefined;
+
+/**
+ * Corrige los importes de una reclamación SIN tocar su estado ni quién la
+ * resolvió.
+ *
+ * Antes la única forma de cambiar el importe aprobado era volver a
+ * aprobarla, y eso reescribía `revisado_por_id`: "Resuelta por" pasaba a
+ * ser quien corregía la cifra y se perdía quién había decidido de verdad.
+ *
+ * El aprobado solo se puede tocar si la reclamación está aprobada: en
+ * cualquier otro estado no hay importe aprobado que corregir.
+ */
+export async function editarImporteReclamacion(
+  id: string,
+  importeTexto: string,
+  importeAprobadoTexto: string | null
+): Promise<EditarImporteState> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user?.email || !CORREOS_GESTION_RECLAMACIONES.includes(user.email)) {
+      return { error: 'No tienes permiso para editar importes.' };
+    }
+    const adminId = await getCurrentAdmin(supabase);
+
+    const importe = leerImporte(importeTexto);
+    if (importe === null) return { error: 'El importe reclamado no puede quedar vacío.' };
+    if (Number.isNaN(importe)) return { error: 'El importe reclamado no es un número válido.' };
+
+    const { data: actual } = await supabase
+      .from('reclamaciones')
+      .select('importe, importe_aprobado, estado, centro_id, nombre_rider')
+      .eq('id', id)
+      .maybeSingle();
+    if (!actual) return { error: 'Esa reclamación no existe.' };
+
+    const cambios: Record<string, unknown> = { importe, updated_at: new Date().toISOString() };
+    let aprobado: number | null = null;
+    if (actual.estado === 'aprobada') {
+      aprobado = leerImporte(importeAprobadoTexto ?? '');
+      if (aprobado === null) return { error: 'Una reclamación aprobada necesita importe aprobado.' };
+      if (Number.isNaN(aprobado)) return { error: 'El importe aprobado no es un número válido.' };
+      cambios.importe_aprobado = aprobado;
+    }
+    // El tope de la columna es numeric(10,2): por encima, Postgres revienta.
+    if (importe > 99_999_999 || (aprobado ?? 0) > 99_999_999) return { error: 'El importe es demasiado grande.' };
+
+    // .select() a propósito: si el RLS bloquea el UPDATE no da error, solo
+    // no cambia nada, y así se detecta en vez de fingir que se guardó.
+    const { data: guardado, error } = await supabase.from('reclamaciones').update(cambios).eq('id', id).select('id');
+    if (error) return { error: error.message };
+    if (!guardado || guardado.length === 0) return { error: 'No se pudo guardar: no tienes acceso a esta reclamación.' };
+
+    const eur = (n: unknown) => (n === null || n === undefined ? '—' : `${Number(n).toFixed(2).replace('.', ',')} €`);
+    const detalle = [
+      Number(actual.importe) !== importe ? `reclamado ${eur(actual.importe)} → ${eur(importe)}` : null,
+      actual.estado === 'aprobada' && Number(actual.importe_aprobado) !== aprobado
+        ? `aprobado ${eur(actual.importe_aprobado)} → ${eur(aprobado)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join('; ');
+    await supabase.from('auditoria').insert({
+      admin_id: adminId,
+      accion: 'Editar importe de reclamación',
+      detalles: `${actual.nombre_rider}: ${detalle || 'sin cambios'}`,
+      centro_id: actual.centro_id ?? null,
+    });
+
+    revalidatePath('/dashboard/reclamaciones');
+    revalidatePath('/rider/dashboard');
+    return { success: true };
+  } catch (e) {
+    return { error: registrarError('reclamaciones:editarImporte', e, 'No se pudo guardar el importe') };
   }
 }

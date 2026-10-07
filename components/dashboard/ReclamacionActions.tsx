@@ -53,14 +53,23 @@ export function ReclamacionActions({
       return;
     }
     setError(null);
-    const limpio = importeTexto.trim().replace(',', '.');
-    const importeNum = limpio === '' ? null : Number(limpio);
     startTransition(async () => {
-      await resolverReclamacion(id, resolviendo, texto, {
-        importeAprobado: Number.isFinite(importeNum as number) ? importeNum : null,
-        viaPago: via || null,
-      });
-      setResolviendo(null);
+      // El importe viaja tal cual se escribió: lo interpreta el servidor, que
+      // entiende "19,85" y "1.234,50". Si algo no cuadra, el error se enseña
+      // aquí en vez de perderse (antes la ventana se cerraba sin decir nada).
+      // La acción DEVUELVE el error en vez de lanzarlo: en producción Next
+      // oculta el texto de los errores lanzados y el gestor solo vería uno
+      // genérico.
+      try {
+        const r = await resolverReclamacion(id, resolviendo, texto, {
+          importeAprobadoTexto: importeTexto,
+          viaPago: via || null,
+        });
+        if ('error' in r) setError(r.error);
+        else setResolviendo(null);
+      } catch {
+        setError('No se pudo guardar. Inténtalo de nuevo.');
+      }
     });
   }
 

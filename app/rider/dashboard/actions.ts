@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { incidenciaSchema, ausenciaSchema, ALLOWED_IMAGE_MIME, ALLOWED_DOC_MIME, MAX_FILE_BYTES, validarArchivo, reclamacionSchema } from '@/lib/validations';
 import { subirArchivoDrive } from '@/lib/googleDrive';
 
-import { mensajeError, registrarError, canonicalEmail } from '@/lib/utils';
+import { mensajeError, registrarError, canonicalEmail, leerImporte } from '@/lib/utils';
 import { moduloRiderActivo } from '@/lib/modulos';
 
 /**
@@ -310,12 +310,13 @@ export async function enviarReclamacion(_prev: FormActionState, formData: FormDa
       return { error: 'Esta opción no está disponible' };
     }
 
-    const importeCrudo = String(formData.get('importe') ?? '').trim().replace(',', '.');
+    const importeLeido = leerImporte(String(formData.get('importe') ?? ''));
+    if (Number.isNaN(importeLeido)) return { error: 'El importe no es un número válido (ej: 19,85).' };
     const parsed = reclamacionSchema.safeParse({
       dni: formData.get('dni'),
       motivoId: Number(formData.get('motivoId')),
       periodo: formData.get('periodo'),
-      importe: importeCrudo === '' ? null : Number(importeCrudo),
+      importe: importeLeido,
       comentario: formData.get('comentario') || null,
     });
 

@@ -303,11 +303,12 @@ export function normalizarNombreCentro(s: string): string {
 export const ROLES_PUEDEN_REPORTAR = ['super_admin', 'administrador', 'moderador', 'admin_zona'] as const;
 
 /**
- * Quién ve el botón "Avisar al gestor" en Reclamaciones de nómina. Sirve
- * para escribir al gestor que aprobó o rechazó una reclamación (por ejemplo,
- * para decirle que no le correspondía) con el mensaje que se quiera.
+ * Permisos especiales en Reclamaciones de nómina, por encima de los de
+ * cualquier gestor:
+ *   · Avisar al gestor que aprobó o rechazó una reclamación.
+ *   · Corregir los importes sin cambiar el estado ni quién la resolvió.
  */
-export const CORREOS_AVISO_GESTOR = [
+export const CORREOS_GESTION_RECLAMACIONES = [
   'nicolas.correa@closerlogistics.com',
   'rodrigo.heredero@closerlogistics.com',
   'elkin.moreno@closerlogistics.com',
@@ -316,3 +317,24 @@ export const CORREOS_AVISO_GESTOR = [
 export const CORREOS_GESTION_MODULOS = ['elkin.moreno@closerlogistics.com'];
 
 export const CORREOS_ACCESO_STOCK_TEMPORAL = ['elkin.moreno@closerlogistics.com', 'rodrigo.heredero@closerlogistics.com', 'nicolas.correa@closerlogistics.com', 'cesar.buitrago@closerlogistics.com'];
+
+/**
+ * Lee un importe escrito a mano, en formato español o internacional:
+ * "19,85", "1.234,50", "1234.5", "1 234,50". Devuelve null si está vacío y
+ * NaN si no es un número.
+ *
+ * Se usa en TODOS los sitios donde se escribe un importe de reclamación
+ * (formulario del rider, aprobar y editar importe), para que el panel entero
+ * entienda lo mismo.
+ *
+ * Existe porque la lectura anterior solo cambiaba la coma por un punto, así
+ * que "1.234,50" se convertía en "1.234.50", no era un número y la
+ * reclamación quedaba aprobada SIN importe y sin avisar a nadie.
+ */
+export function leerImporte(texto: string): number | null {
+  let t = texto.trim().replace(/\s|€/g, '');
+  if (t === '') return null;
+  if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); // 1.234,50 -> 1234.50
+  else if ((t.match(/\./g) ?? []).length > 1) t = t.replace(/\./g, ''); // 1.234.567 -> 1234567
+  return /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+}

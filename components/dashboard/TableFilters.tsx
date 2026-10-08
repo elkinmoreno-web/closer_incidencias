@@ -11,6 +11,17 @@ interface Opcion {
   label: string;
 }
 
+/**
+ * Desplegable extra de un solo módulo (ej. "Se paga en" en Reclamaciones),
+ * para no añadir aquí una prop fija por cada filtro que solo usa una página.
+ * `vacio` es la etiqueta de la opción sin filtro.
+ */
+export interface SelectExtra {
+  param: string;
+  vacio: string;
+  opciones: Opcion[];
+}
+
 interface MotivoOpcion {
   id: number;
   nombre: string;
@@ -28,6 +39,7 @@ export function TableFilters({
   gestores,
   showDateRange = false,
   showMonth = false,
+  selectsExtra,
 }: {
   searchPlaceholder?: string;
   estados?: Opcion[];
@@ -40,6 +52,7 @@ export function TableFilters({
   showDateRange?: boolean;
   /** Selector de mes (aaaa-mm) para los módulos que van por periodo, como Reclamaciones. */
   showMonth?: boolean;
+  selectsExtra?: SelectExtra[];
 }) {
   const { t, idioma } = useIdioma();
   const router = useRouter();
@@ -191,6 +204,20 @@ export function TableFilters({
           ))}
         </select>
       )}
+
+      {selectsExtra?.map((sel) => (
+        <select
+          key={sel.param}
+          defaultValue={searchParams.get(sel.param) ?? ''}
+          onChange={(e) => setParam(sel.param, e.target.value)}
+          className="rounded-lg border border-border px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="">{sel.vacio}</option>
+          {sel.opciones.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      ))}
 
       {showDateRange && (
         <>

@@ -24,6 +24,8 @@ export function ExportarReclamacionesButton() {
           ciudad: searchParams.get('ciudad') ?? undefined,
           periodo: searchParams.get('periodo') ?? undefined,
           q: searchParams.get('q') ?? undefined,
+          via: searchParams.get('via') ?? undefined,
+          reg: searchParams.get('reg') ?? undefined,
         });
         if (filas.length === 0) {
           setError(t('exportar.sinFilas'));
@@ -47,6 +49,8 @@ export function ExportarReclamacionesButton() {
             [t('admReclamaciones.colRespuesta')]: f.respuesta ?? '',
             [t('admReclamaciones.colResueltaPor')]: f.resueltaPor ?? '',
             [t('admReclamaciones.colFechaResolucion')]: f.fechaResolucion ?? '',
+            [t('admReclamaciones.regularizada')]: f.fechaRegularizacion ?? '',
+            [`${t('admReclamaciones.regularizada')} (${t('admReclamaciones.colResueltaPor').toLowerCase()})`]: f.regularizadaPor ?? '',
           }))
         );
         const libro = XLSX.utils.book_new();

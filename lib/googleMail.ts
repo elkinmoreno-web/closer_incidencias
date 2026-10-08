@@ -12,10 +12,18 @@ import { obtenerAccessToken } from '@/lib/googleDrive';
 
 const ALIAS_REMITENTE = 'Stock Closer Logistics';
 
-/** Opciones por correo. El alias es el NOMBRE visible; la dirección no se puede cambiar (ver nota en cuentaGmail). */
+/** Opciones por correo. El alias es el NOMBRE visible. */
 export interface OpcionesCorreo {
   alias?: string;
   responderA?: string;
+  /**
+   * Dirección remitente distinta de la cuenta autorizada. Solo funciona si
+   * esa dirección está añadida como "Enviar como" (send-as) en la cuenta de
+   * GOOGLE_MAIL_FROM_ADDRESS y verificada. Si no lo está, Gmail NO da error:
+   * cambia el From por la cuenta autorizada y el correo sale igual, así
+   * que pedirlo nunca rompe el envío.
+   */
+  desde?: string;
 }
 
 function base64UrlDesdeMime(mime: string): string {
@@ -41,9 +49,9 @@ function cabeceraCodificada(texto: string): string {
   return `=?UTF-8?B?${Buffer.from(texto, 'utf-8').toString('base64')}?=`;
 }
 
-// La API de Gmail firma "From" con la cuenta autenticada — no se puede
-// suplantar otra dirección, pero el NOMBRE que se muestra (el alias)
-// sí es libre. La dirección real se fija por variable de entorno en
+// La API de Gmail firma "From" con la cuenta autenticada: solo acepta
+// otra dirección si es un alias "Enviar como" verificado de esa cuenta
+// (ver OpcionesCorreo.desde). El NOMBRE que se muestra sí es libre. La dirección real se fija por variable de entorno en
 // vez de pedirla a users.getProfile: ese endpoint exige un scope de
 // LECTURA (gmail.readonly/metadata) que no se autorizó — solo se pidió
 // gmail.send (escritura), y da 403 insufficient scope si se intenta.
@@ -58,7 +66,7 @@ export async function enviarCorreoGmail(destinatarios: string[], asunto: string,
   const cuenta = cuentaGmail();
 
   const mime =
-    `From: ${cabeceraCodificada(opciones.alias ?? ALIAS_REMITENTE)} <${cuenta}>\r\n` +
+    `From: ${cabeceraCodificada(opciones.alias ?? ALIAS_REMITENTE)} <${opciones.desde ?? cuenta}>\r\n` +
     (opciones.responderA ? `Reply-To: ${opciones.responderA}\r\n` : '') +
     `To: ${destinatarios.join(', ')}\r\n` +
     `Subject: ${asunto.match(/^[\x20-\x7E]*$/) ? asunto : `=?UTF-8?B?${Buffer.from(asunto, 'utf-8').toString('base64')}?=`}\r\n` +

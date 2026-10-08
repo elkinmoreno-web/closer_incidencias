@@ -150,13 +150,14 @@ export async function sincronizarZonasConexion(): Promise<ResultadoSincronizacio
     // tildes/mayúsculas/espacios) — mismo criterio defensivo que el
     // resto del sistema: nunca se inventa una relación, se listan las
     // que no coinciden para revisión manual.
-    const { data: centros } = await supabase.from('centros').select('id, nombre');
+    const { data: centros } = await supabase.from('centros').select('id, nombre, ciudades(nombre)');
     const zonasSinCentro: string[] = [];
     const centrosSinZona: string[] = [];
     const actualizaciones: { id: number; zona_conexion_id: number }[] = [];
 
     for (const centro of centros ?? []) {
-      const zonaId = idPorNombreZona.get(normalizarNombreCentro(centro.nombre));
+      const ciudad = (centro.ciudades as unknown as { nombre: string } | null)?.nombre ?? null;
+      const zonaId = buscarZonaDeCentro(centro.nombre, ciudad, idPorNombreZona);
       if (zonaId) actualizaciones.push({ id: centro.id, zona_conexion_id: zonaId });
       else centrosSinZona.push(centro.nombre);
     }
@@ -189,6 +190,64 @@ export async function sincronizarZonasConexion(): Promise<ResultadoSincronizacio
     await registrarLog(supabase, resultado);
     return resultado;
   }
+}
+
+/**
+ * Prefijos de centros que NO son la ciudad: "MCD Soria" o "FD Cuenca" no
+ * tienen por qué estar en la zona de Soria o Cuenca del mapa, así que no
+ * se les quita la primera palabra para buscar.
+ */
+const PREFIJOS_NO_CIUDAD = new Set(['mcd', 'fd', 'nrsur']);
+
+/**
+ * Encuentra la zona del mapa que corresponde a un centro.
+ *
+ * El mapa y el CRM no nombran igual: el CRM antepone la ciudad
+ * ("JEREZ ROTA", "MALAGA MARBELLA", "LA CORUNA FERROL") y el mapa no
+ * ("ROTA", "MARBELLA", "FERROL"); el centro de la ciudad es "JEREZ
+ * CENTRO" en el CRM y "JEREZ" en el mapa, o al revés ("HUELVA" frente a
+ * "HUELVA CENTRO"). Solo con el nombre exacto se quedaban 26 centros sin
+ * zona, entre ellos los 6 de Jerez.
+ *
+ * Se prueban variantes de más a menos literal y gana la primera que
+ * existe tal cual. Si ninguna existe, se acepta una zona que EMPIECE por
+ * la variante ("IBIZA" → "IBIZA EIVISSA"), pero solo si es la única: con
+ * dos candidatas no se adivina.
+ */
+export function buscarZonaDeCentro(
+  nombreCentro: string,
+  nombreCiudad: string | null,
+  idPorNombreZona: Map<string, number>
+): number | undefined {
+  const centro = normalizarNombreCentro(nombreCentro);
+  const ciudad = nombreCiudad ? normalizarNombreCentro(nombreCiudad) : null;
+
+  const bases = [centro];
+  // Sin la ciudad delante ("la coruna ferrol" → "ferrol").
+  if (ciudad && centro.startsWith(`${ciudad} `)) bases.push(centro.slice(ciudad.length + 1));
+  // Sin la primera palabra, para cuando la ciudad del CRM no coincide con
+  // el prefijo ("castellon villarreal", ciudad VILLARREAL).
+  const [primera, ...resto] = centro.split(' ');
+  if (resto.length > 0 && !PREFIJOS_NO_CIUDAD.has(primera)) bases.push(resto.join(' '));
+
+  const variantes: string[] = [];
+  for (const b of bases) {
+    variantes.push(b);
+    if (b.endsWith(' centro')) variantes.push(b.slice(0, -' centro'.length));
+    else variantes.push(`${b} centro`);
+    if (!b.startsWith('el ')) variantes.push(`el ${b}`);
+  }
+
+  for (const v of variantes) {
+    const id = idPorNombreZona.get(v);
+    if (id !== undefined) return id;
+  }
+
+  for (const v of variantes) {
+    const candidatas = Array.from(idPorNombreZona.entries()).filter(([nombre]) => nombre.startsWith(`${v} `));
+    if (candidatas.length === 1) return candidatas[0][1];
+  }
+  return undefined;
 }
 
 async function registrarLog(supabase: ReturnType<typeof createAdminClient>, r: ResultadoSincronizacionZonas) {

@@ -9,6 +9,8 @@ import { formatFecha } from '@/lib/utils';
 import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { AvisoGestorButton } from '@/components/dashboard/AvisoGestorButton';
 import { EditarImporteButton } from '@/components/dashboard/EditarImporteButton';
+import { RegularizarButton } from '@/components/dashboard/RegularizarButton';
+import { aplicarFiltrosPago } from '@/lib/reclamacionesFiltros';
 import { CORREOS_GESTION_RECLAMACIONES } from '@/lib/utils';
 import { getAdminActual } from '@/lib/supabase/server';
 import { urlArchivoDrive } from '@/lib/driveUrl';
@@ -52,7 +54,7 @@ export default async function ReclamacionesPage({
   let query = supabase
     .from('reclamaciones')
     .select(
-      '*, centros(id, nombre), motivos_reclamacion(id, nombre, nombre_en), admins:revisado_por_id(usuario)',
+      '*, centros(id, nombre), motivos_reclamacion(id, nombre, nombre_en), admins:revisado_por_id(usuario), regularizador:regularizada_por_id(usuario)',
       { count: 'exact' }
     )
     // Las enviadas a la papelera se ven (y se recuperan) en /dashboard/papelera.
@@ -62,6 +64,7 @@ export default async function ReclamacionesPage({
     .range(from, to);
 
   if (searchParams.estado) query = query.eq('estado', searchParams.estado);
+  query = aplicarFiltrosPago(query, searchParams.via, searchParams.reg);
   if (searchParams.centro) query = query.eq('centro_id', Number(searchParams.centro));
   if (searchParams.motivo) query = query.eq('motivo_id', Number(searchParams.motivo));
   // El periodo llega como aaaa-mm y en la tabla es el día 1 de ese mes.
@@ -117,6 +120,25 @@ export default async function ReclamacionesPage({
         ciudades={zona.ciudades ?? []}
         centros={zona.centros ?? []}
         showMonth
+        selectsExtra={[
+          {
+            param: 'via',
+            vacio: t('admReclamaciones.filtroViaTodas'),
+            opciones: [
+              { value: 'primera_remesa', label: t('accReclamacion.primeraRemesa') },
+              { value: 'siguiente_nomina', label: t('accReclamacion.siguienteNomina') },
+            ],
+          },
+          {
+            param: 'reg',
+            vacio: t('admReclamaciones.filtroRegSinRegularizar'),
+            opciones: [
+              { value: 'pendientes', label: t('admReclamaciones.filtroRegPendientes') },
+              { value: 'si', label: t('admReclamaciones.filtroRegRegularizadas') },
+              { value: 'todas', label: t('admReclamaciones.filtroRegTodas') },
+            ],
+          },
+        ]}
       />
 
       <div className="overflow-x-auto rounded-card border border-border bg-surface">
@@ -226,6 +248,15 @@ export default async function ReclamacionesPage({
                         {r.fecha_gestion && <div className="text-ink-muted">{formatFecha(r.fecha_gestion)}</div>}
                       </div>
                     )}
+                    {r.regularizada_en && (
+                      <div className="mt-2 text-xs">
+                        <span className="whitespace-nowrap rounded-full bg-teal-100 px-2 py-0.5 font-semibold text-teal-800">
+                          {t('admReclamaciones.regularizada')}
+                        </span>
+                        <div className="mt-1 font-medium text-ink">{r.regularizador?.usuario ?? '—'}</div>
+                        <div className="text-ink-muted">{formatFecha(r.regularizada_en)}</div>
+                      </div>
+                    )}
                   </td>
                   <td className="max-w-[14rem] px-3 py-3 text-xs">
                     {r.respuesta ? (
@@ -250,8 +281,20 @@ export default async function ReclamacionesPage({
                           importeAprobado={r.importe_aprobado === null ? null : Number(r.importe_aprobado)}
                         />
                         <AvisoGestorButton id={r.id} gestor={r.admins?.usuario ?? null} />
+                        {r.estado === 'aprobada' && (
+                          <RegularizarButton
+                            id={r.id}
+                            regularizada={!!r.regularizada_en}
+                            rider={r.nombre_rider}
+                            importeAprobado={r.importe_aprobado === null ? null : Number(r.importe_aprobado)}
+                            viaPago={r.via_pago}
+                          />
+                        )}
                       </>
                     )}
+                    {/* Una regularizada ya está pagada: ni se cambia de estado
+                        ni va a la papelera (el servidor también lo impide). */}
+                    {!r.regularizada_en && (
                     <ReclamacionActions
                       id={r.id}
                       estado={r.estado}
@@ -260,6 +303,7 @@ export default async function ReclamacionesPage({
                       importeAprobado={r.importe_aprobado === null ? null : Number(r.importe_aprobado)}
                       viaPago={r.via_pago}
                     />
+                    )}
                     </div>
                   </td>
                 </tr>

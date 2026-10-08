@@ -9,6 +9,7 @@ import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
 import { nombreSegunIdioma } from '@/lib/i18n/traducir';
 import type { EstadoReclamacion, ViaPagoReclamacion } from '@/lib/types';
 import { moduloAdminActivo } from '@/lib/modulos';
+import { aplicarFiltrosPago } from '@/lib/reclamacionesFiltros';
 
 async function getCurrentAdmin(supabase: ReturnType<typeof createClient>) {
   const {
@@ -88,6 +89,12 @@ export async function resolverReclamacion(
     if (importeAprobado > 99_999_999) return { error: 'El importe aprobado es demasiado grande' };
   }
 
+  // Una regularizada ya está pagada: cambiarle el estado dejaría pagado algo
+  // que figura como rechazado o en trámite. Primero hay que deshacer la
+  // regularización, que solo pueden hacer los de CORREOS_GESTION_RECLAMACIONES.
+  const { data: previa } = await supabase.from('reclamaciones').select('regularizada_en').eq('id', id).maybeSingle();
+  if (previa?.regularizada_en) return { error: 'Esta reclamación ya está regularizada (pagada). No se puede cambiar su estado.' };
+
   const { data: fila, error } = await supabase
     .from('reclamaciones')
     .update({
@@ -129,6 +136,9 @@ export async function enviarReclamacionAPapelera(id: string) {
     .from('reclamaciones')
     .update({ estado: 'papelera', eliminado_por_id: adminId, fecha_eliminacion: new Date().toISOString() })
     .eq('id', id)
+    // Una regularizada ya está pagada: no se tira a la papelera. En la
+    // tabla ni se ofrece el botón; esto cubre la llamada directa.
+    .is('regularizada_en', null)
     .select('centro_id')
     .single();
 
@@ -181,6 +191,8 @@ export interface FilaExportReclamacion {
   respuesta: string | null;
   resueltaPor: string | null;
   fechaResolucion: string | null;
+  regularizadaPor: string | null;
+  fechaRegularizacion: string | null;
 }
 
 /** Exporta TODAS las que coinciden con los filtros activos, no solo la página visible. */
@@ -191,6 +203,8 @@ export async function exportarReclamaciones(filtros: {
   ciudad?: string;
   periodo?: string;
   q?: string;
+  via?: string;
+  reg?: string;
 }): Promise<FilaExportReclamacion[]> {
   const supabase = createClient();
   const {
@@ -203,9 +217,11 @@ export async function exportarReclamaciones(filtros: {
 
   let query = supabase
     .from('reclamaciones')
-    .select('created_at, periodo, nombre_rider, dni, importe, importe_aprobado, via_pago, comentario, estado, respuesta, fecha_gestion, centros(nombre), motivos_reclamacion(nombre, nombre_en), admins:revisado_por_id(usuario)')
+    .select('created_at, periodo, nombre_rider, dni, importe, importe_aprobado, via_pago, comentario, estado, respuesta, fecha_gestion, regularizada_en, centros(nombre), motivos_reclamacion(nombre, nombre_en), admins:revisado_por_id(usuario), regularizador:regularizada_por_id(usuario)')
     .neq('estado', 'papelera')
     .order('created_at', { ascending: false });
+
+  query = aplicarFiltrosPago(query, filtros.via, filtros.reg);
 
   if (filtros.estado) query = query.eq('estado', filtros.estado);
   if (filtros.centro) query = query.eq('centro_id', Number(filtros.centro));
@@ -244,6 +260,8 @@ export async function exportarReclamaciones(filtros: {
       respuesta: r.respuesta,
       resueltaPor: (r.admins as unknown as { usuario: string } | null)?.usuario ?? null,
       fechaResolucion: r.fecha_gestion ? formatFecha(r.fecha_gestion) : null,
+      regularizadaPor: (r.regularizador as unknown as { usuario: string } | null)?.usuario ?? null,
+      fechaRegularizacion: r.regularizada_en ? formatFecha(r.regularizada_en) : null,
     };
   });
 }
@@ -420,5 +438,64 @@ export async function editarImporteReclamacion(
     return { success: true };
   } catch (e) {
     return { error: registrarError('reclamaciones:editarImporte', e, 'No se pudo guardar el importe') };
+  }
+}
+
+export type RegularizarState = { error: string } | { success: true } | undefined;
+
+/**
+ * Marca (o desmarca) una reclamación aprobada como regularizada: el pago ya
+ * se ha hecho en nómina.
+ *
+ * Al marcarla sale del listado por defecto —así no se vuelve a revisar— y
+ * pasa al filtro "Regularizadas", que ven todos. Desmarcar existe para
+ * corregir un clic equivocado. Solo los de CORREOS_GESTION_RECLAMACIONES.
+ */
+export async function marcarRegularizada(id: string, regularizada: boolean): Promise<RegularizarState> {
+  try {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user?.email || !CORREOS_GESTION_RECLAMACIONES.includes(user.email)) {
+      return { error: 'No tienes permiso para regularizar reclamaciones.' };
+    }
+    const adminId = await getCurrentAdmin(supabase);
+
+    const { data: actual } = await supabase
+      .from('reclamaciones')
+      .select('estado, regularizada_en, importe_aprobado, centro_id, nombre_rider')
+      .eq('id', id)
+      .maybeSingle();
+    if (!actual) return { error: 'Esa reclamación no existe.' };
+    if (regularizada && actual.estado !== 'aprobada') return { error: 'Solo se pueden regularizar las reclamaciones aprobadas.' };
+    // Sin importe no se sabe qué se ha pagado: que se corrija antes con el lápiz.
+    if (regularizada && actual.importe_aprobado === null) {
+      return { error: 'Falta el importe aprobado. Corrígelo con el lápiz antes de regularizar.' };
+    }
+    if (regularizada === !!actual.regularizada_en) return { success: true }; // otro ya lo hizo: nada que cambiar
+
+    const { data: guardado, error } = await supabase
+      .from('reclamaciones')
+      .update({
+        regularizada_en: regularizada ? new Date().toISOString() : null,
+        regularizada_por_id: regularizada ? adminId : null,
+      })
+      .eq('id', id)
+      .select('id');
+    if (error) return { error: error.message };
+    if (!guardado || guardado.length === 0) return { error: 'No se pudo guardar: no tienes acceso a esta reclamación.' };
+
+    await supabase.from('auditoria').insert({
+      admin_id: adminId,
+      accion: regularizada ? 'Regularizar reclamación' : 'Deshacer regularización de reclamación',
+      detalles: `${actual.nombre_rider}: ${Number(actual.importe_aprobado ?? 0).toFixed(2).replace('.', ',')} €`,
+      centro_id: actual.centro_id ?? null,
+    });
+
+    revalidatePath('/dashboard/reclamaciones');
+    return { success: true };
+  } catch (e) {
+    return { error: registrarError('reclamaciones:regularizar', e, 'No se pudo guardar la regularización') };
   }
 }

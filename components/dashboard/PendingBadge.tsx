@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 /**
- * Contador de pendientes (incidencias o ausencias) que se actualiza
+ * Contador de pendientes (incidencias, ausencias o reclamaciones) que se actualiza
  * solo, en tiempo real, sin recargar la página ni hacer polling.
  * Requiere que la tabla esté en la publicación de Realtime.
  *
@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/client';
  * el mismo, la segunda intenta añadir un listener a un canal que la
  * primera ya suscribió, y Supabase lo rechaza en tiempo de ejecución.
  */
-export function PendingBadge({ tabla, initialCount }: { tabla: 'incidencias' | 'ausencias'; initialCount: number }) {
+export function PendingBadge({ tabla, initialCount }: { tabla: 'incidencias' | 'ausencias' | 'reclamaciones'; initialCount: number }) {
   const [count, setCount] = useState(initialCount);
   const idInstancia = useId();
 
@@ -22,8 +22,8 @@ export function PendingBadge({ tabla, initialCount }: { tabla: 'incidencias' | '
     const supabase = createClient();
     let pendiente: ReturnType<typeof setTimeout> | null = null;
     let ultimo = 0;
-    // Freno: hay hasta 4 de estos contadores montados por usuario (sidebar
-    // de escritorio + cajón móvil, x incidencias y ausencias). Sin freno,
+    // Freno: hay hasta 6 de estos contadores montados por usuario (sidebar
+    // de escritorio + cajón móvil, x incidencias, ausencias y reclamaciones). Sin freno,
     // cada cambio en la tabla lanzaba un COUNT por cada instancia, de cada
     // usuario conectado — con varias personas trabajando a la vez eso es
     // una avalancha de consultas por algo que solo muestra un número.

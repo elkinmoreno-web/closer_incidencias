@@ -8,7 +8,7 @@ import { ExportarReclamacionesButton } from '@/components/dashboard/ExportarRecl
 import { formatFecha } from '@/lib/utils';
 import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { AvisoGestorButton } from '@/components/dashboard/AvisoGestorButton';
-import { EditarImporteButton } from '@/components/dashboard/EditarImporteButton';
+import { EditarReclamacionButton } from '@/components/dashboard/EditarReclamacionButton';
 import { RegularizarButton } from '@/components/dashboard/RegularizarButton';
 import { aplicarFiltrosPago } from '@/lib/reclamacionesFiltros';
 import { CORREOS_GESTION_RECLAMACIONES } from '@/lib/utils';
@@ -274,11 +274,19 @@ export default async function ReclamacionesPage({
                     <div className="flex items-center justify-end gap-1.5">
                     {tienePermisosEspeciales && (
                       <>
-                        <EditarImporteButton
-                          id={r.id}
-                          estado={r.estado}
-                          importe={r.importe === null ? null : Number(r.importe)}
-                          importeAprobado={r.importe_aprobado === null ? null : Number(r.importe_aprobado)}
+                        <EditarReclamacionButton
+                          reclamacion={{
+                            id: r.id,
+                            estado: r.estado,
+                            motivoId: r.motivo_id,
+                            periodo: String(r.periodo).slice(0, 7),
+                            importe: r.importe === null ? null : Number(r.importe),
+                            importeAprobado: r.importe_aprobado === null ? null : Number(r.importe_aprobado),
+                            viaPago: r.via_pago,
+                            comentario: r.comentario,
+                            respuesta: r.respuesta,
+                          }}
+                          motivos={(motivos ?? []).map((m) => ({ id: m.id, nombre: nombreSegunIdioma(idioma, m.nombre, m.nombre_en) }))}
                         />
                         <AvisoGestorButton id={r.id} gestor={r.admins?.usuario ?? null} />
                         {r.estado === 'aprobada' && (

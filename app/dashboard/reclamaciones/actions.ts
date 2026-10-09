@@ -337,8 +337,14 @@ export async function avisarGestorReclamacion(id: string, mensaje: string): Prom
 
     let correoEnviado = false;
     try {
+      // Sale desde la dirección de quien escribe (Nicolás, Rodrigo...) y
+      // con su nombre: para el gestor es un mensaje de esa persona, no un
+      // aviso del sistema. Requiere que esa dirección sea alias "Enviar
+      // como" de la cuenta de envío; si no, Gmail lo manda desde la cuenta
+      // de envío y el Reply-To sigue llevando la respuesta a quien escribe.
       await enviarCorreoGmail([emailGestor], asuntoAvisoGestor(r.nombre_rider, concepto), html, {
-        alias: 'Closer CRM',
+        alias: autor?.usuario ?? 'Closer CRM',
+        desde: user.email,
         responderA: user.email,
       });
       correoEnviado = true;
@@ -361,55 +367,87 @@ export async function avisarGestorReclamacion(id: string, mensaje: string): Prom
 }
 
 
-export type EditarImporteState = { error: string } | { success: true } | undefined;
+export type EditarReclamacionState = { error: string } | { success: true } | undefined;
+
+/** Todo lo editable de una reclamación, tal cual sale del formulario. */
+export interface DatosEdicionReclamacion {
+  motivoId: number;
+  /** aaaa-mm */
+  periodo: string;
+  importeTexto: string;
+  comentario: string;
+  respuesta: string;
+  /** Solo cuentan si la reclamación está aprobada. */
+  importeAprobadoTexto: string;
+  viaPago: ViaPagoReclamacion | '';
+}
 
 /**
- * Corrige los importes de una reclamación SIN tocar su estado ni quién la
- * resolvió.
+ * Corrige cualquier dato de una reclamación SIN resolverla de nuevo.
  *
- * Antes la única forma de cambiar el importe aprobado era volver a
- * aprobarla, y eso reescribía `revisado_por_id`: "Resuelta por" pasaba a
- * ser quien corregía la cifra y se perdía quién había decidido de verdad.
+ * Existe porque la única forma de corregir algo era volver a aprobarla, y
+ * eso reescribía `revisado_por_id`: "Resuelta por" pasaba a ser quien
+ * corregía y se perdía quién había decidido de verdad. Aquí no se tocan ni
+ * el estado, ni quién la resolvió, ni el rider ni su centro (el centro
+ * decide qué gestores la ven).
  *
- * El aprobado solo se puede tocar si la reclamación está aprobada: en
- * cualquier otro estado no hay importe aprobado que corregir.
+ * Importe aprobado y vía de pago solo se tocan si está aprobada: en otro
+ * estado no existen. Cada campo que cambia queda en Auditoría con su valor
+ * anterior. Solo los de CORREOS_GESTION_RECLAMACIONES.
  */
-export async function editarImporteReclamacion(
-  id: string,
-  importeTexto: string,
-  importeAprobadoTexto: string | null
-): Promise<EditarImporteState> {
+export async function editarReclamacion(id: string, datos: DatosEdicionReclamacion): Promise<EditarReclamacionState> {
   try {
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user?.email || !CORREOS_GESTION_RECLAMACIONES.includes(user.email)) {
-      return { error: 'No tienes permiso para editar importes.' };
+      return { error: 'No tienes permiso para editar reclamaciones.' };
     }
     const adminId = await getCurrentAdmin(supabase);
 
-    const importe = leerImporte(importeTexto);
-    if (importe === null) return { error: 'El importe reclamado no puede quedar vacío.' };
-    if (Number.isNaN(importe)) return { error: 'El importe reclamado no es un número válido.' };
-
     const { data: actual } = await supabase
       .from('reclamaciones')
-      .select('importe, importe_aprobado, estado, centro_id, nombre_rider')
+      .select('motivo_id, periodo, importe, importe_aprobado, via_pago, comentario, respuesta, estado, centro_id, nombre_rider, motivos_reclamacion(nombre)')
       .eq('id', id)
       .maybeSingle();
     if (!actual) return { error: 'Esa reclamación no existe.' };
 
-    const cambios: Record<string, unknown> = { importe, updated_at: new Date().toISOString() };
+    const { data: motivo } = await supabase.from('motivos_reclamacion').select('id, nombre').eq('id', datos.motivoId).maybeSingle();
+    if (!motivo) return { error: 'Elige un concepto válido.' };
+
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(datos.periodo)) return { error: 'Elige el mes de la nómina.' };
+    const periodo = `${datos.periodo}-01`;
+
+    // El reclamado puede quedar vacío: hay riders que no saben cuánto les falta.
+    const importe = leerImporte(datos.importeTexto);
+    if (Number.isNaN(importe)) return { error: 'El importe reclamado no es un número válido (ej: 19,85 o 1.234,50).' };
+
+    const comentario = datos.comentario.trim();
+    const respuesta = datos.respuesta.trim();
+    if (comentario.length > 5000 || respuesta.length > 5000) return { error: 'El texto es demasiado largo.' };
+    if (actual.estado === 'rechazada' && !respuesta) return { error: 'Una reclamación rechazada necesita la respuesta al rider.' };
+
+    const cambios: Record<string, unknown> = {
+      motivo_id: motivo.id,
+      periodo,
+      importe,
+      comentario: comentario || null,
+      respuesta: respuesta || null,
+      updated_at: new Date().toISOString(),
+    };
+
     let aprobado: number | null = null;
     if (actual.estado === 'aprobada') {
-      aprobado = leerImporte(importeAprobadoTexto ?? '');
+      aprobado = leerImporte(datos.importeAprobadoTexto);
       if (aprobado === null) return { error: 'Una reclamación aprobada necesita importe aprobado.' };
-      if (Number.isNaN(aprobado)) return { error: 'El importe aprobado no es un número válido.' };
+      if (Number.isNaN(aprobado)) return { error: 'El importe aprobado no es un número válido (ej: 19,85 o 1.234,50).' };
+      if (!datos.viaPago) return { error: 'Indica si se paga en la primera remesa o en la siguiente nómina.' };
       cambios.importe_aprobado = aprobado;
+      cambios.via_pago = datos.viaPago;
     }
     // El tope de la columna es numeric(10,2): por encima, Postgres revienta.
-    if (importe > 99_999_999 || (aprobado ?? 0) > 99_999_999) return { error: 'El importe es demasiado grande.' };
+    if ((importe ?? 0) > 99_999_999 || (aprobado ?? 0) > 99_999_999) return { error: 'El importe es demasiado grande.' };
 
     // .select() a propósito: si el RLS bloquea el UPDATE no da error, solo
     // no cambia nada, y así se detecta en vez de fingir que se guardó.
@@ -418,17 +456,22 @@ export async function editarImporteReclamacion(
     if (!guardado || guardado.length === 0) return { error: 'No se pudo guardar: no tienes acceso a esta reclamación.' };
 
     const eur = (n: unknown) => (n === null || n === undefined ? '—' : `${Number(n).toFixed(2).replace('.', ',')} €`);
+    const num = (n: unknown) => (n === null || n === undefined ? null : Number(n));
+    const motivoAntes = (actual.motivos_reclamacion as unknown as { nombre: string } | null)?.nombre ?? '—';
     const detalle = [
-      Number(actual.importe) !== importe ? `reclamado ${eur(actual.importe)} → ${eur(importe)}` : null,
-      actual.estado === 'aprobada' && Number(actual.importe_aprobado) !== aprobado
-        ? `aprobado ${eur(actual.importe_aprobado)} → ${eur(aprobado)}`
-        : null,
+      actual.motivo_id !== motivo.id ? `concepto ${motivoAntes} → ${motivo.nombre}` : null,
+      String(actual.periodo).slice(0, 7) !== datos.periodo ? `mes ${String(actual.periodo).slice(0, 7)} → ${datos.periodo}` : null,
+      num(actual.importe) !== importe ? `reclamado ${eur(actual.importe)} → ${eur(importe)}` : null,
+      actual.estado === 'aprobada' && num(actual.importe_aprobado) !== aprobado ? `aprobado ${eur(actual.importe_aprobado)} → ${eur(aprobado)}` : null,
+      actual.estado === 'aprobada' && actual.via_pago !== datos.viaPago ? `vía de pago ${actual.via_pago ?? '—'} → ${datos.viaPago}` : null,
+      (actual.comentario ?? '') !== comentario ? 'comentario' : null,
+      (actual.respuesta ?? '') !== respuesta ? 'respuesta' : null,
     ]
       .filter(Boolean)
       .join('; ');
     await supabase.from('auditoria').insert({
       admin_id: adminId,
-      accion: 'Editar importe de reclamación',
+      accion: 'Editar reclamación',
       detalles: `${actual.nombre_rider}: ${detalle || 'sin cambios'}`,
       centro_id: actual.centro_id ?? null,
     });
@@ -437,7 +480,7 @@ export async function editarImporteReclamacion(
     revalidatePath('/rider/dashboard');
     return { success: true };
   } catch (e) {
-    return { error: registrarError('reclamaciones:editarImporte', e, 'No se pudo guardar el importe') };
+    return { error: registrarError('reclamaciones:editar', e, 'No se pudo guardar la reclamación') };
   }
 }
 

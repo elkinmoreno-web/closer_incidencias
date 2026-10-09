@@ -71,6 +71,12 @@ export function AvisoGestorButton({ id, gestor }: { id: string; gestor: string |
                 <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
                   Aviso enviado a {estado.para}.
                 </div>
+                {estado.correoEnviado && !estado.desdeSuGmail && (
+                  <div className="rounded-xl bg-bg px-4 py-3 text-xs text-ink-muted">
+                    Ha salido desde la cuenta del CRM, no desde tu Gmail. Si respondes, la respuesta te llega igual. Para que salga desde tu
+                    cuenta y quede en tus Enviados, conecta tu Gmail arriba en esta página.
+                  </div>
+                )}
                 {!estado.correoEnviado && (
                   <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     El aviso se ha guardado, pero el correo no ha salido. Inténtalo de nuevo más tarde.

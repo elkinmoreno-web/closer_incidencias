@@ -10,6 +10,8 @@ import { VerTextoCompleto } from '@/components/shared/VerTextoCompleto';
 import { AvisoGestorButton } from '@/components/dashboard/AvisoGestorButton';
 import { EditarReclamacionButton } from '@/components/dashboard/EditarReclamacionButton';
 import { RegularizarButton } from '@/components/dashboard/RegularizarButton';
+import { GmailConexion } from '@/components/dashboard/GmailConexion';
+import { estadoGmailPropio } from '@/lib/gmailPropio';
 import { aplicarFiltrosPago } from '@/lib/reclamacionesFiltros';
 import { CORREOS_GESTION_RECLAMACIONES } from '@/lib/utils';
 import { getAdminActual } from '@/lib/supabase/server';
@@ -38,6 +40,7 @@ export default async function ReclamacionesPage({
   // (cada acción lo vuelve a comprobar en el servidor).
   const yo = await getAdminActual();
   const tienePermisosEspeciales = !!yo?.email && CORREOS_GESTION_RECLAMACIONES.includes(yo.email);
+  const gmail = tienePermisosEspeciales && yo ? await estadoGmailPropio(yo.id) : null;
 
   // El super admin puede apagar este módulo desde Configuración.
   // Esconderlo del menú no basta: sin esto se entraría por la URL.
@@ -109,7 +112,10 @@ export default async function ReclamacionesPage({
             {totalPagina > 0 && ` · ${t('admReclamaciones.totalReclamado')} (${filas.length}): ${totalPagina.toFixed(2).replace('.', ',')} €`}
           </p>
         </div>
-        <ExportarReclamacionesButton />
+        <div className="flex flex-wrap items-start gap-2">
+          {tienePermisosEspeciales && <GmailConexion estado={gmail} />}
+          <ExportarReclamacionesButton />
+        </div>
       </div>
 
       <TableFilters

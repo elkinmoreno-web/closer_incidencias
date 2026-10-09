@@ -1,8 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { enviarCorreoGmail } from '@/lib/googleMail';
+import { createClient, createAdminClient, getAdminActual } from '@/lib/supabase/server';
+import { enviarComoAdmin, desconectarGmailPropio } from '@/lib/gmailPropio';
 import { plantillaAvisoGestor, asuntoAvisoGestor } from '@/lib/avisoGestorCorreo';
 import { registrarError, formatFecha, leerImporte, CORREOS_GESTION_RECLAMACIONES } from '@/lib/utils';
 import { resolverIdioma } from '@/lib/i18n/resolverIdioma';
@@ -266,7 +266,11 @@ export async function exportarReclamaciones(filtros: {
   });
 }
 
-export type AvisoGestorState = { error: string } | { success: true; para: string; correoEnviado: boolean } | undefined;
+export type AvisoGestorState =
+  | { error: string }
+  /** `desdeSuGmail`: salió de la cuenta de quien escribe (ver lib/gmailPropio.ts) y no de la del sistema. */
+  | { success: true; para: string; correoEnviado: boolean; desdeSuGmail: boolean }
+  | undefined;
 
 /**
  * Escribe al gestor que APROBÓ O RECHAZÓ una reclamación.
@@ -336,18 +340,18 @@ export async function avisarGestorReclamacion(id: string, mensaje: string): Prom
     });
 
     let correoEnviado = false;
+    let desdeSuGmail = false;
     try {
-      // Sale desde la dirección de quien escribe (Nicolás, Rodrigo...) y
-      // con su nombre: para el gestor es un mensaje de esa persona, no un
-      // aviso del sistema. Requiere que esa dirección sea alias "Enviar
-      // como" de la cuenta de envío; si no, Gmail lo manda desde la cuenta
-      // de envío y el Reply-To sigue llevando la respuesta a quien escribe.
-      await enviarCorreoGmail([emailGestor], asuntoAvisoGestor(r.nombre_rider, concepto), html, {
-        alias: autor?.usuario ?? 'Closer CRM',
-        desde: user.email,
+      // Sale del Gmail de quien escribe si lo ha conectado: queda en SUS
+      // Enviados y la respuesta del gestor le llega a él. Si no, sale de la
+      // cuenta del sistema con Reply-To a él, que también le llega.
+      const via = await enviarComoAdmin(deAdminId, [emailGestor], asuntoAvisoGestor(r.nombre_rider, concepto), html, {
+        nombre: autor?.usuario ?? user.email,
+        alias: 'Closer CRM',
         responderA: user.email,
       });
       correoEnviado = true;
+      desdeSuGmail = via === 'propio';
       await adm.from('reclamacion_avisos').update({ correo_enviado: true }).eq('id', aviso.id);
     } catch (e) {
       registrarError('reclamaciones:avisoGestorCorreo', e, 'No se pudo enviar el correo al gestor');
@@ -360,7 +364,7 @@ export async function avisarGestorReclamacion(id: string, mensaje: string): Prom
       centro_id: null,
     });
 
-    return { success: true, para: gestor.usuario, correoEnviado };
+    return { success: true, para: gestor.usuario, correoEnviado, desdeSuGmail };
   } catch (e) {
     return { error: registrarError('reclamaciones:avisoGestor', e, 'No se pudo enviar el aviso') };
   }
@@ -540,5 +544,18 @@ export async function marcarRegularizada(id: string, regularizada: boolean): Pro
     return { success: true };
   } catch (e) {
     return { error: registrarError('reclamaciones:regularizar', e, 'No se pudo guardar la regularización') };
+  }
+}
+
+/** Quita el Gmail propio conectado: borra el permiso y se lo anula en Google. */
+export async function desconectarMiGmail(): Promise<{ error: string } | { success: true }> {
+  try {
+    const yo = await getAdminActual();
+    if (!yo?.email || !CORREOS_GESTION_RECLAMACIONES.includes(yo.email)) return { error: 'Sin acceso.' };
+    await desconectarGmailPropio(yo.id);
+    revalidatePath('/dashboard/reclamaciones');
+    return { success: true };
+  } catch (e) {
+    return { error: registrarError('gmail:desconectar', e, 'No se pudo desconectar') };
   }
 }

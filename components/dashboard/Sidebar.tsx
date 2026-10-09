@@ -45,12 +45,14 @@ export function Sidebar({
   email,
   pendientesCount,
   ausenciasPendientesCount,
+  reclamacionesPendientesCount,
   modulosVisibles,
 }: {
   rol: RolAdmin;
   email: string | null;
   pendientesCount: number;
   ausenciasPendientesCount: number;
+  reclamacionesPendientesCount: number;
   /** Claves de módulo encendidas para este admin (ver lib/modulos.ts). */
   modulosVisibles: string[];
 }) {
@@ -117,6 +119,7 @@ export function Sidebar({
             {t(item.clave)}
             {item.href === '/dashboard/incidencias' && <PendingBadge tabla="incidencias" initialCount={pendientesCount} />}
             {item.href === '/dashboard/ausencias' && <PendingBadge tabla="ausencias" initialCount={ausenciasPendientesCount} />}
+            {item.href === '/dashboard/reclamaciones' && <PendingBadge tabla="reclamaciones" initialCount={reclamacionesPendientesCount} />}
           </Link>
         );
       })}

@@ -46,21 +46,30 @@ export function MetricasPanel() {
   const [resumen, setResumen] = useState<MisMetricasResumen | null>(null);
   const [dias, setDias] = useState<MisMetricasDia[]>([]);
   const [cargando, setCargando] = useState(true);
+  // Si la petición falla (sesión perdida, red caída...) se dice, en vez de
+  // pintar "Sin datos": eso le hacía creer al rider que no tenía métricas
+  // cuando sí las tenía (pasó el 9-oct-2026 en un móvil).
+  const [fallo, setFallo] = useState(false);
+  const [intento, setIntento] = useState(0);
   const turnoRef = useRef(0);
 
   useEffect(() => {
     const miTurno = ++turnoRef.current;
     setCargando(true);
+    setFallo(false);
     Promise.all([obtenerMiResumenSemanal(semana.year, semana.week), obtenerMisDiasSemana(semana.year, semana.week)])
       .then(([r, d]) => {
         if (turnoRef.current !== miTurno) return; // respuesta vieja de un clic anterior: ignorar
         setResumen(r);
         setDias(d);
       })
+      .catch(() => {
+        if (turnoRef.current === miTurno) setFallo(true);
+      })
       .finally(() => {
         if (turnoRef.current === miTurno) setCargando(false);
       });
-  }, [semana]);
+  }, [semana, intento]);
 
   function semanaDesplazada(delta: number): { year: number; week: number } {
     const { lunes } = rangoSemanaIso(semana.year, semana.week);
@@ -114,6 +123,17 @@ export function MetricasPanel() {
       {cargando ? (
         <div className="flex justify-center py-10 text-ink-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      ) : fallo ? (
+        <div className="flex flex-col items-center gap-2 py-10 text-center text-ink-muted">
+          <p className="text-sm font-medium text-ink">{t('metricas.errorCarga')}</p>
+          <p className="text-xs">{t('metricas.errorCargaAyuda')}</p>
+          <button
+            onClick={() => setIntento((n) => n + 1)}
+            className="mt-1 rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-ink hover:bg-bg"
+          >
+            {t('metricas.reintentar')}
+          </button>
         </div>
       ) : !resumen || !resumen.hayDatos ? (
         <div className="flex flex-col items-center gap-1 py-10 text-center text-ink-muted">
